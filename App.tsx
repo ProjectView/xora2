@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -116,7 +117,17 @@ function App() {
 
   const renderContent = () => {
     switch (currentPage) {
-      case 'dashboard': return <Dashboard userProfile={userProfile} />;
+      case 'dashboard': 
+        return (
+          <Dashboard 
+            userProfile={userProfile} 
+            onClientClick={(client) => {
+              setSelectedClient(client);
+              setCurrentPage('directory');
+            }}
+            onAddClientClick={() => setIsModalOpen(true)}
+          />
+        );
       case 'directory':
         return selectedClient ? (
           <ClientDetails client={selectedClient} onBack={() => setSelectedClient(null)} />
@@ -129,7 +140,7 @@ function App() {
         );
       case 'agenda': return <Agenda />;
       case 'articles': return <Articles />;
-      case 'tasks': return <TasksMemo />;
+      case 'tasks': return <TasksMemo userProfile={userProfile} />;
       case 'projects': 
         return selectedProject ? (
           <ProjectDetails onBack={() => setSelectedProject(null)} />

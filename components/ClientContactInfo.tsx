@@ -1,24 +1,29 @@
+
 import React, { useState } from 'react';
 import ClientContactGeneral from './ClientContactGeneral';
 import ClientExternalContact from './ClientExternalContact';
 import ClientPropertyInfo from './ClientPropertyInfo';
+import { Client } from '../types';
 
-const ClientContactInfo: React.FC = () => {
+interface ClientContactInfoProps {
+  client: Client;
+}
+
+const ClientContactInfo: React.FC<ClientContactInfoProps> = ({ client }) => {
   const [activeSubTab, setActiveSubTab] = useState('Infos client');
   const subTabs = ['Infos client', 'Contact externe', 'Infos des biens'];
 
   const renderSubTab = () => {
     switch (activeSubTab) {
-      case 'Infos client': return <ClientContactGeneral />;
+      case 'Infos client': return <ClientContactGeneral client={client} />;
       case 'Contact externe': return <ClientExternalContact />;
       case 'Infos des biens': return <ClientPropertyInfo />;
-      default: return <ClientContactGeneral />;
+      default: return <ClientContactGeneral client={client} />;
     }
   };
 
   return (
     <div className="flex flex-col h-full animate-in fade-in duration-500">
-      {/* Navigation des sous-onglets - Resserré vers le haut */}
       <div className="sticky top-0 bg-white z-20 px-2 border-b border-gray-100 flex gap-12 shrink-0 pt-1 mb-6">
         {subTabs.map((sub) => (
           <button 

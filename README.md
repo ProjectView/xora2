@@ -1,20 +1,24 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
 
-# Run and deploy your AI Studio app
+# XORA CRM
 
-This contains everything you need to run your app locally.
+Projet React moderne pour la gestion CRM des cuisinistes.
 
-View your app in AI Studio: https://ai.studio/apps/drive/1Ll5uamWrZVB-ss0UA0k5yg_XiVqqzIwU
+## Installation locale
 
-## Run Locally
+1. Clonez le dépôt
+2. Installez les dépendances : `npm install`
+3. Lancez le serveur de développement : `npm run dev`
 
-**Prerequisites:**  Node.js
+## Déploiement Netlify
 
+1. Connectez votre repo GitHub à Netlify.
+2. Commande de build : `npm run build`
+3. Répertoire de sortie : `dist`
+4. Ajoutez vos variables d'environnement (si besoin) dans les paramètres du site.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Stack technique
+- React 19
+- Vite
+- Tailwind CSS
+- Firebase
+- Lucide React

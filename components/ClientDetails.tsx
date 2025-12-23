@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { 
   ArrowLeft, 
@@ -7,8 +8,7 @@ import {
   Mail, 
   MessageSquare,
   FileText,
-  ChevronsRight,
-  Home
+  ChevronsRight
 } from 'lucide-react';
 import { Client } from '../types';
 import ClientTasks from './ClientTasks';
@@ -18,27 +18,31 @@ import ClientProjects from './ClientProjects';
 interface ClientDetailsProps {
   client: Client;
   onBack: () => void;
+  userProfile?: any;
 }
 
-const ClientDetails: React.FC<ClientDetailsProps> = ({ client, onBack }) => {
+const ClientDetails: React.FC<ClientDetailsProps> = ({ client, onBack, userProfile }) => {
   const [activeTab, setActiveTab] = useState('Information contact');
 
-  // Labels exacts et compteurs de la capture Figma
   const mainTabs = [
     { label: 'Information contact', key: 'Information contact' },
-    { label: 'Projet (2)', key: 'Projet (2)' },
-    { label: 'Tâches (2)', key: 'Tâches (2)' },
-    { label: 'Rendez-vous (0)', key: 'Rendez-vous (0)' },
+    { label: `Projet (${client.projectCount || 0})`, key: 'Projet' },
+    { label: 'Tâches (0)', key: 'Tâches' },
+    { label: 'Rendez-vous (0)', key: 'Rendez-vous' },
     { label: 'Fidélisation', key: 'Fidélisation' },
     { label: 'Documents', key: 'Documents' }
   ];
 
+  // Extraire le nom et prénom proprement
+  const nameParts = client.name.split(' ');
+  const firstName = nameParts[0] || '';
+  const lastName = nameParts.slice(1).join(' ') || '';
+
   return (
     <div className="flex h-screen bg-[#F8F9FA] overflow-hidden font-sans">
-      {/* Zone de contenu principale */}
       <div className="flex-1 flex flex-col h-full overflow-y-auto hide-scrollbar">
         
-        {/* En-tête (Header) identique à la capture */}
+        {/* Header dynamique */}
         <div className="px-10 py-8 flex justify-between items-start shrink-0">
           <div className="flex items-center gap-6">
             <button onClick={onBack} className="p-2.5 bg-white border border-gray-200 rounded-xl text-gray-400 shadow-sm hover:bg-gray-50 transition-all">
@@ -46,28 +50,27 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client, onBack }) => {
             </button>
             <div className="space-y-4">
               <div className="flex items-center gap-3">
-                <span className="text-[12px] font-bold text-gray-300">Créé le 01/01/2025</span>
-                <span className="px-2 py-0.5 bg-[#FAE8FF] text-[#D946EF] text-[10px] font-extrabold rounded uppercase tracking-widest">Prospect</span>
+                <span className="text-[12px] font-bold text-gray-300">Créé le {client.dateAdded}</span>
+                <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded uppercase tracking-widest ${
+                  client.status === 'Leads' ? 'bg-purple-100 text-purple-600' :
+                  client.status === 'Prospect' ? 'bg-[#FAE8FF] text-[#D946EF]' :
+                  'bg-cyan-100 text-cyan-600'
+                }`}>
+                  {client.status === 'Leads' ? 'Etudes à réaliser' : client.status}
+                </span>
               </div>
               <div className="flex gap-12 items-center">
                 <div className="space-y-2">
-                  <h1 className="text-[17px] font-bold text-gray-900 leading-tight">Chloé Dubois</h1>
-                  <h1 className="text-[17px] font-bold text-gray-900 leading-tight">Charles Dubois</h1>
+                  <h1 className="text-[17px] font-bold text-gray-900 leading-tight">{client.name}</h1>
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-[13px] font-bold text-gray-700">
-                    <Phone size={16} className="text-gray-300" /> 06 76 54 23 42
-                  </div>
-                  <div className="flex items-center gap-2 text-[13px] font-bold text-gray-700">
-                    <Phone size={16} className="text-gray-300" /> 06 56 43 23 54
+                    <Phone size={16} className="text-gray-300" /> {(client as any).details?.phone || 'Non renseigné'}
                   </div>
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-[13px] font-bold text-gray-700">
-                    <Mail size={16} className="text-gray-300" /> chloe.dubois@gmail.com
-                  </div>
-                  <div className="flex items-center gap-2 text-[13px] font-bold text-gray-700">
-                    <Mail size={16} className="text-gray-300" /> charles.dubois@gmail.com
+                    <Mail size={16} className="text-gray-300" /> {(client as any).details?.email || 'Non renseigné'}
                   </div>
                 </div>
               </div>
@@ -82,7 +85,7 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client, onBack }) => {
           </div>
         </div>
 
-        {/* Barre des onglets style "Classeur" */}
+        {/* Onglets */}
         <div className="px-10 flex items-end shrink-0 mt-4 overflow-x-auto hide-scrollbar">
           <div className="flex gap-2">
             {mainTabs.map((tab) => {
@@ -99,7 +102,6 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client, onBack }) => {
                   style={isActive ? { marginBottom: '-1px' } : {}}
                 >
                   {tab.label}
-                  {/* Petit overlay pour cacher la bordure du dessous quand actif */}
                   {isActive && (
                     <div className="absolute -bottom-[2px] left-0 right-0 h-[3px] bg-white z-20" />
                   )}
@@ -109,21 +111,20 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client, onBack }) => {
           </div>
         </div>
 
-        {/* Corps du dossier blanc - Fusionné avec l'onglet actif */}
-        {/* Suppression de z-0 ici pour éviter de piéger la modale fixe dans un contexte d'empilement inférieur aux onglets */}
+        {/* Corps du dossier */}
         <div className="bg-white flex-1 border-t border-gray-100 shadow-[0_-10px_40px_rgba(0,0,0,0.02)] flex flex-col min-h-0 relative">
           <div className="flex-1 px-10 overflow-y-auto hide-scrollbar">
             
-            {activeTab === 'Information contact' && <ClientContactInfo />}
+            {activeTab === 'Information contact' && <ClientContactInfo client={client} />}
 
-            {activeTab === 'Tâches (2)' && (
+            {activeTab === 'Tâches' && (
               <div className="pt-4">
                 <ClientTasks />
               </div>
             )}
 
-            {activeTab === 'Projet (2)' && (
-              <ClientProjects />
+            {activeTab === 'Projet' && (
+              <ClientProjects client={client} userProfile={userProfile} />
             )}
             
             <div className="pb-10"></div>
