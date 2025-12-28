@@ -70,6 +70,8 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
+      
+      {/* 1. Attribution */}
       <Section title="Attribution">
         <Field label="Agence" colSpan="col-span-6">
           <div className="w-full bg-white border border-gray-100 rounded-xl px-4 py-3 text-[13px] font-bold text-gray-900 flex items-center justify-between shadow-sm">
@@ -78,14 +80,15 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
           </div>
         </Field>
         <Field label="Agenceur référent" colSpan="col-span-6">
-          <div className="w-full bg-white border border-gray-100 rounded-xl px-4 py-2.5 flex items-center gap-3 shadow-sm">
-            <img src={project.agenceur?.avatar} className="w-7 h-7 rounded-full object-cover" alt="" />
+          <div className="w-full bg-white border border-gray-100 rounded-xl px-4 py-2 flex items-center gap-3 shadow-sm">
+            <img src={project.agenceur?.avatar} className="w-8 h-8 rounded-full object-cover border border-gray-50 shadow-sm" alt="" />
             <span className="text-[13px] font-bold text-gray-900">{project.agenceur?.name}</span>
             <ChevronDown size={18} className="ml-auto text-gray-400" />
           </div>
         </Field>
       </Section>
 
+      {/* 2. Origine du projet */}
       <Section title="Origine du Projet">
         <Field label="Origine du projet" colSpan="col-span-3">
           <Select value={project.origine} options={['Relation', 'Web', 'Apporteur', 'Passage magasin']} onChange={(v: string) => handleUpdate('origine', v)} />
@@ -101,6 +104,7 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
         </Field>
       </Section>
 
+      {/* 3. Projet */}
       <Section title="Projet">
         <Field label="Adresse chantier" colSpan="col-span-6">
           <Select value={project.details?.adresseChantier} options={['Choisir']} onChange={(v: string) => handleUpdate('details.adresseChantier', v)} />
@@ -131,7 +135,8 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
         </Field>
       </Section>
 
-      <Section title="Enveloppe financière" action={<button className="flex items-center gap-2 text-[11px] font-bold text-gray-800"><FileText size={14} /> Ajouter une note</button>}>
+      {/* 4. Enveloppe financière */}
+      <Section title="Enveloppe financière" action={<button className="flex items-center gap-2 text-[11px] font-bold text-gray-800 hover:text-indigo-600 transition-colors"><FileText size={14} /> Ajouter une note</button>}>
         <Field label="Fourchette basse Budget">
           <Select value={project.details?.budgetBas} options={['Sélectionner']} onChange={(v: string) => handleUpdate('details.budgetBas', v)} />
         </Field>
@@ -151,6 +156,7 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
         </div>
       </Section>
 
+      {/* 5. Installation */}
       <Section title="Installation">
         <Field label="Dépose">
           <Select value={project.details?.depose} options={['Sélectionner']} onChange={(v: string) => handleUpdate('details.depose', v)} />
@@ -166,14 +172,15 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
         </Field>
       </Section>
 
+      {/* 6. Concurrence */}
       <Section title="Concurrence">
         <Field label="Nombre de confrères consultés">
           <div className="flex items-center justify-between bg-white border border-gray-100 rounded-xl px-4 py-2 shadow-sm">
              <span className="text-[13px] font-bold text-gray-200 italic">Confrères</span>
              <div className="flex items-center gap-3">
-                <button onClick={() => handleUpdate('details.nbConfreres', Math.max(0, (project.details?.nbConfreres || 0) - 1))} className="w-7 h-7 bg-gray-100 text-gray-600 rounded flex items-center justify-center"><Minus size={14} /></button>
+                <button type="button" onClick={() => handleUpdate('details.nbConfreres', Math.max(0, (project.details?.nbConfreres || 0) - 1))} className="w-7 h-7 bg-gray-100 text-gray-600 rounded flex items-center justify-center hover:bg-gray-200"><Minus size={14} /></button>
                 <span className="text-sm font-bold text-gray-900">{project.details?.nbConfreres || 0}</span>
-                <button onClick={() => handleUpdate('details.nbConfreres', (project.details?.nbConfreres || 0) + 1)} className="w-7 h-7 bg-gray-800 text-white rounded flex items-center justify-center"><Plus size={14} /></button>
+                <button type="button" onClick={() => handleUpdate('details.nbConfreres', (project.details?.nbConfreres || 0) + 1)} className="w-7 h-7 bg-gray-800 text-white rounded flex items-center justify-center hover:bg-black shadow-md"><Plus size={14} /></button>
              </div>
           </div>
         </Field>
@@ -187,7 +194,7 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
               placeholder="0" 
               value={project.details?.budgetConcurrence || ''} 
               onChange={(e) => handleUpdate('details.budgetConcurrence', e.target.value)}
-              className="w-full bg-white border border-gray-100 rounded-xl px-4 py-3 text-[13px] font-bold text-gray-900 outline-none shadow-sm"
+              className="w-full bg-white border border-gray-100 rounded-xl px-4 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-gray-300 shadow-sm"
             />
             <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-900 font-bold">€</span>
           </div>
@@ -197,6 +204,7 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
         </Field>
       </Section>
 
+      {/* 7. Permis de construire */}
       <Section title="Permis de construire">
         <Field label="Permis de construire accordé" colSpan="col-span-3">
           <div className="pt-2"><Toggle value={project.details?.permisAccorde || false} onChange={(v) => handleUpdate('details.permisAccorde', v)} /></div>
