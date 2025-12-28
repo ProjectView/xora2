@@ -16,8 +16,8 @@ const ClientContactInfo: React.FC<ClientContactInfoProps> = ({ client }) => {
   const renderSubTab = () => {
     switch (activeSubTab) {
       case 'Infos client': return <ClientContactGeneral client={client} />;
-      case 'Contact externe': return <ClientExternalContact />;
-      case 'Infos des biens': return <ClientPropertyInfo />;
+      case 'Contact externe': return <ClientExternalContact client={client} />;
+      case 'Infos des biens': return <ClientPropertyInfo client={client} />;
       default: return <ClientContactGeneral client={client} />;
     }
   };

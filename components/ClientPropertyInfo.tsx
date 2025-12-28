@@ -1,31 +1,66 @@
-import React, { useState } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+
+import React, { useState, useEffect } from 'react';
+import { Plus, Trash2, ChevronDown, ChevronUp, Loader2, Save } from 'lucide-react';
+import { Client } from '../types';
+import { db } from '../firebase';
+import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
 
 interface Property {
   id: string;
   number: number;
   address: string;
+  complement?: string;
+  type?: string;
+  usage?: string;
+  workNature?: string;
   isMain: boolean;
   isExpanded: boolean;
 }
 
-const ClientPropertyInfo: React.FC = () => {
-  const [properties, setProperties] = useState<Property[]>([
-    {
-      id: 'p1',
-      number: 1,
-      address: '7 Rue de Provence, 34350 Valras-Plage',
-      isMain: true,
-      isExpanded: false
-    },
-    {
-      id: 'p2',
-      number: 2,
-      address: '12 Rue de Grillade, 34350 Valras-Plage',
-      isMain: false,
-      isExpanded: true
+interface ClientPropertyInfoProps {
+  client: Client;
+}
+
+const ClientPropertyInfo: React.FC<ClientPropertyInfoProps> = ({ client: initialClient }) => {
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Charger les biens depuis Firestore
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'clients', initialClient.id), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const existingProps = data.details?.properties || [];
+        
+        // S'il n'y a aucun bien, on initialise avec l'adresse principale
+        if (existingProps.length === 0) {
+          const mainProp = {
+            id: 'main',
+            number: 1,
+            address: data.details?.address || 'Adresse principale',
+            isMain: true,
+            isExpanded: false
+          };
+          setProperties([mainProp]);
+        } else {
+          setProperties(existingProps.map((p: any) => ({ ...p, isExpanded: p.isExpanded || false })));
+        }
+      }
+      setIsLoading(false);
+    });
+    return () => unsub();
+  }, [initialClient.id]);
+
+  const saveProperties = async (newProperties: Property[]) => {
+    try {
+      const clientRef = doc(db, 'clients', initialClient.id);
+      await updateDoc(clientRef, {
+        "details.properties": newProperties.map(({ isExpanded, ...rest }) => rest)
+      });
+    } catch (e) {
+      console.error("Erreur sauvegarde biens:", e);
     }
-  ]);
+  };
 
   const toggleExpand = (id: string) => {
     setProperties(prev => prev.map(p => 
@@ -33,152 +68,169 @@ const ClientPropertyInfo: React.FC = () => {
     ));
   };
 
+  const addProperty = () => {
+    const newProp: Property = {
+      id: Date.now().toString(),
+      number: properties.length + 1,
+      address: '',
+      isMain: false,
+      isExpanded: true
+    };
+    const updated = [...properties, newProp];
+    setProperties(updated);
+    saveProperties(updated);
+  };
+
+  const updatePropertyField = (id: string, field: keyof Property, value: any) => {
+    const updated = properties.map(p => p.id === id ? { ...p, [field]: value } : p);
+    setProperties(updated);
+  };
+
+  const handleBlur = () => {
+    saveProperties(properties);
+  };
+
+  const removeProperty = (id: string) => {
+    if (confirm("Supprimer ce bien ?")) {
+      const updated = properties.filter(p => p.id !== id);
+      setProperties(updated);
+      saveProperties(updated);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="h-64 flex items-center justify-center">
+        <Loader2 className="animate-spin text-gray-300" size={32} />
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-4 max-w-full animate-in fade-in duration-500">
-      {/* En-tête de section */}
-      <div className="flex justify-between items-center mb-6">
+    <div className="space-y-4 max-w-full animate-in fade-in duration-500 pb-10">
+      <div className="flex justify-between items-center mb-6 px-2">
         <h3 className="text-[16px] font-bold text-gray-800">Liste des biens</h3>
-        <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-[12px] font-bold text-gray-700 shadow-sm hover:bg-gray-50 transition-all">
+        <button 
+          onClick={addProperty}
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-[12px] font-bold text-gray-700 shadow-sm hover:bg-gray-50 transition-all"
+        >
           <Plus size={16} /> 
           Ajouter un bien
         </button>
       </div>
       
-      {/* Conteneur principal gris très clair */}
-      <div className="bg-[#f8f9fa] border border-gray-100 rounded-[20px] p-6 space-y-4">
+      <div className="bg-[#f8f9fa] border border-gray-100 rounded-[24px] p-6 space-y-4">
         {properties.map((prop) => (
           <div 
             key={prop.id} 
-            className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm"
+            className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow"
           >
-            {/* Header de la carte */}
             <div 
-              className={`px-6 py-4 flex justify-between items-center cursor-pointer ${prop.isExpanded ? 'border-b border-gray-100' : ''}`}
+              className={`px-6 py-5 flex justify-between items-center cursor-pointer ${prop.isExpanded ? 'border-b border-gray-50' : ''}`}
               onClick={() => toggleExpand(prop.id)}
             >
               <div className="flex items-center gap-4 flex-1">
                 <span className="text-[14px] font-bold text-gray-900">Bien numéro {prop.number}</span>
-                <span className="text-[13px] text-gray-500 font-medium truncate max-w-[300px]">{prop.address}</span>
-                <span className="px-3 py-1 bg-[#F8F9FA] border border-gray-100 rounded-lg text-[10px] font-bold text-gray-700 uppercase tracking-tight">
+                <span className="text-[13px] text-gray-400 font-medium truncate max-w-[300px]">{prop.address || 'Sans adresse'}</span>
+                <span className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${prop.isMain ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-100 text-gray-700'}`}>
                   {prop.isMain ? 'Bien principal' : 'Bien secondaire'}
                 </span>
-                <button 
-                  className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded transition-all"
-                  onClick={(e) => { e.stopPropagation(); }}
-                >
-                  <Trash2 size={16} />
-                </button>
               </div>
-              <div className="text-gray-400">
-                {prop.isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+              <div className="flex items-center gap-3">
+                {!prop.isMain && (
+                  <button 
+                    className="p-1.5 text-gray-200 hover:text-red-500 rounded transition-all"
+                    onClick={(e) => { e.stopPropagation(); removeProperty(prop.id); }}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
+                <div className="text-gray-300">
+                  {prop.isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                </div>
               </div>
             </div>
 
-            {/* Formulaire expansé */}
             {prop.isExpanded && (
-              <div className="p-6 space-y-6 animate-in slide-in-from-top-1 duration-200">
-                {/* Ligne 1: Adresse */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-8 space-y-8 animate-in slide-in-from-top-1 duration-200">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-medium text-gray-400">Adresse</label>
+                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Adresse</label>
                     <input 
                       type="text" 
-                      defaultValue={prop.address} 
-                      className="w-full bg-white border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-gray-400 shadow-sm"
+                      value={prop.address} 
+                      onChange={(e) => updatePropertyField(prop.id, 'address', e.target.value)}
+                      onBlur={handleBlur}
+                      className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-gray-900 shadow-sm transition-all" 
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-medium text-gray-400">Complément d'adresse</label>
+                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Complément d'adresse</label>
                     <input 
                       type="text" 
-                      placeholder="Complément" 
-                      className="w-full bg-white border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-gray-400 shadow-sm placeholder:text-gray-300"
+                      placeholder="Appartement, étage..." 
+                      value={prop.complement || ''}
+                      onChange={(e) => updatePropertyField(prop.id, 'complement', e.target.value)}
+                      onBlur={handleBlur}
+                      className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-gray-900 shadow-sm placeholder:text-gray-300 transition-all" 
                     />
                   </div>
                 </div>
 
-                {/* Ligne 2: Détails techniques 1 */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-medium text-gray-400">Propriétaire</label>
+                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Type de bien</label>
                     <div className="relative">
-                      <select className="w-full appearance-none bg-white border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-gray-400 shadow-sm">
-                        <option>Choisir</option>
+                      <select 
+                        value={prop.type || 'Maison'}
+                        onChange={(e) => { updatePropertyField(prop.id, 'type', e.target.value); saveProperties(properties); }}
+                        className="w-full appearance-none bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-gray-900 transition-all"
+                      >
+                        <option>Maison</option>
+                        <option>Appartement</option>
+                        <option>Terrain</option>
+                        <option>Local Pro</option>
                       </select>
-                      <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-medium text-gray-400">Type de bien</label>
+                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Usage</label>
                     <div className="relative">
-                      <select className="w-full appearance-none bg-white border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-gray-400 shadow-sm">
-                        <option>Choisir</option>
+                      <select 
+                        value={prop.usage || 'Résidence principale'}
+                        onChange={(e) => { updatePropertyField(prop.id, 'usage', e.target.value); saveProperties(properties); }}
+                        className="w-full appearance-none bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-gray-900 transition-all"
+                      >
+                        <option>Résidence principale</option>
+                        <option>Résidence secondaire</option>
+                        <option>Investissement locatif</option>
                       </select>
-                      <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-medium text-gray-400">Type de propriété</label>
+                    <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Nature travaux</label>
                     <div className="relative">
-                      <select className="w-full appearance-none bg-white border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-gray-400 shadow-sm">
-                        <option selected={!prop.isMain}>Bien secondaire</option>
-                        <option selected={prop.isMain}>Bien principal</option>
-                      </select>
-                      <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-medium text-gray-400">Nature des travaux</label>
-                    <div className="relative">
-                      <select className="w-full appearance-none bg-white border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-gray-400 shadow-sm">
+                      <select 
+                        value={prop.workNature || 'Rénovation'}
+                        onChange={(e) => { updatePropertyField(prop.id, 'workNature', e.target.value); saveProperties(properties); }}
+                        className="w-full appearance-none bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-gray-900 transition-all"
+                      >
                         <option>Rénovation</option>
                         <option>Neuf</option>
+                        <option>Extension</option>
                       </select>
-                      <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                     </div>
                   </div>
-                </div>
-
-                {/* Ligne 3: Détails techniques 2 */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-medium text-gray-400">+2ans</label>
-                    <div className="relative">
-                      <select className="w-full appearance-none bg-white border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-gray-400 shadow-sm">
-                        <option>Choisir</option>
-                        <option>Oui</option>
-                        <option>Non</option>
-                      </select>
-                      <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-medium text-gray-400">Etage</label>
-                    <div className="relative">
-                      <select className="w-full appearance-none bg-white border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-gray-400 shadow-sm">
-                        <option>Choisir</option>
-                      </select>
-                      <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-medium text-gray-400">Ascenseur</label>
-                    <div className="relative">
-                      <select className="w-full appearance-none bg-white border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-gray-400 shadow-sm">
-                        <option>Choisir</option>
-                        <option>Oui</option>
-                        <option>Non</option>
-                      </select>
-                      <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-medium text-gray-400">Infos diverses</label>
-                    <input 
-                      type="text" 
-                      placeholder="à saisir" 
-                      className="w-full bg-white border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-gray-400 shadow-sm placeholder:text-gray-300"
-                    />
+                  <div className="flex items-end pb-1">
+                     <button 
+                      onClick={() => saveProperties(properties)}
+                      className="flex items-center gap-2 px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-[11px] font-bold text-gray-500 hover:bg-gray-900 hover:text-white transition-all shadow-sm"
+                     >
+                       <Save size={14} /> Sauvegarder
+                     </button>
                   </div>
                 </div>
               </div>

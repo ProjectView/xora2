@@ -1,3 +1,4 @@
+
 export type Page = 
   | 'dashboard' 
   | 'directory' 
@@ -71,10 +72,13 @@ export interface StatusCard {
 export interface Article {
   id: string;
   metier: string;
+  rubrique: string;
   famille: string;
-  gamme: string;
-  fournisseur: string;
-  reference: string;
-  prixPublicHT: string;
-  prixVenteTTC: string;
+  collection: string;
+  descriptif: string;
+  prixMiniTTC: number;
+  prixMaxiTTC: number;
+  companyId: string;
+  createdAt: any;
+  createdBy: string;
 }

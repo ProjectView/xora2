@@ -1,9 +1,8 @@
 
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore, doc, writeBatch, collection } from "firebase/firestore";
+import { getFirestore, doc, writeBatch, collection, getDoc } from "firebase/firestore";
 
-// Fonction sécurisée pour récupérer les variables d'environnement
 const getEnv = (key: string, fallback: string): string => {
   try {
     // @ts-ignore
@@ -27,9 +26,25 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
 
-export const seedDatabase = async (companyId: string = 'default_company') => {
+export const seedDatabase = async (companyId: string, currentUser: any) => {
   const batch = writeBatch(db);
 
+  // 1. Initialisation / Mise à jour de la Société
+  const companyRef = doc(db, 'companies', companyId);
+  const companySnap = await getDoc(companyRef);
+  
+  if (!companySnap.exists()) {
+    batch.set(companyRef, {
+      id: companyId,
+      name: currentUser.companyName || "Ma Nouvelle Société",
+      activity: "Cuisiniste",
+      createdAt: new Date().toISOString(),
+      ownerId: currentUser.uid,
+      plan: 'Pro'
+    });
+  }
+
+  // 2. KPIs Financiers
   const kpis = [
     { id: 'ca', label: 'CA Généré', value: '53.456€', target: '110.000€', percentage: 65, iconName: 'euro', companyId },
     { id: 'marge', label: 'Marge générée', value: '12.326€', target: '15.000€', percentage: 73, iconName: 'search', companyId },
@@ -42,12 +57,13 @@ export const seedDatabase = async (companyId: string = 'default_company') => {
     batch.set(ref, kpi);
   });
 
+  // 3. Statuts du Dashboard
   const statusCards = [
-    { id: 'leads', label: 'Leads', count: 8, color: 'purple', order: 1, companyId },
-    { id: 'etudes', label: 'Etudes en cours', count: 12, color: 'fuchsia', order: 2, companyId },
-    { id: 'commandes', label: 'Commandes clients', count: 5, color: 'blue', order: 3, companyId },
-    { id: 'dossiers', label: 'Dossiers tech & install', count: 14, color: 'cyan', order: 4, companyId },
-    { id: 'sav', label: 'SAV', count: 3, color: 'orange', order: 5, companyId },
+    { id: 'leads', label: 'Leads', count: 3, color: 'purple', order: 1, companyId },
+    { id: 'etudes', label: 'Etudes en cours', count: 2, color: 'fuchsia', order: 2, companyId },
+    { id: 'commandes', label: 'Commandes clients', count: 1, color: 'blue', order: 3, companyId },
+    { id: 'dossiers', label: 'Dossiers tech & install', count: 0, color: 'cyan', order: 4, companyId },
+    { id: 'sav', label: 'SAV', count: 0, color: 'orange', order: 5, companyId },
   ];
 
   statusCards.forEach(card => {
@@ -55,6 +71,47 @@ export const seedDatabase = async (companyId: string = 'default_company') => {
     batch.set(ref, card);
   });
 
+  // 4. Quelques clients exemples
+  const clientsData = [
+    {
+      name: "CHARLES DUBOIS",
+      status: "Client",
+      origin: "Relation",
+      location: "Montpellier",
+      companyId,
+      dateAdded: new Date().toLocaleDateString('fr-FR'),
+      addedBy: { uid: currentUser.uid, name: currentUser.name, avatar: currentUser.avatar },
+      details: {
+        address: "12 Rue de la Loge, 34000 Montpellier",
+        phone: "06 12 34 56 78",
+        email: "charles.dubois@gmail.com",
+        properties: [
+          { id: "p1", number: 1, address: "12 Rue de la Loge, 34000 Montpellier", isMain: true },
+          { id: "p2", number: 2, address: "Résidence le Cap, 34300 Agde", isMain: false }
+        ]
+      }
+    },
+    {
+      name: "MARIE BERNARD",
+      status: "Prospect",
+      origin: "Web",
+      location: "Béziers",
+      companyId,
+      dateAdded: new Date().toLocaleDateString('fr-FR'),
+      addedBy: { uid: currentUser.uid, name: currentUser.name, avatar: currentUser.avatar },
+      details: {
+        address: "5 Avenue Foch, 34500 Béziers",
+        phone: "07 88 99 00 11",
+        email: "m.bernard@outlook.fr"
+      }
+    }
+  ];
+
+  clientsData.forEach(client => {
+    const ref = doc(collection(db, 'clients'));
+    batch.set(ref, client);
+  });
+
   await batch.commit();
-  console.log("Base de données initialisée !");
+  console.log("Base de données initialisée avec succès !");
 };

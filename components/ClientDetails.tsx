@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeft, 
   Calendar, 
@@ -8,9 +8,12 @@ import {
   Mail, 
   MessageSquare,
   FileText,
-  ChevronsRight
+  ChevronsRight,
+  Loader2
 } from 'lucide-react';
 import { Client } from '../types';
+import { db } from '../firebase';
+import { doc, onSnapshot } from 'firebase/firestore';
 import ClientTasks from './ClientTasks';
 import ClientContactInfo from './ClientContactInfo';
 import ClientProjects from './ClientProjects';
@@ -21,8 +24,22 @@ interface ClientDetailsProps {
   userProfile?: any;
 }
 
-const ClientDetails: React.FC<ClientDetailsProps> = ({ client, onBack, userProfile }) => {
+const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, onBack, userProfile }) => {
   const [activeTab, setActiveTab] = useState('Information contact');
+  const [client, setClient] = useState<Client>(initialClient);
+  const [loading, setLoading] = useState(false);
+
+  // Synchronisation en temps réel avec Firebase pour que l'en-tête (badge, etc.) soit toujours à jour
+  useEffect(() => {
+    setLoading(true);
+    const unsub = onSnapshot(doc(db, 'clients', initialClient.id), (docSnap) => {
+      if (docSnap.exists()) {
+        setClient({ id: docSnap.id, ...docSnap.data() } as Client);
+      }
+      setLoading(false);
+    });
+    return () => unsub();
+  }, [initialClient.id]);
 
   const mainTabs = [
     { label: 'Information contact', key: 'Information contact' },
@@ -32,11 +49,6 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client, onBack, userProfi
     { label: 'Fidélisation', key: 'Fidélisation' },
     { label: 'Documents', key: 'Documents' }
   ];
-
-  // Extraire le nom et prénom proprement
-  const nameParts = client.name.split(' ');
-  const firstName = nameParts[0] || '';
-  const lastName = nameParts.slice(1).join(' ') || '';
 
   return (
     <div className="flex h-screen bg-[#F8F9FA] overflow-hidden font-sans">
@@ -51,9 +63,10 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client, onBack, userProfi
             <div className="space-y-4">
               <div className="flex items-center gap-3">
                 <span className="text-[12px] font-bold text-gray-300">Créé le {client.dateAdded}</span>
+                {/* Badge de statut synchronisé avec la BDD */}
                 <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded uppercase tracking-widest ${
                   client.status === 'Leads' ? 'bg-purple-100 text-purple-600' :
-                  client.status === 'Prospect' ? 'bg-[#FAE8FF] text-[#D946EF]' :
+                  client.status === 'Prospect' ? 'bg-fuchsia-100 text-fuchsia-600' :
                   'bg-cyan-100 text-cyan-600'
                 }`}>
                   {client.status === 'Leads' ? 'Etudes à réaliser' : client.status}
@@ -87,7 +100,7 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client, onBack, userProfi
 
         {/* Onglets */}
         <div className="px-10 flex items-end shrink-0 mt-4 overflow-x-auto hide-scrollbar">
-          <div className="flex gap-2">
+          <div className="flex gap-1">
             {mainTabs.map((tab) => {
               const isActive = activeTab === tab.key;
               return (
@@ -113,6 +126,11 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client, onBack, userProfi
 
         {/* Corps du dossier */}
         <div className="bg-white flex-1 border-t border-gray-100 shadow-[0_-10px_40px_rgba(0,0,0,0.02)] flex flex-col min-h-0 relative">
+          {loading && (
+            <div className="absolute inset-0 bg-white/50 z-50 flex items-center justify-center">
+              <Loader2 className="animate-spin text-gray-300" size={32} />
+            </div>
+          )}
           <div className="flex-1 px-10 overflow-y-auto hide-scrollbar">
             
             {activeTab === 'Information contact' && <ClientContactInfo client={client} />}

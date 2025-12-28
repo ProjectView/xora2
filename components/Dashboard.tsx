@@ -30,6 +30,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
   const [tasks, setTasks] = useState<Task[]>([]);
   const [allClients, setAllClients] = useState<Client[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasPermissionError, setHasPermissionError] = useState(false);
 
   // Search states
   const [searchQuery, setSearchQuery] = useState('');
@@ -39,6 +40,11 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
   useEffect(() => {
     if (!userProfile?.companyId) return;
 
+    const errorHandler = (error: any) => {
+      console.error("Dashboard Snapshot Error:", error);
+      if (error.code === 'permission-denied') setHasPermissionError(true);
+    };
+
     // 1. Charger les KPIs financiers
     const kpisRef = collection(db, 'kpis');
     const kpisQuery = query(kpisRef, where('companyId', '==', userProfile.companyId));
@@ -46,7 +52,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
     const unsubscribeKpis = onSnapshot(kpisQuery, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as FinancialKPI[];
       setKpis(data);
-    });
+    }, errorHandler);
 
     // 2. Charger les compteurs de statut
     const statusRef = collection(db, 'status_overview');
@@ -56,7 +62,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as StatusCard[];
       const sortedData = [...data].sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
       setStatusCards(sortedData);
-    });
+    }, errorHandler);
 
     // 3. Charger les tâches prioritaires
     const tasksRef = collection(db, 'tasks');
@@ -73,9 +79,9 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
         .slice(0, 6);
       
       setTasks(filteredTasks);
-    });
+    }, errorHandler);
 
-    // 4. Charger TOUS les clients de l'entreprise pour la recherche locale (évite les erreurs d'index composite)
+    // 4. Charger TOUS les clients de l'entreprise pour la recherche locale
     const clientsRef = collection(db, 'clients');
     const clientsQuery = query(clientsRef, where('companyId', '==', userProfile.companyId));
     
@@ -83,7 +89,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Client[];
       setAllClients(data);
       setIsLoading(false);
-    });
+    }, errorHandler);
 
     return () => {
       unsubscribeKpis();
@@ -99,10 +105,9 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
     const normalizedQuery = searchQuery.toLowerCase();
     return allClients
       .filter(client => client.name.toLowerCase().includes(normalizedQuery))
-      .slice(0, 5); // Limiter à 5 résultats pour le dropdown
+      .slice(0, 5); 
   }, [searchQuery, allClients]);
 
-  // Click outside listener for search dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
@@ -122,6 +127,18 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
       default: return <Euro size={20} className="text-white" />;
     }
   };
+
+  if (hasPermissionError) {
+    return (
+      <div className="h-full w-full flex items-center justify-center p-10">
+        <div className="bg-red-50 border border-red-100 p-8 rounded-3xl text-center space-y-4 max-w-md">
+          <AlertTriangle className="text-red-500 mx-auto" size={48} />
+          <h2 className="text-lg font-bold text-red-900">Erreur de permission Firestore</h2>
+          <p className="text-sm text-red-700">L'application ne peut pas lire les données. Veuillez vérifier que les règles de sécurité Firestore sont configurées sur votre console Firebase.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -184,16 +201,16 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
                 </div>
               ) : null}
 
-              {/* Add Client Button inside Dropdown */}
-              <div className="p-2">
+              {/* Add Client Button */}
+              <div className="px-3 pb-3">
                 <button 
                   onClick={() => {
                     onAddClientClick?.();
                     setShowSearchDropdown(false);
                   }}
-                  className="w-full flex items-center justify-center gap-3 py-4 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-800 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 bg-gray-50 border border-gray-200/60 rounded-xl text-[13px] font-bold text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-all"
                 >
-                  <Plus size={18} className="text-gray-400" />
+                  <Plus size={16} className="text-gray-400" />
                   <span>Ajouter une fiche lead</span>
                 </button>
               </div>

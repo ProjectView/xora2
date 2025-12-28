@@ -1,8 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   Users, 
-  Download, 
-  Upload, 
   Plus, 
   List, 
   Map as MapIcon, 
@@ -74,12 +73,11 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, onAddClick, onClient
                 attribution: '&copy; OpenStreetMap'
             }).addTo(map);
 
-            // Ajouter des marqueurs pour les clients qui ont une localisation (simulation pour la démo)
-            clients.forEach((client, idx) => {
-                // On simule des coordonnées proches de Béziers pour la démo
-                const lat = 43.3442 + (Math.random() - 0.5) * 0.1;
-                const lng = 3.2158 + (Math.random() - 0.5) * 0.1;
-                L.marker([lat, lng]).addTo(map).bindPopup(client.name);
+            // Ajouter des marqueurs pour les clients
+            clients.forEach((client) => {
+                if ((client as any).details?.lat && (client as any).details?.lng) {
+                  L.marker([(client as any).details.lat, (client as any).details.lng]).addTo(map).bindPopup(client.name);
+                }
             });
             
             setTimeout(() => { map.invalidateSize(); }, 100);
@@ -115,17 +113,9 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, onAddClick, onClient
         </div>
 
         <div className="flex items-center space-x-3">
-            <button className="flex items-center px-3 py-2 bg-white border border-gray-200 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all">
-                <Download size={16} className="mr-2" />
-                Exporter
-            </button>
-            <button className="flex items-center px-3 py-2 bg-white border border-gray-200 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-all">
-                <Upload size={16} className="mr-2" />
-                Importer
-            </button>
             <button 
                 onClick={onAddClick}
-                className="flex items-center px-4 py-2 bg-gray-900 text-white border border-gray-900 rounded-md text-sm font-bold hover:bg-black transition-all shadow-lg shadow-gray-200"
+                className="flex items-center px-4 py-2.5 bg-gray-900 text-white border border-gray-900 rounded-xl text-sm font-bold hover:bg-black transition-all shadow-lg shadow-gray-200"
             >
                 <Plus size={16} className="mr-2" />
                 Ajouter une fiche leads

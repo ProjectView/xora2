@@ -1,54 +1,160 @@
-import React, { useState } from 'react';
-import { Plus } from 'lucide-react';
+
+import React, { useState, useEffect } from 'react';
+import { Plus, Phone, Mail, User, Trash2, ExternalLink } from 'lucide-react';
 import AddExternalContactModal from './AddExternalContactModal';
 import AddDirectoryContactModal from './AddDirectoryContactModal';
+import { Client } from '../types';
+import { db } from '../firebase';
+import { doc, onSnapshot, updateDoc, arrayRemove } from 'firebase/firestore';
 
-const ClientExternalContact: React.FC = () => {
+interface ClientExternalContactProps {
+  client: Client;
+}
+
+const ClientExternalContact: React.FC<ClientExternalContactProps> = ({ client: initialClient }) => {
+  const [client, setClient] = useState<Client>(initialClient);
   const [isExternalModalOpen, setIsExternalModalOpen] = useState(false);
   const [isDirectoryModalOpen, setIsDirectoryModalOpen] = useState(false);
 
+  // Écouter les mises à jour du client pour les listes de contacts
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'clients', initialClient.id), (docSnap) => {
+      if (docSnap.exists()) {
+        setClient({ id: docSnap.id, ...docSnap.data() } as Client);
+      }
+    });
+    return () => unsub();
+  }, [initialClient.id]);
+
+  const externalContacts = (client as any).details?.externalContacts || [];
+  const directoryContacts = (client as any).details?.directoryContacts || [];
+
+  const removeExternalContact = async (contact: any) => {
+    try {
+      await updateDoc(doc(db, 'clients', client.id), {
+        "details.externalContacts": arrayRemove(contact)
+      });
+    } catch (e) { console.error(e); }
+  };
+
+  const removeDirectoryContact = async (contact: any) => {
+    try {
+      await updateDoc(doc(db, 'clients', client.id), {
+        "details.directoryContacts": arrayRemove(contact)
+      });
+    } catch (e) { console.error(e); }
+  };
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 max-w-full">
-      {/* Section Liste des contacts externes */}
-      <div className="bg-[#f8f9fa] border border-gray-100 rounded-[20px] p-8 space-y-4">
-        <div className="space-y-1">
-          <h3 className="text-[15px] font-bold text-gray-900">Liste des contacts externes</h3>
-          <p className="text-[13px] text-gray-400">Vous n'avez pas renseigné de contact externe.</p>
+    <div className="space-y-8 animate-in fade-in duration-500 max-w-full pb-10">
+      
+      {/* Section Contacts Externes */}
+      <div className="space-y-4">
+        <div className="flex justify-between items-center px-2">
+          <div className="space-y-1">
+            <h3 className="text-[15px] font-bold text-gray-900">Liste des contacts externes</h3>
+            <p className="text-[12px] text-gray-400">Contacts spécifiques à ce dossier (conjoint, famille...)</p>
+          </div>
+          <button 
+            onClick={() => setIsExternalModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-[11px] font-bold text-gray-800 shadow-sm hover:bg-gray-50 transition-all"
+          >
+            <Plus size={14} /> Ajouter un contact
+          </button>
         </div>
-        
-        <button 
-          onClick={() => setIsExternalModalOpen(true)}
-          className="flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-200 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:bg-gray-50 transition-all"
-        >
-          <Plus size={16} />
-          Ajouter un contact externe
-        </button>
+
+        <div className="bg-[#f8f9fa] border border-gray-100 rounded-[24px] p-6">
+          {externalContacts.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {externalContacts.map((contact: any, idx: number) => (
+                <div key={idx} className="bg-white border border-gray-100 rounded-2xl p-5 flex items-center justify-between shadow-sm hover:shadow-md transition-all group">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400">
+                      <User size={24} />
+                    </div>
+                    <div>
+                      <h4 className="text-[14px] font-bold text-gray-900">{contact.firstName} {contact.lastName}</h4>
+                      <p className="text-[11px] font-bold text-indigo-500 uppercase tracking-tight">{contact.type}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {contact.phone && <button className="p-2 bg-gray-50 text-gray-400 hover:text-gray-900 rounded-lg transition-colors"><Phone size={16} /></button>}
+                    {contact.email && <button className="p-2 bg-gray-50 text-gray-400 hover:text-gray-900 rounded-lg transition-colors"><Mail size={16} /></button>}
+                    <button onClick={() => removeExternalContact(contact)} className="p-2 text-gray-200 hover:text-red-500 rounded-lg transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={16} /></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-10 text-center space-y-2">
+              <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-gray-200 mx-auto shadow-sm"><User size={24} /></div>
+              <p className="text-[13px] text-gray-400 italic">Aucun contact externe renseigné.</p>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Section Liste des contacts annuaires */}
-      <div className="bg-[#f8f9fa] border border-gray-100 rounded-[20px] p-8 space-y-4">
-        <div className="space-y-1">
-          <h3 className="text-[15px] font-bold text-gray-900">Liste des contacts annuaires</h3>
-          <p className="text-[13px] text-gray-400">Vous n'avez pas renseigné de contact externe.</p>
+      {/* Section Contacts Annuaires */}
+      <div className="space-y-4">
+        <div className="flex justify-between items-center px-2">
+          <div className="space-y-1">
+            <h3 className="text-[15px] font-bold text-gray-900">Liste des contacts annuaires</h3>
+            <p className="text-[12px] text-gray-400">Lien avec d'autres fiches clients existantes</p>
+          </div>
+          <button 
+            onClick={() => setIsDirectoryModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-[11px] font-bold text-gray-800 shadow-sm hover:bg-gray-50 transition-all"
+          >
+            <Plus size={14} /> Lier un contact
+          </button>
         </div>
-        
-        <button 
-          onClick={() => setIsDirectoryModalOpen(true)}
-          className="flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-200 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:bg-gray-50 transition-all"
-        >
-          <Plus size={16} />
-          Ajouter depuis annuaires
-        </button>
+
+        <div className="bg-[#f8f9fa] border border-gray-100 rounded-[24px] p-6">
+          {directoryContacts.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {directoryContacts.map((contact: any, idx: number) => (
+                <div key={idx} className="bg-white border border-gray-100 rounded-2xl p-5 flex items-center justify-between shadow-sm hover:shadow-md transition-all group">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-400">
+                      <ExternalLink size={24} />
+                    </div>
+                    <div>
+                      <h4 className="text-[14px] font-bold text-gray-900">{contact.name}</h4>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase ${
+                          contact.status === 'Client' ? 'bg-cyan-100 text-cyan-600' : 
+                          contact.status === 'Prospect' ? 'bg-fuchsia-100 text-fuchsia-600' : 'bg-purple-100 text-purple-600'
+                        }`}>{contact.status}</span>
+                        <span className="text-[11px] text-gray-400">{contact.location}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => removeDirectoryContact(contact)} className="p-2 text-gray-200 hover:text-red-500 rounded-lg transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={16} /></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-10 text-center space-y-2">
+              <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-gray-200 mx-auto shadow-sm"><ExternalLink size={24} /></div>
+              <p className="text-[13px] text-gray-400 italic">Aucun contact lié depuis l'annuaire.</p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Modals */}
       <AddExternalContactModal 
         isOpen={isExternalModalOpen} 
         onClose={() => setIsExternalModalOpen(false)} 
+        clientId={client.id}
       />
       <AddDirectoryContactModal 
         isOpen={isDirectoryModalOpen} 
         onClose={() => setIsDirectoryModalOpen(false)} 
+        clientId={client.id}
+        companyId={(client as any).companyId}
       />
     </div>
   );

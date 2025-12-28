@@ -12,17 +12,19 @@ import TasksMemo from './components/TasksMemo';
 import ProjectTracking from './components/ProjectTracking';
 import ProjectDetails from './components/ProjectDetails';
 import UserProfile from './components/UserProfile';
+import CompanyManagement from './components/CompanyManagement';
 import LoginPage from './components/LoginPage';
 import { Page, Client } from './types';
-import { Construction } from 'lucide-react';
+import { Construction, AlertCircle } from 'lucide-react';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -31,38 +33,47 @@ function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        const userDocRef = doc(db, 'users', user.uid);
-        const userDoc = await getDoc(userDocRef);
-        
-        if (userDoc.exists()) {
-          setUserProfile({ uid: user.uid, ...userDoc.data() });
-        } else {
-          const defaultProfile = {
-            name: user.displayName || user.email?.split('@')[0] || 'Utilisateur',
-            email: user.email,
-            companyId: 'default_company',
-            avatar: `https://i.pravatar.cc/150?u=${user.uid}`,
-            role: 'Agenceur',
-            phone: '01 23 45 67 89',
-            lastName: (user.displayName || user.email?.split('@')[0] || '').toUpperCase(),
-            firstName: user.displayName || user.email?.split('@')[0] || '',
-            contractType: 'CDI',
-            jobTitle: 'Agenceur',
-            hasPhone: true,
-            hasCar: true,
-            hasLaptop: true,
-            agendaColor: '#A8A8A8',
-            isSubscriptionActive: true
-          };
-          await setDoc(userDocRef, defaultProfile);
-          setUserProfile({ uid: user.uid, ...defaultProfile });
-        }
-        setIsAuthenticated(true);
+        setAuthError(null);
+        const unsubDoc = onSnapshot(
+          doc(db, 'users', user.uid), 
+          (docSnap) => {
+            if (docSnap.exists()) {
+              setUserProfile({ uid: user.uid, ...docSnap.data() });
+              setIsAuthenticated(true);
+              setIsLoadingAuth(false);
+            } else {
+              const defaultProfile = {
+                name: user.displayName || 'Utilisateur',
+                email: user.email,
+                companyId: 'temp_company',
+                avatar: `https://i.pravatar.cc/150?u=${user.uid}`,
+                role: 'Agenceur',
+                lastName: '',
+                firstName: '',
+                isSubscriptionActive: true
+              };
+              setDoc(doc(db, 'users', user.uid), defaultProfile)
+                .catch(err => console.error("Erreur creation profil auto:", err));
+              
+              setUserProfile({ uid: user.uid, ...defaultProfile });
+              setIsAuthenticated(true);
+              setIsLoadingAuth(false);
+            }
+          },
+          (error) => {
+            console.error("Erreur Permission Firestore:", error);
+            if (error.code === 'permission-denied') {
+              setAuthError("Accès refusé : Veuillez configurer les règles de sécurité Firestore dans la console Firebase.");
+            }
+            setIsLoadingAuth(false);
+          }
+        );
+        return () => unsubDoc();
       } else {
         setIsAuthenticated(false);
         setUserProfile(null);
+        setIsLoadingAuth(false);
       }
-      setIsLoadingAuth(false);
     });
 
     return () => unsubscribe();
@@ -71,17 +82,11 @@ function App() {
   const getHeaderTitle = (page: Page) => {
     switch (page) {
       case 'dashboard': return 'Tableau de bord';
-      case 'directory': return 'Clients & prospects';
+      case 'directory': return 'Annuaire';
       case 'agenda': return 'Agenda';
       case 'articles': return 'Articles';
       case 'tasks': return 'Tâches & mémo';
-      case 'suppliers': return 'Fournisseurs';
-      case 'artisans': return 'Artisans';
-      case 'institutional': return 'Institutionnel';
-      case 'prescriber': return 'Prescripteur';
-      case 'subcontractor': return 'Sous traitant';
       case 'projects': return 'Suivi projets';
-      case 'kpi': return 'Indicateurs KPI';
       case 'company': return 'Notre entreprise';
       case 'profile': return 'Mon profil';
       default: return 'XORA';
@@ -106,7 +111,32 @@ function App() {
   if (isLoadingAuth) {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-white">
-        <div className="w-12 h-12 border-4 border-gray-100 border-t-gray-900 rounded-full animate-spin"></div>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-gray-100 border-t-gray-900 rounded-full animate-spin"></div>
+          <p className="text-sm font-bold text-gray-400 animate-pulse uppercase tracking-widest">Chargement XORA...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (authError) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-[#F8F9FA] p-6">
+        <div className="max-w-md w-full bg-white p-10 rounded-[32px] shadow-xl border border-red-50 text-center space-y-6">
+          <div className="w-20 h-20 bg-red-50 rounded-3xl flex items-center justify-center text-red-500 mx-auto">
+            <AlertCircle size={40} />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold text-gray-900">Problème de configuration</h2>
+            <p className="text-sm text-gray-500 leading-relaxed">{authError}</p>
+          </div>
+          <button 
+            onClick={() => window.location.reload()}
+            className="w-full py-4 bg-gray-900 text-white rounded-2xl font-bold text-sm hover:bg-black transition-all"
+          >
+            Réessayer
+          </button>
+        </div>
       </div>
     );
   }
@@ -130,7 +160,7 @@ function App() {
         );
       case 'directory':
         return selectedClient ? (
-          <ClientDetails client={selectedClient} onBack={() => setSelectedClient(null)} />
+          <ClientDetails client={selectedClient} userProfile={userProfile} onBack={() => setSelectedClient(null)} />
         ) : (
           <Directory 
             userProfile={userProfile}
@@ -139,17 +169,23 @@ function App() {
           />
         );
       case 'agenda': return <Agenda />;
-      case 'articles': return <Articles />;
+      case 'articles': return <Articles userProfile={userProfile} />;
       case 'tasks': return <TasksMemo userProfile={userProfile} />;
       case 'projects': 
         return selectedProject ? (
-          <ProjectDetails onBack={() => setSelectedProject(null)} />
+          <ProjectDetails 
+            project={selectedProject} 
+            userProfile={userProfile} 
+            onBack={() => setSelectedProject(null)} 
+          />
         ) : (
           <ProjectTracking 
             userProfile={userProfile}
             onProjectClick={(project) => setSelectedProject(project)} 
           />
         );
+      case 'company':
+        return <CompanyManagement userProfile={userProfile} />;
       case 'profile':
         return <UserProfile userProfile={userProfile} setUserProfile={setUserProfile} onBack={() => setCurrentPage('dashboard')} />;
       default:
@@ -160,10 +196,7 @@ function App() {
                 <Construction size={40} className="text-gray-300" />
               </div>
               <h3 className="text-xl font-bold text-gray-800 mb-2">Espace en développement</h3>
-              <p className="text-sm leading-relaxed">
-                Cette section de l'application XORA est actuellement en cours de finalisation. 
-                Veuillez revenir ultérieurement.
-              </p>
+              <p className="text-sm leading-relaxed">Cette section est en cours de finalisation.</p>
             </div>
           </div>
         );
@@ -175,7 +208,7 @@ function App() {
       <Sidebar currentPage={currentPage} setCurrentPage={handlePageChange} onLogout={handleLogout} />
       
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        {(!selectedClient && !selectedProject && currentPage !== 'profile') && (
+        {(!selectedClient && !selectedProject && currentPage !== 'profile' && currentPage !== 'company') && (
           <Header title={getHeaderTitle(currentPage)} user={userProfile} onProfileClick={() => setCurrentPage('profile')} />
         )}
         <main className="flex-1 overflow-auto bg-gray-50">

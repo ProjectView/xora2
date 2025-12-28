@@ -1,20 +1,14 @@
-import React, { useState } from 'react';
+
+import React from 'react';
 import { 
   LayoutDashboard, 
   CheckSquare, 
   Book, 
-  Users, 
   Briefcase, 
-  Hammer, 
-  UserSquare, 
-  FileText, 
   Box, 
   Calendar, 
   BarChart2, 
-  Building2, 
   LogOut, 
-  ChevronDown, 
-  ChevronRight, 
   ChevronsLeft
 } from 'lucide-react';
 import { Page } from '../types';
@@ -26,22 +20,12 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, onLogout }) => {
-  const [isAnnuaireOpen, setIsAnnuaireOpen] = useState(true);
-
   const LOGO_URL = "https://framerusercontent.com/images/BrlQcPpho2hjJ0qjdKGIdbfXY.png?width=1024&height=276";
 
   const menuItems = [
     { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard, page: 'dashboard' as Page },
     { id: 'tasks', label: 'Tâches & mémo', icon: CheckSquare, page: 'tasks' as Page },
-  ];
-
-  const directoryItems = [
-    { id: 'clients', label: 'Clients & prospects', icon: Users, page: 'directory' as Page },
-    { id: 'suppliers', label: 'Fournisseurs', icon: Building2, page: 'suppliers' as Page },
-    { id: 'artisans', label: 'Artisans', icon: Hammer, page: 'artisans' as Page },
-    { id: 'institutional', label: 'Institutionnel', icon: UserSquare, page: 'institutional' as Page },
-    { id: 'prescriber', label: 'Prescripteur', icon: FileText, page: 'prescriber' as Page },
-    { id: 'subcontractor', label: 'Sous traitant', icon: Briefcase, page: 'subcontractor' as Page },
+    { id: 'directory', label: 'Annuaire', icon: Book, page: 'directory' as Page },
   ];
 
   const bottomItems = [
@@ -80,39 +64,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, onLogout
             {item.label}
           </button>
         ))}
-
-        {/* Annuaire Group */}
-        <div className="pt-2">
-          <button
-            onClick={() => setIsAnnuaireOpen(!isAnnuaireOpen)}
-            className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm hover:bg-gray-50 text-gray-900 font-bold"
-          >
-            <div className="flex items-center">
-              <Book size={18} className="mr-3 text-gray-900" />
-              Annuaire
-            </div>
-            {isAnnuaireOpen ? <ChevronDown size={16} className="text-gray-300" /> : <ChevronRight size={16} className="text-gray-300" />}
-          </button>
-
-          {isAnnuaireOpen && (
-            <div className="mt-1 space-y-1">
-              {directoryItems.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => setCurrentPage(item.page)}
-                  className={`w-full flex items-center pl-10 pr-3 py-2 rounded-xl text-sm transition-all ${
-                    isActive(item.page)
-                      ? 'bg-gray-50 text-gray-900 font-bold'
-                      : 'hover:bg-gray-50 text-gray-500 font-medium hover:text-gray-700'
-                  }`}
-                >
-                  <item.icon size={16} className={`mr-3 ${isActive(item.page) ? 'text-gray-900' : 'text-gray-300'}`} />
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
 
         {/* Bottom Items */}
         <div className="pt-2 border-t border-gray-50 mt-2 space-y-1">
