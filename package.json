@@ -1,3 +1,4 @@
+
 {
   "name": "xora-crm",
   "private": true,
@@ -15,7 +16,7 @@
     "firebase": "^11.3.1",
     "clsx": "^2.1.1",
     "tailwind-merge": "^2.5.4",
-    "@google/genai": "^0.0.10"
+    "@google/genai": "^0.1.1"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
