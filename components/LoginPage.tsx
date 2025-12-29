@@ -3,7 +3,8 @@ import React, { useState } from 'react';
 import { Mail, Lock, Eye, EyeOff, ArrowRight, AlertCircle, Building2, User, CheckCircle2, Loader2, ArrowLeft } from 'lucide-react';
 import { auth, db, seedDatabase } from '../firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+// Use @firebase/firestore to fix named export resolution issues
+import { doc, setDoc } from '@firebase/firestore';
 
 interface LoginPageProps {
   onLogin: () => void;

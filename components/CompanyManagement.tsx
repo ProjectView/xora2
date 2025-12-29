@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { Building2, Users, Database, Check, Loader2, Save, MapPin, Globe, ShieldCheck, ChevronDown, Plus } from 'lucide-react';
 import { db, seedDatabase } from '../firebase';
-import { doc, updateDoc, onSnapshot, collection, query, where } from 'firebase/firestore';
+// Use @firebase/firestore to fix named export resolution issues
+import { doc, updateDoc, onSnapshot, collection, query, where } from '@firebase/firestore';
 import InviteCollaboratorModal from './InviteCollaboratorModal';
 
 interface CompanyManagementProps {

@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ChevronDown, ChevronUp, Plus, Search, MapPin, Loader2, X, Check, Navigation, User, Phone, Mail } from 'lucide-react';
 import { Client } from '../types';
 import { db } from '../firebase';
-import { doc, updateDoc, onSnapshot, collection, query, where } from 'firebase/firestore';
+// Use @firebase/firestore to fix named export resolution issues
+import { doc, updateDoc, onSnapshot, collection, query, where } from '@firebase/firestore';
 
 // Structure de données hiérarchique
 const HIERARCHY_DATA: Record<string, Record<string, string[]>> = {

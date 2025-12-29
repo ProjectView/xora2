@@ -18,7 +18,8 @@ import { Page, Client } from './types';
 import { Construction, AlertCircle } from 'lucide-react';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { doc, setDoc, onSnapshot } from 'firebase/firestore';
+// Use @firebase/firestore to fix named export resolution issues
+import { doc, setDoc, onSnapshot } from '@firebase/firestore';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);

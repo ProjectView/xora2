@@ -3,7 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, ChevronDown, ChevronUp, Loader2, Save } from 'lucide-react';
 import { Client } from '../types';
 import { db } from '../firebase';
-import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
+// Use @firebase/firestore to fix named export resolution issues
+import { doc, updateDoc, onSnapshot } from '@firebase/firestore';
 
 interface Property {
   id: string;

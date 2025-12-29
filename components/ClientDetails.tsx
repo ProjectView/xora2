@@ -13,7 +13,8 @@ import {
 } from 'lucide-react';
 import { Client } from '../types';
 import { db } from '../firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+// Use @firebase/firestore to fix named export resolution issues
+import { doc, onSnapshot } from '@firebase/firestore';
 import ClientTasks from './ClientTasks';
 import ClientContactInfo from './ClientContactInfo';
 import ClientProjects from './ClientProjects';

@@ -16,7 +16,8 @@ import {
   File as FileIcon
 } from 'lucide-react';
 import { db } from '../firebase';
-import { doc, onSnapshot, getDoc } from 'firebase/firestore';
+// Use @firebase/firestore to fix named export resolution issues
+import { doc, onSnapshot, getDoc } from '@firebase/firestore';
 import ProjectGeneralDiscovery from './ProjectGeneralDiscovery';
 import ProjectKitchenDiscovery from './ProjectKitchenDiscovery';
 
@@ -148,7 +149,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
                 </button>
               ))}
             </div>
-            <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-[12px] font-bold text-gray-700 hover:bg-gray-50 transition-all">
+            <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-[12px] font-bold text-gray-700 hover:bg-gray-50 shadow-sm transition-all">
               <FileText size={16} className="text-gray-400" /> Résumé des informations
             </button>
           </div>

@@ -2,7 +2,8 @@
 import React from 'react';
 import { ChevronDown, Plus, Minus, FileText } from 'lucide-react';
 import { db } from '../firebase';
-import { doc, updateDoc } from 'firebase/firestore';
+// Use @firebase/firestore to fix named export resolution issues
+import { doc, updateDoc } from '@firebase/firestore';
 
 interface ProjectGeneralDiscoveryProps {
   project: any;

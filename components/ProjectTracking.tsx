@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   Search, 
@@ -10,7 +11,8 @@ import {
   ChevronsLeft 
 } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+// Use @firebase/firestore to fix named export resolution issues
+import { collection, query, where, onSnapshot } from '@firebase/firestore';
 
 interface Project {
   id: string;

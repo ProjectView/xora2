@@ -1,7 +1,8 @@
 
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore, doc, writeBatch, collection, getDoc } from "firebase/firestore";
+// Use @firebase/firestore to fix named export resolution issues
+import { getFirestore, doc, writeBatch, collection, getDoc } from "@firebase/firestore";
 
 const getEnv = (key: string, fallback: string): string => {
   try {

@@ -2,7 +2,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, PenSquare, MessageSquare, Phone, Mail, ChevronDown, Camera, Loader2, Database, Check } from 'lucide-react';
 import { db } from '../firebase';
-import { doc, updateDoc, onSnapshot } from 'firebase/firestore';
+// Use @firebase/firestore to fix named export resolution issues
+import { doc, updateDoc, onSnapshot } from '@firebase/firestore';
 
 interface UserProfileProps {
   userProfile: any;

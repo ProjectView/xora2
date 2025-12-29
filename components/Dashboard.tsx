@@ -14,7 +14,8 @@ import {
   Loader2
 } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot, limit } from 'firebase/firestore';
+// Use @firebase/firestore to fix named export resolution issues
+import { collection, query, where, onSnapshot, limit } from '@firebase/firestore';
 import { FinancialKPI, StatusCard, Task, Client } from '../types';
 
 interface DashboardProps {

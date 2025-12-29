@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Box, 
@@ -17,7 +18,8 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot, doc, deleteDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
+// Use @firebase/firestore to fix named export resolution issues
+import { collection, query, where, onSnapshot, doc, deleteDoc, writeBatch, serverTimestamp } from '@firebase/firestore';
 import { Article } from '../types';
 import AddArticleModal from './AddArticleModal';
 

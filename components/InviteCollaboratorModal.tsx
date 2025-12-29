@@ -2,7 +2,8 @@
 import React, { useState } from 'react';
 import { X, UserPlus, Mail, User, ChevronDown, CheckCircle2, Loader2, Send } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+// Use @firebase/firestore to fix named export resolution issues
+import { collection, addDoc, serverTimestamp } from '@firebase/firestore';
 
 interface InviteCollaboratorModalProps {
   isOpen: boolean;

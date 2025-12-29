@@ -1,8 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { Search, ChevronDown, Plus, Eye, MoreHorizontal, Home } from 'lucide-react';
 import AddProjectModal from './AddProjectModal';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+// Use @firebase/firestore to fix named export resolution issues
+import { collection, query, where, onSnapshot } from '@firebase/firestore';
 
 interface ClientProjectsProps {
   client: any;

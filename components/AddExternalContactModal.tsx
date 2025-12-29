@@ -2,7 +2,8 @@
 import React, { useState } from 'react';
 import { X, ChevronDown, Check, SquarePen, Loader2 } from 'lucide-react';
 import { db } from '../firebase';
-import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
+// Use @firebase/firestore to fix named export resolution issues
+import { doc, updateDoc, arrayUnion } from '@firebase/firestore';
 
 interface AddExternalContactModalProps {
   isOpen: boolean;
@@ -57,7 +58,6 @@ const AddExternalContactModal: React.FC<AddExternalContactModalProps> = ({ isOpe
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
-        
         <form onSubmit={handleSubmit}>
           {/* Header */}
           <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between bg-[#FBFBFB]">
@@ -72,107 +72,109 @@ const AddExternalContactModal: React.FC<AddExternalContactModalProps> = ({ isOpe
             </button>
           </div>
 
-          {/* Form Body */}
           <div className="p-8 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-              <div className="md:col-span-3 space-y-2">
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Civilité*</label>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Civilité*</label>
                 <div className="relative">
                   <select 
-                    className="w-full appearance-none bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-gray-900 transition-all"
                     value={formData.civility}
                     onChange={(e) => setFormData({...formData, civility: e.target.value})}
+                    className="w-full appearance-none bg-[#F8F9FA] border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-indigo-400 transition-all shadow-sm"
                   >
                     <option>Mme</option>
                     <option>M.</option>
                   </select>
-                  <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
+                  <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
                 </div>
               </div>
-              <div className="md:col-span-4 space-y-2">
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Nom*</label>
+              <div className="md:col-span-1 space-y-2">
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Nom*</label>
                 <input 
                   required
                   type="text" 
-                  placeholder="Ex: DUBOIS" 
                   value={formData.lastName}
                   onChange={(e) => setFormData({...formData, lastName: e.target.value.toUpperCase()})}
-                  className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-gray-900 transition-all" 
+                  className="w-full bg-[#F8F9FA] border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-indigo-400 transition-all shadow-sm"
                 />
               </div>
-              <div className="md:col-span-5 space-y-2">
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Prénom*</label>
+              <div className="md:col-span-1 space-y-2">
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Prénom*</label>
                 <input 
                   required
                   type="text" 
-                  placeholder="Ex: Paul" 
                   value={formData.firstName}
                   onChange={(e) => setFormData({...formData, firstName: e.target.value})}
-                  className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-gray-900 transition-all" 
+                  className="w-full bg-[#F8F9FA] border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-indigo-400 transition-all shadow-sm"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-              <div className="md:col-span-4 space-y-2">
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Email</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Email</label>
                 <input 
                   type="email" 
-                  placeholder="nom@exemple.com" 
                   value={formData.email}
                   onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-gray-900 transition-all" 
+                  className="w-full bg-[#F8F9FA] border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-indigo-400 transition-all shadow-sm"
                 />
               </div>
-              <div className="md:col-span-4 space-y-2">
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Portable</label>
-                <input 
-                  type="text" 
-                  placeholder="06..." 
-                  value={formData.phone}
-                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                  className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-gray-900 transition-all" 
-                />
-              </div>
-              <div className="md:col-span-4 space-y-2">
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Fixe</label>
-                <input 
-                  type="text" 
-                  placeholder="04..." 
-                  value={formData.fixed}
-                  onChange={(e) => setFormData({...formData, fixed: e.target.value})}
-                  className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-gray-900 transition-all" 
-                />
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Type de contact</label>
+                <div className="relative">
+                  <select 
+                    value={formData.type}
+                    onChange={(e) => setFormData({...formData, type: e.target.value})}
+                    className="w-full appearance-none bg-[#F8F9FA] border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-indigo-400 transition-all shadow-sm"
+                  >
+                    <option>Conjoint / Conjointe</option>
+                    <option>Famille</option>
+                    <option>Ami / Voisin</option>
+                    <option>Autre</option>
+                  </select>
+                  <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
+                </div>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Type de contact</label>
-              <div className="relative">
-                <select 
-                  className="w-full appearance-none bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-gray-900 transition-all"
-                  value={formData.type}
-                  onChange={(e) => setFormData({...formData, type: e.target.value})}
-                >
-                  <option>Conjoint / Conjointe</option>
-                  <option>Membre de la famille</option>
-                  <option>Ami / Proche</option>
-                  <option>Autre</option>
-                </select>
-                <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Téléphone mobile</label>
+                <input 
+                  type="text" 
+                  value={formData.phone}
+                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                  className="w-full bg-[#F8F9FA] border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-indigo-400 transition-all shadow-sm"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Téléphone fixe</label>
+                <input 
+                  type="text" 
+                  value={formData.fixed}
+                  onChange={(e) => setFormData({...formData, fixed: e.target.value})}
+                  className="w-full bg-[#F8F9FA] border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-indigo-400 transition-all shadow-sm"
+                />
               </div>
             </div>
           </div>
 
-          {/* Footer */}
-          <div className="p-8 pt-0 flex justify-center">
+          <div className="p-8 border-t border-gray-100 bg-[#FBFBFB] flex justify-end gap-3">
+            <button 
+              type="button" 
+              onClick={onClose}
+              className="px-6 py-3 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all"
+            >
+              Annuler
+            </button>
             <button 
               type="submit"
               disabled={isLoading || !formData.lastName || !formData.firstName}
-              className="w-full flex items-center justify-center gap-3 px-10 py-4 bg-[#1A1C23] text-white border border-transparent rounded-2xl text-[14px] font-bold shadow-xl hover:bg-black transition-all active:scale-[0.98] disabled:opacity-50"
+              className="flex items-center gap-2 px-8 py-3 bg-gray-900 text-white rounded-xl text-sm font-bold shadow-lg hover:bg-black transition-all disabled:opacity-50"
             >
               {isLoading ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
-              Ajouter le contact au dossier
+              Enregistrer le contact
             </button>
           </div>
         </form>

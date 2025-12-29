@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { X, Search, Check, SquarePen, Plus, Loader2, MapPin } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot, doc, updateDoc, arrayUnion } from 'firebase/firestore';
+// Use @firebase/firestore to fix named export resolution issues
+import { collection, query, where, onSnapshot, doc, updateDoc, arrayUnion } from '@firebase/firestore';
 
 interface AddDirectoryContactModalProps {
   isOpen: boolean;

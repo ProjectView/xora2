@@ -2,7 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import { X, ChevronDown, Plus, CheckSquare, Calendar as CalendarIcon, Loader2 } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';
+// Use @firebase/firestore to fix named export resolution issues
+import { collection, addDoc, query, where, getDocs } from '@firebase/firestore';
 
 interface AddTaskModalProps {
   isOpen: boolean;

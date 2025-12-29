@@ -2,7 +2,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X, Briefcase, ArrowLeft, Check, Loader2, Search, User, Phone, Mail, ChevronDown, MapPin } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, addDoc, query, where, onSnapshot, doc } from 'firebase/firestore';
+// Use @firebase/firestore to fix named export resolution issues
+import { collection, addDoc, query, where, onSnapshot, doc } from '@firebase/firestore';
 
 const HIERARCHY_DATA: Record<string, Record<string, string[]>> = {
   "Actif commercial": {
@@ -81,7 +82,7 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, user
 
     const usersQ = query(collection(db, 'users'), where('companyId', '==', userProfile.companyId));
     const unsubscribeUsers = onSnapshot(usersQ, (snapshot) => {
-      let fetched = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+      let fetched: any[] = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
       
       // Sécurité : Toujours inclure l'utilisateur courant
       if (userProfile && !fetched.find(u => u.uid === userProfile.uid)) {
