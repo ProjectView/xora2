@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Box, 
@@ -18,7 +17,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot, doc, deleteDoc, orderBy, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, deleteDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import { Article } from '../types';
 import AddArticleModal from './AddArticleModal';
 
@@ -41,12 +40,10 @@ const Articles: React.FC<ArticlesProps> = ({ userProfile }) => {
     if (!userProfile?.companyId) return;
 
     const articlesRef = collection(db, 'articles');
-    // Note: Si l'index composite n'est pas encore créé, cette requête peut échouer.
-    // On ajoute un try/catch silencieux ou on gère l'erreur pour ne pas bloquer l'UI.
+    // On enlève le orderBy côté serveur pour éviter de requérir un index composite complexe
     const q = query(
       articlesRef, 
-      where('companyId', '==', userProfile.companyId),
-      orderBy('createdAt', 'desc')
+      where('companyId', '==', userProfile.companyId)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -54,20 +51,19 @@ const Articles: React.FC<ArticlesProps> = ({ userProfile }) => {
         id: doc.id,
         ...doc.data()
       })) as Article[];
+      
+      // Tri manuel côté client par date de création décroissante
+      articlesList.sort((a, b) => {
+        const dateA = a.createdAt?.seconds || 0;
+        const dateB = b.createdAt?.seconds || 0;
+        return dateB - dateA;
+      });
+
       setArticles(articlesList);
       setIsLoading(false);
     }, (error) => {
-      console.error("Firestore error (Vérifiez si l'index est créé):", error);
-      // Si l'index manque, on réessaie sans le tri pour que l'utilisateur voit quand même ses données
-      if (error.code === 'failed-precondition') {
-        const simpleQ = query(articlesRef, where('companyId', '==', userProfile.companyId));
-        onSnapshot(simpleQ, (snap) => {
-          setArticles(snap.docs.map(d => ({ id: d.id, ...d.data() })) as Article[]);
-          setIsLoading(false);
-        });
-      } else {
-        setIsLoading(false);
-      }
+      console.error("Firestore error:", error);
+      setIsLoading(false);
     });
 
     return () => unsubscribe();
@@ -102,9 +98,6 @@ const Articles: React.FC<ArticlesProps> = ({ userProfile }) => {
       const batch = writeBatch(db);
       let count = 0;
 
-      // Logique de parsing robuste pour le format :
-      // Métier;Rubrique;Famille;Collection;Résumé descriptif;Prix mini TTC;Prix maxi TTC
-      
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim();
         if (!line || line.startsWith(';;') || line.toLowerCase().includes('métier;rubrique')) continue;
@@ -112,14 +105,12 @@ const Articles: React.FC<ArticlesProps> = ({ userProfile }) => {
         const cols = line.split(';');
         if (cols.length < 6) continue;
 
-        // Nettoyage des colonnes
         const metier = cols[0]?.trim();
         const rubrique = cols[1]?.trim();
         const famille = cols[2]?.trim();
         const collectionName = cols[3]?.trim();
         const descriptif = cols[4]?.trim();
         
-        // Nettoyage des prix (retrait des espaces insécables, du symbole € et conversion en nombre)
         const parsePrice = (val: string) => {
             if (!val) return 0;
             const cleaned = val.replace(/[^\d.,]/g, '').replace(',', '.');
@@ -146,7 +137,6 @@ const Articles: React.FC<ArticlesProps> = ({ userProfile }) => {
         });
 
         count++;
-        // Firestore limite les batches à 500 opérations
         if (count >= 490) break; 
       }
 
@@ -182,7 +172,6 @@ const Articles: React.FC<ArticlesProps> = ({ userProfile }) => {
         className="hidden" 
       />
 
-      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center space-x-3 text-gray-900">
             <div className="p-2 bg-white border border-gray-100 rounded-xl shadow-sm">
@@ -225,7 +214,6 @@ const Articles: React.FC<ArticlesProps> = ({ userProfile }) => {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
           <div className="md:col-span-4 relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
@@ -248,7 +236,6 @@ const Articles: React.FC<ArticlesProps> = ({ userProfile }) => {
           ))}
       </div>
 
-      {/* Table */}
       <div className="bg-white rounded-[24px] border border-gray-100 overflow-hidden shadow-sm flex flex-col flex-1 relative">
           {(isLoading || isImporting) && (
             <div className="absolute inset-0 bg-white/50 z-20 flex items-center justify-center">
