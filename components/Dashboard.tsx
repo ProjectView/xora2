@@ -239,7 +239,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
                 ) : kpis.map((kpi) => (
                     <div key={kpi.id} className="border border-gray-100 rounded-xl p-4 flex flex-col justify-between shadow-sm hover:shadow-md transition-shadow bg-[#FBFBFB]">
                         <div className="flex justify-between items-start mb-4">
-                            <div className="p-2 rounded-lg bg-gray-800 shadow-sm">
+                            <div className="p-2 rounded-lg bg-[#A886D7] shadow-sm">
                                 {renderIcon(kpi.iconName)}
                             </div>
                             <span className="text-sm font-bold text-gray-400 uppercase tracking-tight">{kpi.label}</span>
@@ -250,7 +250,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
                                 <span className="text-xs text-gray-400 font-medium">/ {kpi.target}</span>
                             </div>
                             <div className="mt-3 relative h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
-                                <div className="absolute top-0 left-0 h-full bg-gray-800 rounded-full transition-all duration-1000" style={{ width: `${kpi.percentage}%` }}></div>
+                                <div className="absolute top-0 left-0 h-full bg-[#A886D7] rounded-full transition-all duration-1000" style={{ width: `${kpi.percentage}%` }}></div>
                             </div>
                             <div className="text-right mt-1">
                                 <span className="text-xs font-bold text-gray-900">{kpi.percentage}%</span>

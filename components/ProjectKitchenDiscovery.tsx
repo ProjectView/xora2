@@ -3,6 +3,8 @@ import React, { useState } from 'react';
 import { File as FileIcon, Plus } from 'lucide-react';
 import ProjectKitchenAmbiance from './ProjectKitchenAmbiance';
 import ProjectKitchenElectros from './ProjectKitchenElectros';
+import ProjectKitchenFurniture from './ProjectKitchenFurniture';
+import ProjectKitchenEstimation from './ProjectKitchenEstimation';
 
 interface ProjectKitchenDiscoveryProps {
   project: any;
@@ -51,17 +53,9 @@ const ProjectKitchenDiscovery: React.FC<ProjectKitchenDiscoveryProps> = ({ proje
 
       <div className="animate-in fade-in duration-300">
         {activeKitchenTab === 'Ambiance' && <ProjectKitchenAmbiance project={project} />}
+        {activeKitchenTab === 'Meubles' && <ProjectKitchenFurniture project={project} />}
         {activeKitchenTab === 'Electros & sanitaires' && <ProjectKitchenElectros project={project} userProfile={userProfile} />}
-        
-        {(activeKitchenTab === 'Meubles' || activeKitchenTab === 'Estimation financière') && (
-          <div className="h-64 flex flex-col items-center justify-center text-center p-12 bg-white border border-gray-100 rounded-[24px] shadow-sm">
-            <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4 text-gray-200">
-              <Plus size={32} />
-            </div>
-            <h3 className="text-[15px] font-bold text-gray-800 mb-1">Section {activeKitchenTab}</h3>
-            <p className="text-[12px] text-gray-400">Détails techniques en cours de développement.</p>
-          </div>
-        )}
+        {activeKitchenTab === 'Estimation financière' && <ProjectKitchenEstimation project={project} />}
       </div>
     </div>
   );
