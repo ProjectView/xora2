@@ -13,6 +13,7 @@ import ProjectTracking from './components/ProjectTracking';
 import ProjectDetails from './components/ProjectDetails';
 import UserProfile from './components/UserProfile';
 import CompanyManagement from './components/CompanyManagement';
+import KPIManagement from './components/KPIManagement';
 import LoginPage from './components/LoginPage';
 import { Page, Client } from './types';
 import { Construction, AlertCircle } from 'lucide-react';
@@ -90,6 +91,7 @@ function App() {
       case 'projects': return 'Suivi projets';
       case 'company': return 'Notre entreprise';
       case 'profile': return 'Mon profil';
+      case 'kpi': return 'KPI';
       default: return 'XORA';
     }
   };
@@ -169,7 +171,7 @@ function App() {
             onClientClick={(client) => setSelectedClient(client)} 
           />
         );
-      case 'agenda': return <Agenda />;
+      case 'agenda': return <Agenda userProfile={userProfile} />;
       case 'articles': return <Articles userProfile={userProfile} />;
       case 'tasks': return <TasksMemo userProfile={userProfile} />;
       case 'projects': 
@@ -189,11 +191,13 @@ function App() {
         return <CompanyManagement userProfile={userProfile} />;
       case 'profile':
         return <UserProfile userProfile={userProfile} setUserProfile={setUserProfile} onBack={() => setCurrentPage('dashboard')} />;
+      case 'kpi':
+        return <KPIManagement userProfile={userProfile} />;
       default:
         return (
           <div className="flex flex-col items-center justify-center h-[calc(100vh-64px)] bg-gray-50 text-gray-400 p-8 text-center">
             <div className="bg-white p-12 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center max-w-md">
-              <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-6">
+              <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-6 text-gray-300">
                 <Construction size={40} className="text-gray-300" />
               </div>
               <h3 className="text-xl font-bold text-gray-800 mb-2">Espace en développement</h3>
@@ -209,7 +213,7 @@ function App() {
       <Sidebar currentPage={currentPage} setCurrentPage={handlePageChange} onLogout={handleLogout} />
       
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        {(!selectedClient && !selectedProject && currentPage !== 'profile' && currentPage !== 'company') && (
+        {(!selectedClient && !selectedProject && currentPage !== 'profile' && currentPage !== 'company' && currentPage !== 'kpi') && (
           <Header title={getHeaderTitle(currentPage)} user={userProfile} onProfileClick={() => setCurrentPage('profile')} />
         )}
         <main className="flex-1 overflow-auto bg-gray-50">

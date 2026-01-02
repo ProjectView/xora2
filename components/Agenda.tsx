@@ -1,195 +1,256 @@
-import React from 'react';
+
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  CheckSquare, 
+  Calendar, 
   Plus, 
   Search, 
   ChevronDown, 
-  Video, 
-  MapPin
+  ChevronLeft, 
+  ChevronRight, 
+  Loader2,
+  Clock
 } from 'lucide-react';
+import { db } from '../firebase';
+import { collection, query, where, onSnapshot } from '@firebase/firestore';
+import { Appointment } from '../types';
 
-const Agenda: React.FC = () => {
-  // Mock data for the week days
-  const weekDays = [
-    { day: 'Lundi', date: '12 avril', avatars: 3 },
-    { day: 'Mardi', date: '13 avril', avatars: 3 },
-    { day: 'Mercredi', date: '14 avril', avatars: 3 },
-    { day: 'Jeudi', date: '15 avril', avatars: 3 },
-    { day: 'Vendredi', date: '16 avril', avatars: 3 },
-    { day: 'Samedi', date: '17 avril', avatars: 3 },
-    { day: 'Dimanche', date: '18 avril', avatars: 3 },
-  ];
+interface AgendaProps {
+  userProfile: any;
+}
 
-  // Hours to display
-  const hours = Array.from({ length: 11 }, (_, i) => i + 8); // 08:00 to 18:00
+const Agenda: React.FC<AgendaProps> = ({ userProfile }) => {
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [viewMode, setViewMode] = useState<'Jours' | 'Semaine' | 'Mois'>('Semaine');
+  const [filterUser, setFilterUser] = useState(userProfile?.name || '');
+
+  // --- Gestion du temps (Navigation dynamique) ---
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  const weekDays = useMemo(() => {
+    const startOfWeek = new Date(currentDate);
+    const day = startOfWeek.getDay();
+    const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1); // Lundi comme premier jour
+    startOfWeek.setDate(diff);
+
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(startOfWeek);
+      d.setDate(startOfWeek.getDate() + i);
+      return {
+        label: d.toLocaleDateString('fr-FR', { weekday: 'long' }),
+        dayNum: d.getDate(),
+        month: d.toLocaleDateString('fr-FR', { month: 'long' }),
+        fullDate: d.toLocaleDateString('fr-FR'), // Format DD/MM/YYYY
+        isToday: d.toLocaleDateString('fr-FR') === new Date().toLocaleDateString('fr-FR')
+      };
+    });
+  }, [currentDate]);
+
+  const dateRangeLabel = useMemo(() => {
+    const start = weekDays[0];
+    const end = weekDays[6];
+    return `${start.dayNum}/${start.fullDate.split('/')[1]} - ${end.dayNum}/${end.fullDate.split('/')[1]}`;
+  }, [weekDays]);
+
+  const changeWeek = (direction: 'next' | 'prev') => {
+    const newDate = new Date(currentDate);
+    newDate.setDate(currentDate.getDate() + (direction === 'next' ? 7 : -7));
+    setCurrentDate(newDate);
+  };
+
+  const hours = Array.from({ length: 11 }, (_, i) => i + 8); // 08:00 à 18:00
+
+  // --- Données Firestore ---
+  useEffect(() => {
+    if (!userProfile?.companyId) return;
+    const q = query(collection(db, 'appointments'), where('companyId', '==', userProfile.companyId));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Appointment[];
+      setAppointments(data);
+      setIsLoading(false);
+    });
+    return () => unsubscribe();
+  }, [userProfile?.companyId]);
+
+  const filteredAppointments = useMemo(() => {
+    return appointments.filter(rdv => {
+      const matchesSearch = rdv.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                           rdv.clientName.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesUser = filterUser ? rdv.collaborator.name === filterUser : true;
+      return matchesSearch && matchesUser;
+    });
+  }, [appointments, searchQuery, filterUser]);
+
+  const getPositionStyles = (startTime: string, endTime: string) => {
+    const [startH, startM] = startTime.split(':').map(Number);
+    const [endH, endM] = endTime.split(':').map(Number);
+    const startMinutesFrom8am = (startH - 8) * 60 + startM;
+    const durationMinutes = (endH * 60 + endM) - (startH * 60 + startM);
+    const rowHeight = 80; 
+    return {
+      top: `${(startMinutesFrom8am / 60) * rowHeight}px`,
+      height: `${(durationMinutes / 60) * rowHeight}px`
+    };
+  };
 
   return (
-    <div className="flex flex-col h-full bg-gray-50">
-      
-      {/* Controls Header */}
-      <div className="px-6 py-6 flex flex-col gap-6">
+    <div className="flex flex-col h-full bg-white font-sans animate-in fade-in duration-300">
+      <div className="p-8 space-y-6 flex-1 flex flex-col min-h-0">
         
-        {/* Top Row: Title, View Toggles, Actions */}
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-          <div className="flex items-center gap-4">
-            <h2 className="text-xl font-bold text-gray-800">Agenda</h2>
-            
-            <div className="flex items-center bg-white rounded-md border border-gray-200 p-0.5">
-                <span className="px-3 py-1.5 text-xs font-semibold text-gray-700 bg-gray-100 rounded shadow-sm">Semaine 17</span>
-            </div>
-
-            <div className="flex bg-gray-200 rounded-lg p-1 space-x-1">
-                 <button className="px-4 py-1.5 rounded-md text-xs font-medium text-gray-600 hover:bg-white/50 transition-colors">Jours</button>
-                 <button className="px-4 py-1.5 rounded-md text-xs font-medium bg-gray-800 text-white shadow-sm">Semaine</button>
-                 <button className="px-4 py-1.5 rounded-md text-xs font-medium text-gray-600 hover:bg-white/50 transition-colors">Mois</button>
-            </div>
-
-            <div className="relative">
-                <button className="flex items-center space-x-2 px-3 py-1.5 bg-white border border-gray-200 rounded-md text-xs font-medium text-gray-700 hover:bg-gray-50">
-                   <span>12/05 - 18/05</span>
-                   <ChevronDown size={14} className="text-gray-400" />
+        {/* Barre d'outils combinée (Navigation + Action) */}
+        <div className="bg-[#F8F9FA] border border-gray-100 rounded-2xl p-4 flex flex-col md:flex-row justify-between items-center gap-4 shadow-sm shrink-0">
+          <div className="flex items-center gap-5">
+            {/* Segmented View Control */}
+            <div className="flex bg-white rounded-full p-1 border border-gray-200 shadow-sm">
+              {['Jours', 'Semaine', 'Mois'].map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode as any)}
+                  className={`px-6 py-1.5 text-xs font-bold rounded-full transition-all ${
+                    viewMode === mode ? 'bg-[#1A1C23] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'
+                  }`}
+                >
+                  {mode}
                 </button>
+              ))}
+            </div>
+
+            {/* Navigation Temporelle */}
+            <div className="flex items-center bg-white border border-gray-200 rounded-xl px-2 py-1 gap-4 shadow-sm">
+               <button onClick={() => changeWeek('prev')} className="p-1.5 hover:bg-gray-50 rounded-lg text-gray-400 transition-colors"><ChevronLeft size={16} /></button>
+               <span className="text-xs font-black text-gray-800 uppercase tracking-widest min-w-[100px] text-center">
+                 {dateRangeLabel}
+               </span>
+               <button onClick={() => changeWeek('next')} className="p-1.5 hover:bg-gray-50 rounded-lg text-gray-400 transition-colors"><ChevronRight size={16} /></button>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-             <button className="flex items-center px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
-                <CheckSquare size={16} className="mr-2" />
-                Ajouter une tâche
-             </button>
-             <button className="flex items-center px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm font-medium text-gray-800 hover:bg-gray-100 transition-colors">
-                <Plus size={16} className="mr-2" />
-                Ajouter un rendez-vous
-             </button>
+          <button className="flex items-center gap-2 px-6 py-3 bg-white border border-gray-200 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:border-gray-900 transition-all active:scale-95">
+             <Plus size={16} className="text-gray-400" />
+             Ajouter un rendez-vous
+          </button>
+        </div>
+
+        {/* Barre de Filtres */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 shrink-0">
+          <div className="relative group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-gray-800 transition-colors" size={16} />
+            <input 
+              type="text" 
+              placeholder="Rechercher par client ou objet..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 outline-none focus:border-gray-400 transition-all placeholder:text-gray-200 shadow-sm"
+            />
+          </div>
+          <div className="relative group">
+            <select 
+              value={filterUser}
+              onChange={(e) => setFilterUser(e.target.value)}
+              className="w-full appearance-none bg-white border border-gray-200 rounded-xl px-5 py-3 text-sm font-bold text-gray-800 outline-none hover:border-gray-400 transition-all cursor-pointer shadow-sm"
+            >
+              <option value="">Tous les collaborateurs</option>
+              <option value={userProfile?.name}>{userProfile?.name} (Moi)</option>
+              <option value="Thomas">Thomas</option>
+              <option value="Céline">Céline</option>
+            </select>
+            <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
           </div>
         </div>
 
-        {/* Filter Row */}
-        <div className="flex flex-col md:flex-row gap-4">
-             <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-                <input 
-                    type="text" 
-                    placeholder="Rechercher" 
-                    className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-gray-300 text-gray-800 placeholder-gray-400"
-                />
-             </div>
-             <div className="relative w-full md:w-64">
-                <button className="w-full flex items-center justify-between px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-800 hover:bg-gray-50">
-                    <div className="flex items-center">
-                        <img src="https://i.pravatar.cc/150?u=admin" alt="" className="w-6 h-6 rounded-full mr-2" />
-                        <span className="font-medium">Loïc <span className="text-gray-500 font-normal">(Vous)</span></span>
-                    </div>
-                    <ChevronDown size={16} className="text-gray-400" />
-                </button>
-             </div>
-        </div>
-      </div>
+        {/* Grille de l'Agenda */}
+        <div className="bg-white border border-gray-100 rounded-3xl shadow-2xl shadow-gray-100/50 overflow-hidden relative flex-1 flex flex-col min-h-0">
+          {isLoading && (
+            <div className="absolute inset-0 bg-white/60 z-50 flex items-center justify-center">
+              <Loader2 className="animate-spin text-gray-300" size={32} />
+            </div>
+          )}
 
-      {/* Calendar Grid */}
-      <div className="flex-1 overflow-auto px-6 pb-6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 min-w-[1000px] flex flex-col h-full">
-            
-            {/* Header Row */}
-            <div className="flex border-b border-gray-200">
-                {/* Time Column Header */}
-                <div className="w-16 flex-shrink-0 border-r border-gray-100"></div>
-                
-                {/* Days Headers */}
-                <div className="flex-1 grid grid-cols-7 divide-x divide-gray-100">
-                    {weekDays.map((day, index) => (
-                        <div key={index} className="p-3 text-center">
-                            <div className="text-sm font-semibold text-gray-800 mb-1">{day.day} {day.date}</div>
-                            {/* Avatars Stack */}
-                            <div className="flex justify-center -space-x-1.5">
-                                {[1, 2, 3, 4].map(i => (
-                                    <img 
-                                        key={i} 
-                                        src={`https://i.pravatar.cc/150?u=${10 + i + index}`} 
-                                        alt="" 
-                                        className="w-5 h-5 rounded-full border border-white ring-1 ring-gray-100" 
-                                    />
-                                ))}
-                                <div className="w-5 h-5 rounded-full bg-gray-100 border border-white flex items-center justify-center text-[8px] font-bold text-gray-500">
-                                    +{day.avatars}
-                                </div>
-                            </div>
-                        </div>
-                    ))}
+          <div className="overflow-auto flex-1 custom-scrollbar">
+            <div className="min-w-[1000px] flex flex-col h-full">
+              {/* En-têtes des Jours */}
+              <div className="flex border-b border-gray-100 bg-[#FCFCFD] sticky top-0 z-40">
+                <div className="w-20 shrink-0 border-r border-gray-50 flex items-center justify-center">
+                  <Clock size={16} className="text-gray-200" />
                 </div>
-            </div>
+                {weekDays.map((day, i) => (
+                  <div key={i} className={`flex-1 py-5 text-center border-l border-gray-50 ${day.isToday ? 'bg-indigo-50/20' : ''}`}>
+                    <div className={`text-[10px] font-black uppercase tracking-[0.1em] ${day.isToday ? 'text-indigo-600' : 'text-gray-300'}`}>
+                      {day.label}
+                    </div>
+                    <div className={`text-[14px] font-black mt-1 ${day.isToday ? 'text-indigo-600' : 'text-gray-900'}`}>
+                      {day.dayNum} {day.month}
+                    </div>
+                    {day.isToday && <div className="w-1.5 h-1.5 bg-indigo-600 rounded-full mx-auto mt-1 animate-pulse"></div>}
+                  </div>
+                ))}
+              </div>
 
-            {/* Body */}
-            <div className="flex flex-1 overflow-y-auto">
-                 {/* Time Labels Column */}
-                 <div className="w-16 flex-shrink-0 border-r border-gray-100 bg-white z-10">
-                     {hours.map(hour => (
-                         <div key={hour} className="h-24 text-xs text-gray-400 font-medium text-center relative">
-                             <span className="absolute -top-2 left-0 right-0">{hour}:00</span>
-                         </div>
-                     ))}
-                 </div>
+              {/* Corps de la Grille */}
+              <div className="flex relative min-h-[880px] bg-white">
+                {/* Colonne des Heures */}
+                <div className="w-20 shrink-0 bg-[#FCFCFD]/50 border-r border-gray-50 sticky left-0 z-30">
+                  {hours.map((hour) => (
+                    <div key={hour} className="h-20 text-[11px] font-black text-gray-300 text-center pt-2">
+                      <span className="bg-white px-2 py-0.5 rounded border border-gray-50 shadow-sm">{hour}:00</span>
+                    </div>
+                  ))}
+                </div>
 
-                 {/* Days Columns */}
-                 <div className="flex-1 grid grid-cols-7 divide-x divide-gray-100 relative">
-                     {/* Background Grid Lines */}
-                     <div className="absolute inset-0 flex flex-col pointer-events-none z-0">
-                         {hours.map(hour => (
-                             <div key={hour} className="h-24 border-b border-gray-50 w-full"></div>
-                         ))}
-                     </div>
+                {/* Colonnes des Jours */}
+                <div className="flex-1 grid grid-cols-7 relative">
+                  {/* Lignes Horizontales de fond */}
+                  <div className="absolute inset-0 flex flex-col pointer-events-none z-0">
+                    {hours.map((hour) => (
+                      <div key={hour} className="h-20 border-b border-gray-50/50 w-full"></div>
+                    ))}
+                  </div>
 
-                     {weekDays.map((_, dayIndex) => (
-                         <div key={dayIndex} className="relative h-[1056px] z-0"> {/* Height = 11 hours * 96px (h-24) */}
-                             
-                             {/* Mock Events for Monday (Index 0) */}
-                             {dayIndex === 0 && (
-                                 <>
-                                     {/* Event 1: 11:30 - 13:30 */}
-                                     {/* 11:30 starts at: (11.5 - 8) * 96px = 3.5 * 96 = 336px */}
-                                     {/* Duration 2h = 192px */}
-                                     <div 
-                                        className="absolute left-1 right-1 rounded-lg bg-indigo-100 border border-indigo-200 p-2 cursor-pointer hover:shadow-md transition-shadow z-10"
-                                        style={{ top: '336px', height: '192px' }}
-                                     >
-                                         <div className="text-[10px] font-semibold text-indigo-800 mb-1">RDV R1 Dupont</div>
-                                         <div className="flex -space-x-1.5 mb-2">
-                                             <img src="https://i.pravatar.cc/150?u=20" className="w-5 h-5 rounded-full border border-indigo-100" alt="" />
-                                             <img src="https://i.pravatar.cc/150?u=21" className="w-5 h-5 rounded-full border border-indigo-100" alt="" />
-                                         </div>
-                                         <div className="flex items-center text-[10px] text-indigo-700 mb-1">
-                                             <MapPin size={10} className="mr-1" />
-                                             Extérieur <span className="bg-gray-800 text-white rounded-full px-1 py-0.5 text-[8px] ml-1">R1</span>
-                                         </div>
-                                         <div className="flex items-center text-[10px] text-indigo-700 mt-4 border-t border-indigo-200 pt-2">
-                                             <Video size={10} className="mr-1" />
-                                             11:30 - 13:30
-                                         </div>
-                                     </div>
+                  {weekDays.map((day, dayIdx) => (
+                    <div key={dayIdx} className={`relative h-full border-l border-gray-50/30 ${day.isToday ? 'bg-indigo-50/5' : ''}`}>
+                      {/* Rendu des RDV */}
+                      {filteredAppointments
+                        .filter(rdv => rdv.date === day.fullDate)
+                        .map(rdv => {
+                          const styles = getPositionStyles(rdv.startTime, rdv.endTime);
+                          return (
+                            <div 
+                              key={rdv.id}
+                              className="absolute inset-x-1.5 rounded-xl bg-[#C6F6D5] border-l-4 border-[#38A169] p-3 cursor-pointer hover:shadow-2xl hover:scale-[1.02] transition-all z-20 overflow-hidden flex flex-col justify-between shadow-md"
+                              style={styles}
+                            >
+                              <div className="space-y-0.5">
+                                <h4 className="text-[11.5px] font-black text-[#22543D] leading-tight truncate uppercase tracking-tighter">{rdv.title}</h4>
+                                {rdv.clientName && <p className="text-[10px] font-bold text-[#2F855A] truncate opacity-80">{rdv.clientName}</p>}
+                              </div>
+                              <div className="flex justify-between items-end mt-2">
+                                <span className="text-[9px] font-black px-1.5 py-0.5 bg-white/40 rounded uppercase text-[#22543D]">{rdv.type}</span>
+                                <span className="text-[9px] font-black text-[#38A169]">{rdv.startTime}</span>
+                              </div>
+                            </div>
+                          );
+                        })
+                      }
 
-                                     {/* Event 2: 14:30 - 15:30 */}
-                                     {/* 14:30 starts at: (14.5 - 8) * 96px = 6.5 * 96 = 624px */}
-                                     {/* Duration 1h = 96px */}
-                                     <div 
-                                        className="absolute left-1 right-1 rounded-lg bg-emerald-100 border border-emerald-200 p-2 cursor-pointer hover:shadow-md transition-shadow z-10"
-                                        style={{ top: '624px', height: '96px' }}
-                                     >
-                                         <div className="text-[10px] font-semibold text-emerald-800 mb-1">RDV R2 Dubois</div>
-                                         <div className="flex justify-between items-end">
-                                            <div className="flex -space-x-1.5">
-                                                <img src="https://i.pravatar.cc/150?u=22" className="w-5 h-5 rounded-full border border-emerald-100" alt="" />
-                                                <img src="https://i.pravatar.cc/150?u=23" className="w-5 h-5 rounded-full border border-emerald-100" alt="" />
-                                            </div>
-                                            <div className="text-[10px] text-emerald-700">14:30 - 15:30</div>
-                                         </div>
-                                     </div>
-                                 </>
-                             )}
-                         </div>
-                     ))}
-                 </div>
+                      {/* Ligne de temps actuel */}
+                      {day.isToday && (
+                        <div 
+                          className="absolute left-0 right-0 border-t-2 border-red-500 z-30 pointer-events-none flex items-center"
+                          style={{ 
+                            top: `${((new Date().getHours() - 8) * 60 + new Date().getMinutes()) / 60 * 80}px` 
+                          }}
+                        >
+                          <div className="w-2.5 h-2.5 bg-red-500 rounded-full -ml-1.5 shadow-lg"></div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
+        </div>
       </div>
     </div>
   );

@@ -11,12 +11,22 @@ import {
   FileText, 
   User,
   ChevronUp,
-  Loader2
+  Loader2,
+  Target,
+  TrendingUp,
+  PieChart,
+  BarChart3,
+  StickyNote,
+  PenSquare,
+  Trash2,
+  CheckCircle2,
+  Clock
 } from 'lucide-react';
 import { db } from '../firebase';
 // Use @firebase/firestore to fix named export resolution issues
-import { collection, query, where, onSnapshot, limit } from '@firebase/firestore';
+import { collection, query, where, onSnapshot, limit, doc, deleteDoc, updateDoc } from '@firebase/firestore';
 import { FinancialKPI, StatusCard, Task, Client } from '../types';
+import AddTaskModal from './AddTaskModal';
 
 interface DashboardProps {
   userProfile?: any;
@@ -32,6 +42,8 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
   const [allClients, setAllClients] = useState<Client[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasPermissionError, setHasPermissionError] = useState(false);
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
 
   // Search states
   const [searchQuery, setSearchQuery] = useState('');
@@ -75,11 +87,13 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
     
     const unsubscribeTasks = onSnapshot(tasksQuery, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Task[];
+      // On affiche les tâches non terminées, triées par date de création ou retard
       const filteredTasks = data
         .filter(t => t.status !== 'completed')
-        .slice(0, 6);
+        .slice(0, 8);
       
       setTasks(filteredTasks);
+      setIsLoading(false);
     }, errorHandler);
 
     // 4. Charger TOUS les clients de l'entreprise pour la recherche locale
@@ -89,7 +103,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
     const unsubscribeClients = onSnapshot(clientsQuery, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Client[];
       setAllClients(data);
-      setIsLoading(false);
     }, errorHandler);
 
     return () => {
@@ -99,6 +112,24 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
       unsubscribeClients();
     };
   }, [userProfile?.companyId]);
+
+  const handleDeleteTask = async (id: string) => {
+    if (!window.confirm("Supprimer cette tâche ?")) return;
+    try {
+      await deleteDoc(doc(db, 'tasks', id));
+      setActiveMenuId(null);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const updateTaskStatus = async (id: string, status: string) => {
+    try {
+      await updateDoc(doc(db, 'tasks', id), { status });
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   // Filtrage local des résultats de recherche
   const searchResults = useMemo(() => {
@@ -120,12 +151,17 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
   }, []);
 
   const renderIcon = (iconName: string) => {
+    const props = { size: 20, className: "text-white" };
     switch (iconName) {
-      case 'euro': return <Euro size={20} className="text-white" />;
-      case 'search': return <Search size={20} className="text-white" />;
-      case 'file': return <FileText size={20} className="text-white" />;
-      case 'user': return <User size={20} className="text-white" />;
-      default: return <Euro size={20} className="text-white" />;
+      case 'euro': return <Euro {...props} />;
+      case 'target': return <Target {...props} />;
+      case 'search': return <Search {...props} />;
+      case 'file': return <FileText {...props} />;
+      case 'user': return <User {...props} />;
+      case 'trending-up': return <TrendingUp {...props} />;
+      case 'pie-chart': return <PieChart {...props} />;
+      case 'bar-chart': return <BarChart3 {...props} />;
+      default: return <Euro {...props} />;
     }
   };
 
@@ -242,7 +278,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
                             <div className="p-2 rounded-lg bg-[#A886D7] shadow-sm">
                                 {renderIcon(kpi.iconName)}
                             </div>
-                            <span className="text-sm font-bold text-gray-400 uppercase tracking-tight">{kpi.label}</span>
+                            <span className="text-[11px] font-black text-gray-300 uppercase tracking-tight text-right leading-tight max-w-[120px]">{kpi.label}</span>
                         </div>
                         <div>
                             <div className="flex items-baseline space-x-2">
@@ -294,71 +330,138 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
         </div>
 
         <div className="lg:col-span-9">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 h-full">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+            <div className="bg-white rounded-[24px] shadow-sm border border-gray-100 p-8 h-full flex flex-col overflow-hidden">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 shrink-0">
                     <div>
-                        <h3 className="text-lg font-bold text-gray-800">Priorité des tâches & mémos</h3>
-                        <p className="text-xs text-gray-400 mt-1">{new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                        <div className="flex items-center gap-3">
+                           <h3 className="text-[18px] font-black text-gray-900 uppercase tracking-tight">Priorité des tâches & mémos</h3>
+                           <span className="px-2 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[10px] font-black uppercase tracking-widest">{tasks.length} actives</span>
+                        </div>
+                        <p className="text-[11px] text-gray-400 font-bold mt-1 flex items-center gap-2 uppercase tracking-widest">
+                           <Clock size={12} className="text-gray-300" />
+                           {new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                        </p>
                     </div>
                     <div className="flex items-center gap-3">
                         <button 
-                          onClick={onAddClientClick}
-                          className="flex items-center space-x-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-bold hover:bg-gray-50 text-gray-800 shadow-sm transition-colors"
+                          onClick={() => setIsAddTaskModalOpen(true)}
+                          className="flex items-center gap-2 px-6 py-3 bg-white border border-gray-200 rounded-xl text-[12px] font-black hover:bg-gray-50 text-gray-800 shadow-sm transition-all active:scale-95"
                         >
-                            <Plus size={16} />
-                            <span>Ajouter</span>
+                            <Plus size={16} className="text-[#A886D7]" />
+                            <span>AJOUTER UNE TÂCHE</span>
                         </button>
-                        <div className="p-2 bg-gray-50 rounded-lg border border-gray-100 cursor-pointer hover:bg-gray-100 transition-colors">
+                        <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer hover:bg-gray-100 transition-colors">
                             <ArrowUpRight size={18} className="text-gray-400 transform rotate-45" />
                         </div>
                     </div>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
                     {tasks.length === 0 ? (
-                      <div className="py-20 text-center text-gray-400 font-medium border-2 border-dashed border-gray-50 rounded-xl">
-                        Toutes les tâches sont à jour ! 🎉
+                      <div className="py-20 text-center text-gray-400 font-medium border-2 border-dashed border-gray-50 rounded-[24px] bg-[#FBFBFB]">
+                        <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 text-gray-100 shadow-sm">
+                           <CheckCircle2 size={32} />
+                        </div>
+                        <p className="text-[14px] font-bold text-gray-400">Toutes les tâches sont à jour ! 🎉</p>
                       </div>
                     ) : tasks.map((task, index) => (
-                        <div key={task.id} className="flex flex-col lg:flex-row lg:items-center justify-between p-4 border border-gray-100 rounded-xl hover:border-gray-300 transition-colors bg-[#FBFBFB]">
-                            <div className="flex items-start space-x-4 mb-4 lg:mb-0">
-                                <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-white border border-gray-100 rounded-md text-sm font-bold text-gray-400">
+                        <div key={task.id} className="group bg-white border border-gray-100 rounded-[20px] p-5 flex flex-col lg:flex-row lg:items-center justify-between hover:border-indigo-100 hover:shadow-lg hover:shadow-indigo-50/20 transition-all">
+                            <div className="flex items-center space-x-5 mb-4 lg:mb-0">
+                                <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-[#FBFBFB] border border-gray-100 rounded-xl text-[12px] font-black text-gray-300 group-hover:bg-indigo-50 group-hover:text-indigo-400 transition-colors">
                                     {index + 1}
                                 </div>
                                 <div>
-                                    <div className="flex items-center space-x-2 flex-wrap gap-y-1">
-                                        <h4 className="font-bold text-gray-900 mr-2 uppercase text-[13px]">{task.title}</h4>
-                                        {task.tag && (
-                                            <span className={`px-2 py-0.5 text-[9px] rounded-full font-black uppercase tracking-widest ${
-                                                task.tagColor === 'blue' ? 'bg-cyan-100 text-cyan-800' :
-                                                task.tagColor === 'purple' ? 'bg-fuchsia-100 text-fuchsia-800' :
-                                                'bg-gray-800 text-white'
+                                    <div className="flex items-center space-x-3 flex-wrap gap-y-1">
+                                        <h4 className="font-black text-gray-900 uppercase text-[13.5px] group-hover:text-indigo-600 transition-colors">{task.title}</h4>
+                                        <span className="px-2.5 py-1 text-[9px] font-black bg-gray-50 border border-gray-100 text-gray-400 rounded-lg uppercase tracking-tight">
+                                           {task.type}
+                                        </span>
+                                        {task.statusLabel && (
+                                            <span className={`px-3 py-1 text-[9px] font-black rounded-full uppercase tracking-widest ${
+                                                task.tagColor === 'purple' ? 'bg-purple-100 text-purple-600' :
+                                                task.tagColor === 'blue' ? 'bg-cyan-100 text-cyan-600' :
+                                                'bg-gray-100 text-gray-500'
                                             }`}>
-                                                {task.tag}
+                                                {task.statusLabel}
                                             </span>
                                         )}
                                     </div>
-                                    <p className={`text-[11px] font-bold mt-1 uppercase ${task.isLate ? 'text-red-500' : 'text-gray-400'}`}>{task.date}</p>
+                                    <div className="flex items-center gap-4 mt-1.5">
+                                       <div className="flex items-center gap-1.5">
+                                          <img src={task.collaborator.avatar} className="w-5 h-5 rounded-full border border-white shadow-sm" alt="" />
+                                          <span className="text-[11px] font-bold text-gray-400 uppercase tracking-tight">{task.collaborator.name}</span>
+                                       </div>
+                                       <span className={`text-[11px] font-black uppercase tracking-widest ${task.isLate ? 'text-red-500' : 'text-gray-300'}`}>
+                                          {task.date || 'Sans échéance'}
+                                       </span>
+                                       {task.subtitle && <span className="text-[10px] font-black text-indigo-300 uppercase tracking-tight">• {task.subtitle}</span>}
+                                    </div>
                                 </div>
                             </div>
 
-                            <div className="flex items-center space-x-4 w-full lg:w-auto justify-between lg:justify-end">
-                                {task.statusType === 'progress' ? (
-                                    <div className="flex items-center space-x-4 flex-1 lg:flex-none min-w-[180px]">
-                                        <div className="w-full lg:w-28 h-2 bg-gray-200 rounded-full overflow-hidden">
-                                            <div className={`h-full rounded-full transition-all duration-1000 ${task.tagColor === 'purple' ? 'bg-fuchsia-500' : 'bg-blue-500'}`} style={{ width: `${task.progress}%` }}></div>
+                            <div className="flex items-center space-x-6 w-full lg:w-auto justify-between lg:justify-end">
+                                <div className="min-w-[180px]">
+                                  {task.statusType === 'progress' ? (
+                                      <div className="flex items-center gap-3">
+                                          <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                              <div className={`h-full rounded-full transition-all duration-1000 ${task.tagColor === 'purple' ? 'bg-fuchsia-500 shadow-[0_0_8px_rgba(217,70,239,0.4)]' : 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.4)]'}`} style={{ width: `${task.progress}%` }}></div>
+                                          </div>
+                                          <span className={`text-[11px] font-black ${task.tagColor === 'purple' ? 'text-fuchsia-500' : 'text-blue-500'}`}>{task.progress}%</span>
+                                      </div>
+                                  ) : (
+                                      <div className="flex bg-[#F8F9FA] rounded-full border border-gray-200 p-0.5 w-full">
+                                          <button 
+                                            onClick={() => updateTaskStatus(task.id, 'pending')}
+                                            className={`flex-1 py-1.5 text-[9px] font-black uppercase rounded-full transition-all ${task.status === 'pending' ? 'bg-white shadow-sm text-gray-800 border border-gray-100' : 'text-gray-300 hover:text-gray-600'}`}
+                                          >
+                                             À faire
+                                          </button>
+                                          <button 
+                                            onClick={() => updateTaskStatus(task.id, 'in-progress')}
+                                            className={`flex-1 py-1.5 text-[9px] font-black uppercase rounded-full transition-all ${task.status === 'in-progress' ? 'bg-white shadow-sm text-gray-800 border border-gray-100' : 'text-gray-300 hover:text-gray-600'}`}
+                                          >
+                                             En cours
+                                          </button>
+                                          <button 
+                                            onClick={() => updateTaskStatus(task.id, 'completed')}
+                                            className={`flex-1 py-1.5 text-[9px] font-black uppercase rounded-full transition-all ${task.status === 'completed' ? 'bg-white shadow-sm text-gray-800 border border-gray-100' : 'text-gray-300 hover:text-gray-600'}`}
+                                          >
+                                             Terminé
+                                          </button>
+                                      </div>
+                                  )}
+                                </div>
+                                
+                                <div className="flex items-center space-x-1 relative shrink-0">
+                                    {task.isLate && (
+                                      <div className="p-2 bg-red-50 text-red-500 rounded-lg animate-pulse">
+                                         <AlertTriangle size={16} />
+                                      </div>
+                                    )}
+                                    <button 
+                                      onClick={() => setActiveMenuId(activeMenuId === task.id ? null : task.id)}
+                                      className={`p-2 rounded-lg transition-all ${activeMenuId === task.id ? 'bg-gray-100 text-gray-900' : 'text-gray-300 hover:bg-gray-50 hover:text-gray-600'}`}
+                                    >
+                                       <MoreVertical size={20} />
+                                    </button>
+
+                                    {activeMenuId === task.id && (
+                                      <>
+                                        <div className="fixed inset-0 z-40" onClick={() => setActiveMenuId(null)}></div>
+                                        <div className="absolute right-0 top-12 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 py-2 w-48 animate-in fade-in zoom-in-95 duration-150">
+                                          <button className="w-full text-left px-4 py-2.5 text-[12px] font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                                            <PenSquare size={14} className="text-gray-400" /> Modifier
+                                          </button>
+                                          <div className="h-px bg-gray-50 my-1 mx-2" />
+                                          <button 
+                                            onClick={() => handleDeleteTask(task.id)}
+                                            className="w-full text-left px-4 py-2.5 text-[12px] font-bold text-red-500 hover:bg-red-50 flex items-center gap-2"
+                                          >
+                                            <Trash2 size={14} /> Supprimer
+                                          </button>
                                         </div>
-                                        <span className={`text-xs font-black ${task.tagColor === 'purple' ? 'text-fuchsia-500' : 'text-blue-500'}`}>{task.progress}%</span>
-                                    </div>
-                                ) : (
-                                    <div className="flex bg-gray-200 rounded-full border border-gray-100 p-0.5">
-                                        <button className="px-3 py-1 text-[10px] font-black uppercase bg-white rounded-full shadow-sm text-gray-900 border border-gray-50">Non commencé</button>
-                                        <button className="px-3 py-1 text-[10px] font-black uppercase text-gray-400 hover:text-gray-600 transition-colors">En cours</button>
-                                    </div>
-                                )}
-                                <div className="flex items-center space-x-2 pl-4 lg:border-l border-gray-200">
-                                    {task.isLate && <div className="relative p-1"><AlertTriangle size={18} className="text-gray-300" /><span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span></div>}
-                                    <button className="p-1 hover:bg-gray-100 rounded transition-colors"><MoreVertical size={18} className="text-gray-400" /></button>
+                                      </>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -401,6 +504,12 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
                 </div>
             </div>
       </div>
+
+      <AddTaskModal 
+        isOpen={isAddTaskModalOpen}
+        onClose={() => setIsAddTaskModalOpen(false)}
+        userProfile={userProfile}
+      />
     </div>
   );
 };

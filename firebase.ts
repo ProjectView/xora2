@@ -45,12 +45,12 @@ export const seedDatabase = async (companyId: string, currentUser: any) => {
     });
   }
 
-  // 2. KPIs Financiers
+  // 2. KPIs Financiers - Utilisation des types d'icônes mis à jour
   const kpis = [
     { id: 'ca', label: 'CA Généré', value: '53.456€', target: '110.000€', percentage: 65, iconName: 'euro', companyId },
-    { id: 'marge', label: 'Marge générée', value: '12.326€', target: '15.000€', percentage: 73, iconName: 'search', companyId },
-    { id: 'taux_marge', label: 'Taux de marge', value: '23,4%', target: '35%', percentage: 68, iconName: 'file', companyId },
-    { id: 'taux_transfo', label: 'Taux de transformation', value: '32,2%', target: '33%', percentage: 96, iconName: 'user', companyId },
+    { id: 'marge', label: 'Marge générée', value: '12.326€', target: '15.000€', percentage: 73, iconName: 'trending-up', companyId },
+    { id: 'taux_marge', label: 'Taux de marge', value: '23,4%', target: '35%', percentage: 68, iconName: 'pie-chart', companyId },
+    { id: 'taux_transfo', label: 'Taux de transformation', value: '32,2%', target: '33%', percentage: 96, iconName: 'target', companyId },
   ];
 
   kpis.forEach(kpi => {
@@ -90,7 +90,8 @@ export const seedDatabase = async (companyId: string, currentUser: any) => {
           { id: "p1", number: 1, address: "12 Rue de la Loge, 34000 Montpellier", isMain: true },
           { id: "p2", number: 2, address: "Résidence le Cap, 34300 Agde", isMain: false }
         ]
-      }
+      },
+      projectCount: 0
     },
     {
       name: "MARIE BERNARD",
@@ -104,7 +105,8 @@ export const seedDatabase = async (companyId: string, currentUser: any) => {
         address: "5 Avenue Foch, 34500 Béziers",
         phone: "07 88 99 00 11",
         email: "m.bernard@outlook.fr"
-      }
+      },
+      projectCount: 0
     }
   ];
 

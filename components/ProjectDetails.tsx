@@ -17,9 +17,10 @@ import {
 } from 'lucide-react';
 import { db } from '../firebase';
 // Use @firebase/firestore to fix named export resolution issues
-import { doc, onSnapshot, getDoc } from '@firebase/firestore';
+import { doc, onSnapshot, getDoc, collection, query, where } from '@firebase/firestore';
 import ProjectGeneralDiscovery from './ProjectGeneralDiscovery';
 import ProjectKitchenDiscovery from './ProjectKitchenDiscovery';
+import ProjectTasks from './ProjectTasks';
 
 interface ProjectDetailsProps {
   project: any;
@@ -34,6 +35,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
   const [project, setProject] = useState<any>(initialProject);
   const [clientData, setClientData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [taskCount, setTaskCount] = useState(0);
 
   useEffect(() => {
     setLoading(true);
@@ -44,6 +46,15 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
       setLoading(false);
     });
     return () => unsub();
+  }, [initialProject.id]);
+
+  // Écouter le nombre de tâches du projet en temps réel
+  useEffect(() => {
+    const q = query(collection(db, 'tasks'), where('projectId', '==', initialProject.id));
+    const unsubTasks = onSnapshot(q, (snapshot) => {
+      setTaskCount(snapshot.size);
+    });
+    return () => unsubTasks();
   }, [initialProject.id]);
 
   useEffect(() => {
@@ -67,7 +78,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
 
   const mainTabs = [
     { label: 'Etude client', key: 'Etude client' },
-    { label: 'Tâches (0)', key: 'Tâches' },
+    { label: `Tâches (${taskCount})`, key: 'Tâches' },
     { label: 'Calendrier', key: 'Calendrier' },
     { label: 'Documents', key: 'Documents' }
   ];
@@ -156,7 +167,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
         </div>
 
         {/* Sous-navigation Dynamique */}
-        {activeTab === 'Etude client' && (
+        {(activeTab === 'Etude client') && (
           <div className="bg-white border-b border-gray-100 px-8 flex gap-12 shrink-0 z-10 sticky top-0">
             {subTabs.map((sub) => (
               <button 
@@ -186,6 +197,15 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
 
           {activeTab === 'Etude client' && activeSubTab === 'Découverte cuisine' && (
              <ProjectKitchenDiscovery project={project} userProfile={userProfile} />
+          )}
+
+          {activeTab === 'Tâches' && (
+            <ProjectTasks 
+              projectId={project.id} 
+              clientId={project.clientId}
+              projectName={project.projectName}
+              userProfile={userProfile} 
+            />
           )}
 
           {activeTab === 'Etude client' && (activeSubTab !== 'Découverte' && activeSubTab !== 'Découverte cuisine') && (

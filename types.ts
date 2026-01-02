@@ -76,13 +76,31 @@ export interface Task {
   companyId?: string;
 }
 
+export interface Appointment {
+  id: string;
+  clientId: string;
+  clientName: string;
+  projectId?: string;
+  projectName?: string;
+  title: string;
+  type: 'R1' | 'R2' | 'Métré' | 'Pose' | 'SAV' | 'Autre';
+  date: string;
+  startTime: string;
+  endTime: string;
+  location: 'Showroom' | 'Domicile' | 'Visio' | 'Autre';
+  status: 'confirmé' | 'en attente' | 'annulé' | 'effectué';
+  collaborator: User;
+  companyId: string;
+  createdAt: string;
+}
+
 export interface FinancialKPI {
   id: string;
   label: string;
   value: string;
   target: string;
   percentage: number;
-  iconName: 'euro' | 'search' | 'file' | 'user';
+  iconName: 'euro' | 'target' | 'search' | 'file' | 'user' | 'trending-up' | 'pie-chart' | 'bar-chart';
   color: string;
   companyId?: string;
 }

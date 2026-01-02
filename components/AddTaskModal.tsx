@@ -9,17 +9,25 @@ interface AddTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
   userProfile?: any;
+  initialClientId?: string;
+  initialProjectId?: string;
 }
 
-const AddTaskModal: React.FC<AddTaskModalProps> = ({ isOpen, onClose, userProfile }) => {
+const AddTaskModal: React.FC<AddTaskModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  userProfile, 
+  initialClientId = '', 
+  initialProjectId = '' 
+}) => {
   const [isMemo, setIsMemo] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   
   // Form States
   const [title, setTitle] = useState('');
   const [selectedCollaboratorIdx, setSelectedCollaboratorIdx] = useState(0);
-  const [selectedClientId, setSelectedClientId] = useState('');
-  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [selectedClientId, setSelectedClientId] = useState(initialClientId);
+  const [selectedProjectId, setSelectedProjectId] = useState(initialProjectId);
   const [selectedStatusLabel, setSelectedStatusLabel] = useState('A faire');
   const [endDate, setEndDate] = useState('');
   const [note, setNote] = useState('');
@@ -42,6 +50,14 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({ isOpen, onClose, userProfil
     'Dossier technique',
     'Appel à passer'
   ];
+
+  // Synchroniser les ID initiaux quand la modale s'ouvre
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedClientId(initialClientId);
+      setSelectedProjectId(initialProjectId);
+    }
+  }, [isOpen, initialClientId, initialProjectId]);
 
   useEffect(() => {
     if (!isOpen || !userProfile?.companyId) return;
@@ -148,7 +164,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({ isOpen, onClose, userProfil
                 <button 
                   type="button"
                   onClick={() => setIsMemo(!isMemo)}
-                  className={`relative w-14 h-7 rounded-full transition-all duration-300 focus:outline-none shadow-sm ${isMemo ? 'bg-indigo-500' : 'bg-gray-800'}`}
+                  className={`relative w-14 h-7 rounded-full transition-all duration-300 focus:outline-none shadow-sm ${isMemo ? 'bg-[#A886D7]' : 'bg-gray-800'}`}
                 >
                   <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform duration-300 shadow-md ${isMemo ? 'translate-x-7' : 'translate-x-0'}`} />
                 </button>
@@ -162,7 +178,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({ isOpen, onClose, userProfil
                 <label className="block text-xs font-bold text-gray-500 ml-1">Collaborateur assigné</label>
                 <div className="relative group">
                   <select 
-                    className="w-full appearance-none flex items-center pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 hover:border-gray-400 focus:ring-2 focus:ring-gray-100 outline-none transition-all cursor-pointer"
+                    className="w-full appearance-none flex items-center pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 hover:border-[#A886D7] focus:ring-2 focus:ring-purple-50 outline-none transition-all cursor-pointer"
                     onChange={(e) => setSelectedCollaboratorIdx(parseInt(e.target.value))}
                     value={selectedCollaboratorIdx}
                   >
@@ -184,7 +200,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({ isOpen, onClose, userProfil
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 focus:ring-2 focus:ring-gray-100 outline-none transition-all cursor-pointer"
+                    className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 focus:ring-2 focus:ring-purple-50 outline-none transition-all cursor-pointer"
                   />
                   <CalendarIcon size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                 </div>
@@ -197,7 +213,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({ isOpen, onClose, userProfil
                 <label className="block text-xs font-bold text-gray-500 ml-1">Client lié (optionnel)</label>
                 <div className="relative">
                   <select 
-                    className="w-full appearance-none px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 hover:border-gray-400 outline-none transition-all cursor-pointer"
+                    className="w-full appearance-none px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 hover:border-[#A886D7] outline-none transition-all cursor-pointer"
                     value={selectedClientId}
                     onChange={(e) => setSelectedClientId(e.target.value)}
                   >
@@ -214,7 +230,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({ isOpen, onClose, userProfil
                 <label className="block text-xs font-bold text-gray-500 ml-1">Projet lié (optionnel)</label>
                 <div className="relative">
                   <select 
-                    className="w-full appearance-none px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 hover:border-gray-400 outline-none transition-all cursor-pointer"
+                    className="w-full appearance-none px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 hover:border-[#A886D7] outline-none transition-all cursor-pointer"
                     value={selectedProjectId}
                     onChange={(e) => setSelectedProjectId(e.target.value)}
                   >
@@ -231,7 +247,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({ isOpen, onClose, userProfil
                 <label className="block text-xs font-bold text-gray-500 ml-1">Marqueur Statut</label>
                 <div className="relative">
                   <select 
-                    className="w-full appearance-none px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 hover:border-gray-400 outline-none transition-all cursor-pointer"
+                    className="w-full appearance-none px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 hover:border-[#A886D7] outline-none transition-all cursor-pointer"
                     value={selectedStatusLabel}
                     onChange={(e) => setSelectedStatusLabel(e.target.value)}
                   >
@@ -252,7 +268,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({ isOpen, onClose, userProfil
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 placeholder="Ex: Précisions sur la demande du client..."
-                className="w-full bg-white border border-gray-200 rounded-2xl p-5 text-sm font-medium text-gray-800 focus:outline-none focus:border-gray-800 focus:ring-4 focus:ring-gray-50/50 placeholder:text-gray-300 resize-none transition-all shadow-sm"
+                className="w-full bg-white border border-gray-200 rounded-2xl p-5 text-sm font-medium text-gray-800 focus:outline-none focus:border-[#A886D7] focus:ring-4 focus:ring-purple-50/50 placeholder:text-gray-300 resize-none transition-all shadow-sm"
               />
             </div>
           </div>
@@ -262,7 +278,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({ isOpen, onClose, userProfil
             <button 
               type="submit"
               disabled={isLoading || !title}
-              className="group flex items-center gap-3 px-10 py-4 bg-gray-900 text-white rounded-2xl text-sm font-bold shadow-xl hover:bg-gray-800 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
+              className="group flex items-center gap-3 px-10 py-4 bg-gray-900 text-white rounded-2xl text-sm font-bold shadow-xl hover:bg-black transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50"
             >
               {isLoading ? (
                 <Loader2 size={20} className="animate-spin" />

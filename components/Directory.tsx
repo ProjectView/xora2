@@ -206,17 +206,22 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, onAddClick, onClient
                                     <td className="px-6 py-4 text-sm font-bold text-gray-900">{client.name}</td>
                                     <td className="px-6 py-4">
                                         <div className="flex items-center">
-                                            <img src={client.addedBy.avatar} alt="" className="w-6 h-6 rounded-full mr-2 border border-gray-100 shadow-sm" />
-                                            <span className="text-sm font-medium text-gray-800">{client.addedBy.name}</span>
+                                            <img src={client.addedBy?.avatar} alt="" className="w-6 h-6 rounded-full mr-2 border border-gray-100 shadow-sm" />
+                                            <span className="text-sm font-medium text-gray-800">{client.addedBy?.name}</span>
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-sm font-semibold text-gray-700">{client.origin}</td>
                                     <td className="px-6 py-4 text-sm font-semibold text-gray-700">{client.location}</td>
                                     <td className="px-6 py-4">
-                                        {client.projectCount === 0 || !client.projectCount ? (
-                                            <span className="px-2 py-1 bg-gray-100 text-gray-400 text-[10px] font-bold rounded-full">-</span>
+                                        {!client.projectCount || client.projectCount === 0 ? (
+                                            <span className="px-3 py-1 bg-gray-50 border border-gray-100 text-gray-300 text-[11px] font-bold rounded-full">-</span>
                                         ) : (
-                                            <span className="px-3 py-1 bg-gray-50 border border-gray-100 text-gray-700 text-[11px] rounded-full font-bold">{client.projectCount} projets</span>
+                                            <div className="flex items-center gap-2">
+                                              <div className="w-6 h-6 bg-gray-900 text-white rounded-full flex items-center justify-center text-[10px] font-black shadow-sm">
+                                                {client.projectCount}
+                                              </div>
+                                              <span className="text-[11px] font-bold text-gray-700">projet{client.projectCount > 1 ? 's' : ''}</span>
+                                            </div>
                                         )}
                                     </td>
                                     <td className="px-6 py-4">
@@ -225,7 +230,7 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, onAddClick, onClient
                                             client.status === 'Client' ? 'bg-cyan-100 text-cyan-700' :
                                             'bg-purple-100 text-purple-800'
                                         }`}>
-                                            {client.status}
+                                            {client.status === 'Leads' ? 'Études' : client.status}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-sm font-bold text-gray-700">{client.dateAdded}</td>

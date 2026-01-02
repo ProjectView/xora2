@@ -14,10 +14,11 @@ import {
 import { Client } from '../types';
 import { db } from '../firebase';
 // Use @firebase/firestore to fix named export resolution issues
-import { doc, onSnapshot } from '@firebase/firestore';
+import { doc, onSnapshot, collection, query, where } from '@firebase/firestore';
 import ClientTasks from './ClientTasks';
 import ClientContactInfo from './ClientContactInfo';
 import ClientProjects from './ClientProjects';
+import ClientAppointments from './ClientAppointments';
 
 interface ClientDetailsProps {
   client: Client;
@@ -29,8 +30,9 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, on
   const [activeTab, setActiveTab] = useState('Information contact');
   const [client, setClient] = useState<Client>(initialClient);
   const [loading, setLoading] = useState(false);
+  const [appointmentCount, setAppointmentCount] = useState(0);
 
-  // Synchronisation en temps réel avec Firebase pour que l'en-tête (badge, etc.) soit toujours à jour
+  // Synchronisation en temps réel avec Firebase
   useEffect(() => {
     setLoading(true);
     const unsub = onSnapshot(doc(db, 'clients', initialClient.id), (docSnap) => {
@@ -42,11 +44,20 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, on
     return () => unsub();
   }, [initialClient.id]);
 
+  // Compteur de rendez-vous en temps réel
+  useEffect(() => {
+    const q = query(collection(db, 'appointments'), where('clientId', '==', initialClient.id));
+    const unsubCount = onSnapshot(q, (snapshot) => {
+      setAppointmentCount(snapshot.size);
+    });
+    return () => unsubCount();
+  }, [initialClient.id]);
+
   const mainTabs = [
     { label: 'Information contact', key: 'Information contact' },
     { label: `Projet (${client.projectCount || 0})`, key: 'Projet' },
-    { label: 'Tâches (0)', key: 'Tâches' },
-    { label: 'Rendez-vous (0)', key: 'Rendez-vous' },
+    { label: 'Tâches', key: 'Tâches' },
+    { label: `Rendez-vous (${appointmentCount})`, key: 'Rendez-vous' },
     { label: 'Fidélisation', key: 'Fidélisation' },
     { label: 'Documents', key: 'Documents' }
   ];
@@ -64,7 +75,6 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, on
             <div className="space-y-4">
               <div className="flex items-center gap-3">
                 <span className="text-[12px] font-bold text-gray-300">Créé le {client.dateAdded}</span>
-                {/* Badge de statut synchronisé avec la BDD */}
                 <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded uppercase tracking-widest ${
                   client.status === 'Leads' ? 'bg-purple-100 text-purple-600' :
                   client.status === 'Prospect' ? 'bg-fuchsia-100 text-fuchsia-600' :
@@ -93,7 +103,7 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, on
 
           <div className="grid grid-cols-2 gap-2">
             <button className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white border border-gray-100 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:bg-gray-50 transition-all"><MessageSquare size={16} /> Contacter</button>
-            <button className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white border border-gray-200 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:bg-gray-50 transition-all"><Calendar size={16} /> Planifier un RDV</button>
+            <button className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white border border-gray-100 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:bg-gray-50 transition-all"><Calendar size={16} /> Planifier un RDV</button>
             <button className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white border border-gray-200 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:bg-gray-50 transition-all"><Phone size={16} /> Appeler</button>
             <button className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white border border-gray-200 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:bg-gray-50 transition-all"><CheckSquare size={16} /> Ajouter une tâche</button>
           </div>
@@ -137,9 +147,19 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, on
             {activeTab === 'Information contact' && <ClientContactInfo client={client} />}
 
             {activeTab === 'Tâches' && (
-              <div className="pt-4">
-                <ClientTasks />
-              </div>
+              <ClientTasks 
+                clientId={client.id} 
+                clientName={client.name} 
+                userProfile={userProfile} 
+              />
+            )}
+
+            {activeTab === 'Rendez-vous' && (
+              <ClientAppointments 
+                clientId={client.id}
+                clientName={client.name}
+                userProfile={userProfile}
+              />
             )}
 
             {activeTab === 'Projet' && (

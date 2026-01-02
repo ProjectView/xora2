@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { ArrowLeft, PenSquare, MessageSquare, Phone, Mail, ChevronDown, Camera, Loader2, Database, Check } from 'lucide-react';
 import { db } from '../firebase';
 // Use @firebase/firestore to fix named export resolution issues
-import { doc, updateDoc, onSnapshot } from '@firebase/firestore';
+import { doc, updateDoc, onSnapshot, writeBatch, collection, query, where, getDocs } from '@firebase/firestore';
 
 interface UserProfileProps {
   userProfile: any;
@@ -14,9 +14,9 @@ interface UserProfileProps {
 const UserProfile: React.FC<UserProfileProps> = ({ userProfile, setUserProfile, onBack }) => {
   const [activeTab, setActiveTab] = useState('Informations collaborateur');
   const [isUploading, setIsUploading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Initialisation sécurisée pour éviter le bug des noms basés sur l'email
   const [formData, setFormData] = useState({
     civility: userProfile?.civility || 'Mr',
     lastName: userProfile?.lastName || '',
@@ -34,7 +34,6 @@ const UserProfile: React.FC<UserProfileProps> = ({ userProfile, setUserProfile, 
     avatar: userProfile?.avatar || `https://i.pravatar.cc/150?u=${userProfile?.uid}`
   });
 
-  // Synchronisation si le profil change
   useEffect(() => {
     if (userProfile) {
       setFormData(prev => ({
@@ -48,23 +47,71 @@ const UserProfile: React.FC<UserProfileProps> = ({ userProfile, setUserProfile, 
     }
   }, [userProfile]);
 
+  // FONCTION DE SYNCHRONISATION (Lien dynamique simulé)
+  const syncProfileEverywhere = async (newName: string, newAvatar: string) => {
+    if (!userProfile?.uid) return;
+    setIsSyncing(true);
+    try {
+      const batch = writeBatch(db);
+      
+      // 1. Chercher tous les clients ajoutés par cet utilisateur
+      const clientsQ = query(collection(db, 'clients'), where('addedBy.uid', '==', userProfile.uid));
+      const clientsSnap = await getDocs(clientsQ);
+      clientsSnap.forEach(d => {
+        batch.update(doc(db, 'clients', d.id), {
+          "addedBy.name": newName,
+          "addedBy.avatar": newAvatar
+        });
+      });
+
+      // 2. Chercher tous les projets gérés par cet utilisateur
+      const projectsQ = query(collection(db, 'projects'), where('agenceur.uid', '==', userProfile.uid));
+      const projectsSnap = await getDocs(projectsQ);
+      projectsSnap.forEach(d => {
+        batch.update(doc(db, 'projects', d.id), {
+          "agenceur.name": newName,
+          "agenceur.avatar": newAvatar
+        });
+      });
+
+      await batch.commit();
+    } catch (e) {
+      console.error("Erreur synchro profil:", e);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const handleUpdate = async (field: string, value: any) => {
     const newFormData = { ...formData, [field]: value };
     setFormData(newFormData);
     try {
       if (userProfile?.uid) {
         const userRef = doc(db, 'users', userProfile.uid);
-        await updateDoc(userRef, { [field]: value });
         
-        if (field === 'firstName' || field === 'lastName') {
-          const finalFirst = field === 'firstName' ? value : formData.firstName;
-          const finalLast = (field === 'lastName' ? value : formData.lastName).toUpperCase();
-          const fullName = `${finalFirst} ${finalLast}`;
-          await updateDoc(userRef, { name: fullName, lastName: finalLast });
-          setUserProfile({ ...userProfile, ...newFormData, name: fullName, lastName: finalLast });
-        } else {
-          setUserProfile({ ...userProfile, ...newFormData });
+        let finalFirst = formData.firstName;
+        let finalLast = formData.lastName;
+        let finalAvatar = formData.avatar;
+
+        if (field === 'firstName') finalFirst = value;
+        if (field === 'lastName') finalLast = value.toUpperCase();
+        if (field === 'avatar') finalAvatar = value;
+
+        const fullName = `${finalFirst} ${finalLast}`;
+        
+        // Update user document
+        await updateDoc(userRef, { 
+          [field]: value,
+          name: fullName,
+          lastName: finalLast 
+        });
+
+        // Sync snapshots if critical info changed
+        if (field === 'firstName' || field === 'lastName' || field === 'avatar') {
+          await syncProfileEverywhere(fullName, finalAvatar);
         }
+
+        setUserProfile({ ...userProfile, ...newFormData, name: fullName, lastName: finalLast });
       }
     } catch (error) {
       console.error(error);
@@ -86,16 +133,6 @@ const UserProfile: React.FC<UserProfileProps> = ({ userProfile, setUserProfile, 
     };
     reader.readAsDataURL(file);
   };
-
-  const Toggle = ({ value, onChange }: { value: boolean, onChange: (v: boolean) => void }) => (
-    <div className="flex items-center gap-3">
-      <span className={`text-[12px] font-bold ${!value ? 'text-gray-900' : 'text-gray-300'}`}>Non</span>
-      <button type="button" onClick={() => onChange(!value)} className={`w-12 h-6 rounded-full relative transition-all duration-300 ${value ? 'bg-gray-800' : 'bg-gray-300'}`}>
-        <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all duration-300 shadow-sm ${value ? 'right-1' : 'left-1'}`}></div>
-      </button>
-      <span className={`text-[12px] font-bold ${value ? 'text-gray-900' : 'text-gray-300'}`}>Oui</span>
-    </div>
-  );
 
   return (
     <div className="flex flex-col h-full bg-[#F8F9FA] overflow-y-auto hide-scrollbar font-sans">
@@ -130,7 +167,12 @@ const UserProfile: React.FC<UserProfileProps> = ({ userProfile, setUserProfile, 
             </div>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-3">
+          {isSyncing && (
+            <div className="flex items-center gap-2 px-4 py-2.5 bg-indigo-50 text-indigo-600 rounded-xl text-[12px] font-bold animate-pulse">
+              <Loader2 size={14} className="animate-spin" /> Synchro en cours...
+            </div>
+          )}
           <button onClick={handleAvatarClick} className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white border border-gray-100 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:bg-gray-50 transition-all">
             <PenSquare size={16} /> Modifier le profil
           </button>

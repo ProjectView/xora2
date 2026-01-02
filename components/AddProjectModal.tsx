@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X, Briefcase, ArrowLeft, Check, Loader2, Search, User, Phone, Mail, ChevronDown, MapPin } from 'lucide-react';
 import { db } from '../firebase';
 // Use @firebase/firestore to fix named export resolution issues
-import { collection, addDoc, query, where, onSnapshot, doc } from '@firebase/firestore';
+import { collection, addDoc, query, where, onSnapshot, doc, updateDoc, increment } from '@firebase/firestore';
 
 const HIERARCHY_DATA: Record<string, Record<string, string[]>> = {
   "Actif commercial": {
@@ -34,7 +34,7 @@ const HIERARCHY_DATA: Record<string, Record<string, string[]>> = {
   "Magasin": {
     "Passage magasin": ["Sans RDV"],
     "Vitrine": ["Promo vitrine", "PLV"],
-    "Référencement local": ["Google Maps", "PagesJaunes", "GPS", "Plan local"],
+    "Référencement marque local": ["Google Maps", "PagesJaunes", "GPS", "Plan local"],
     "Bouche-à-oreille local": ["Habitant quartier", "Voisinage proche"]
   },
   "Autres": {
@@ -58,11 +58,6 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, user
   const [agenceurs, setAgenceurs] = useState<any[]>([]);
   const [clientAddresses, setClientAddresses] = useState<string[]>([]);
   
-  const [sponsorSearch, setSponsorSearch] = useState('');
-  const [showSponsorDropdown, setShowSponsorDropdown] = useState(false);
-  const [selectedSponsor, setSelectedSponsor] = useState<any | null>(null);
-  const sponsorRef = useRef<HTMLDivElement>(null);
-
   const [formData, setFormData] = useState({
     categorie: '',
     origine: '',
@@ -84,7 +79,6 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, user
     const unsubscribeUsers = onSnapshot(usersQ, (snapshot) => {
       let fetched: any[] = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
       
-      // Sécurité : Toujours inclure l'utilisateur courant
       if (userProfile && !fetched.find(u => u.uid === userProfile.uid)) {
         fetched = [{ 
           uid: userProfile.uid, 
@@ -95,7 +89,6 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, user
       
       setAgenceurs(fetched);
       
-      // Initialiser le référent si vide
       if (!formData.agenceurUid && userProfile) {
         setFormData(prev => ({
           ...prev,
@@ -153,6 +146,7 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, user
       const finalClientId = clientId || formData.selectedClientId;
       const finalClientName = clientName || clients.find(c => c.id === formData.selectedClientId)?.name || 'Client Inconnu';
       
+      // 1. Créer le projet
       await addDoc(collection(db, 'projects'), {
         projectName: formData.projectName,
         clientName: finalClientName,
@@ -174,6 +168,13 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, user
         details: { adresseChantier: formData.adresseChantier },
         createdAt: new Date().toISOString()
       });
+
+      // 2. Incrémenter le compteur de projets sur la fiche client
+      const clientRef = doc(db, 'clients', finalClientId);
+      await updateDoc(clientRef, {
+        projectCount: increment(1)
+      });
+
       onClose();
     } catch (e) {
       console.error(e);
@@ -203,7 +204,7 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, user
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Catégorie</label>
                 <div className="relative">
-                  <select value={formData.categorie} onChange={(e) => setFormData({...formData, categorie: e.target.value, origine: '', sousOrigine: ''})} className="w-full appearance-none bg-white border border-gray-200 rounded-xl px-4 py-3 text-[13px] text-gray-900 outline-none focus:border-gray-900 transition-all font-bold shadow-sm">
+                  <select value={formData.categorie} onChange={(e) => setFormData({...formData, categorie: e.target.value, origine: '', sousOrigine: ''})} className="w-full appearance-none bg-white border border-gray-100 rounded-xl px-4 py-3 text-[13px] text-gray-900 outline-none focus:border-gray-900 transition-all font-bold shadow-sm">
                     <option value="">Sélectionner</option>
                     {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                   </select>
@@ -213,7 +214,7 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, user
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Origine du contact</label>
                 <div className="relative">
-                  <select value={formData.origine} onChange={(e) => setFormData({...formData, origine: e.target.value, sousOrigine: ''})} className="w-full appearance-none bg-white border border-gray-200 rounded-xl px-4 py-3 text-[13px] text-gray-900 outline-none focus:border-gray-900 transition-all font-bold shadow-sm">
+                  <select value={formData.origine} onChange={(e) => setFormData({...formData, origine: e.target.value, sousOrigine: ''})} className="w-full appearance-none bg-white border border-gray-100 rounded-xl px-4 py-3 text-[13px] text-gray-900 outline-none focus:border-gray-900 transition-all font-bold shadow-sm">
                     <option value="">Sélectionner</option>
                     {origines.map(orig => <option key={orig} value={orig}>{orig}</option>)}
                   </select>
@@ -223,7 +224,7 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, user
               <div className="space-y-1.5">
                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Sous origine</label>
                 <div className="relative">
-                  <select value={formData.sousOrigine} onChange={(e) => setFormData({...formData, sousOrigine: e.target.value})} className="w-full appearance-none bg-white border border-gray-200 rounded-xl px-4 py-3 text-[13px] text-gray-900 outline-none focus:border-gray-900 transition-all font-bold shadow-sm">
+                  <select value={formData.sousOrigine} onChange={(e) => setFormData({...formData, sousOrigine: e.target.value})} className="w-full appearance-none bg-white border border-gray-100 rounded-xl px-4 py-3 text-[13px] text-gray-900 outline-none focus:border-gray-900 transition-all font-bold shadow-sm">
                     <option value="">Sélectionner</option>
                     {sousOrigines.map(so => <option key={so} value={so}>{so}</option>)}
                   </select>
@@ -234,7 +235,7 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, user
             <div className="bg-[#FBFBFB] border border-gray-100 rounded-2xl p-6 grid grid-cols-12 gap-6">
               <div className="col-span-4 space-y-1.5">
                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Titre du projet*</label>
-                <input required type="text" value={formData.projectName} onChange={(e) => setFormData({...formData, projectName: e.target.value})} className="w-full bg-white border border-gray-200 rounded-xl px-4 py-3 text-[14px] text-gray-900 outline-none focus:border-gray-900 transition-all font-bold shadow-sm" />
+                <input required type="text" value={formData.projectName} onChange={(e) => setFormData({...formData, projectName: e.target.value})} className="w-full bg-white border border-gray-100 rounded-xl px-4 py-3 text-[14px] text-gray-900 outline-none focus:border-gray-900 transition-all font-bold shadow-sm" />
               </div>
               <div className="col-span-4 space-y-1.5">
                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Agenceur référent</label>
@@ -242,7 +243,7 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, user
                   <select value={formData.agenceurReferent} onChange={(e) => {
                     const found = agenceurs.find(a => a.name === e.target.value);
                     setFormData({...formData, agenceurReferent: e.target.value, agenceurUid: found?.uid || '', agenceurAvatar: found?.avatar || ''});
-                  }} className="w-full appearance-none bg-white border border-gray-200 rounded-xl pl-12 pr-4 py-3 text-[14px] text-gray-900 outline-none focus:border-gray-900 transition-all font-bold shadow-sm">
+                  }} className="w-full appearance-none bg-white border border-gray-100 rounded-xl pl-12 pr-4 py-3 text-[14px] text-gray-900 outline-none focus:border-gray-900 transition-all font-bold shadow-sm">
                     {agenceurs.map(a => <option key={a.uid} value={a.name}>{a.name}</option>)}
                   </select>
                   <div className="absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none">
@@ -254,7 +255,7 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, user
               <div className="col-span-4 space-y-1.5">
                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Lieu du chantier</label>
                 <div className="relative">
-                  <select value={formData.adresseChantier} onChange={(e) => setFormData({...formData, adresseChantier: e.target.value})} className="w-full appearance-none bg-white border border-gray-200 rounded-xl pl-12 pr-4 py-3 text-[14px] text-gray-900 outline-none focus:border-gray-900 transition-all font-bold shadow-sm">
+                  <select value={formData.adresseChantier} onChange={(e) => setFormData({...formData, adresseChantier: e.target.value})} className="w-full appearance-none bg-white border border-gray-100 rounded-xl pl-12 pr-4 py-3 text-[14px] text-gray-900 outline-none focus:border-gray-900 transition-all font-bold shadow-sm">
                     {clientAddresses.length > 0 ? clientAddresses.map(addr => <option key={addr} value={addr}>{addr}</option>) : <option value="">Aucune adresse renseignée</option>}
                   </select>
                   <MapPin size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />

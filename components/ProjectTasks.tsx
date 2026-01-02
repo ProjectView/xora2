@@ -1,56 +1,58 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-  FileText, 
-  MoreHorizontal, 
-  PenSquare, 
+  Search, 
   Plus, 
-  Loader2, 
-  StickyNote, 
-  GripVertical, 
-  AlertTriangle,
-  Trash2,
-  MoreVertical
+  ChevronDown, 
+  AlertTriangle, 
+  MoreVertical, 
+  GripVertical,
+  StickyNote,
+  Loader2,
+  FileText,
+  PenSquare,
+  Trash2
 } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, doc, deleteDoc, updateDoc } from '@firebase/firestore';
 import { Task } from '../types';
 import AddTaskModal from './AddTaskModal';
 
-interface ClientTasksProps {
+interface ProjectTasksProps {
+  projectId: string;
   clientId: string;
-  clientName: string;
+  projectName: string;
   userProfile: any;
 }
 
-const ClientTasks: React.FC<ClientTasksProps> = ({ clientId, clientName, userProfile }) => {
+const ProjectTasks: React.FC<ProjectTasksProps> = ({ projectId, clientId, projectName, userProfile }) => {
   const [filter, setFilter] = useState<'en-cours' | 'termine'>('en-cours');
-  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
-  // Charger TOUTES les tâches liées à ce client (directes ou via projets)
+  // Charger les tâches liées à ce PROJET en temps réel
   useEffect(() => {
-    if (!clientId) return;
+    if (!projectId) return;
 
     const q = query(
       collection(db, 'tasks'), 
-      where('clientId', '==', clientId)
+      where('projectId', '==', projectId)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Task[];
-      // Tri par date de création ou échéance si nécessaire
       setTasks(data);
       setIsLoading(false);
     }, (err) => {
-      console.error("Error fetching client tasks:", err);
+      console.error("Error fetching project tasks:", err);
       setIsLoading(false);
     });
 
     return () => unsubscribe();
-  }, [clientId]);
+  }, [projectId]);
 
   const handleDeleteTask = async (id: string) => {
     if (!window.confirm("Supprimer cette tâche ?")) return;
@@ -70,32 +72,35 @@ const ClientTasks: React.FC<ClientTasksProps> = ({ clientId, clientName, userPro
     }
   };
 
-  const filteredTasks = tasks.filter(t => 
-    filter === 'en-cours' ? t.status !== 'completed' : t.status === 'completed'
-  );
+  const filteredTasks = tasks.filter(task => {
+    const matchesTab = filter === 'en-cours' ? task.status !== 'completed' : task.status === 'completed';
+    const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesTab && matchesSearch;
+  });
 
   return (
-    <div className="flex flex-col h-full animate-in fade-in duration-300 pt-6">
-      {/* En-tête de l'onglet Tâches */}
-      <div className="flex justify-between items-center mb-6 px-2">
+    <div className="animate-in fade-in duration-500 space-y-6">
+      {/* Header Actions */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div className="flex items-center gap-6">
-          <div className="space-y-1">
-            <h2 className="text-[16px] font-bold text-gray-800">
-              Récapitulatif des tâches <span className="text-gray-300 font-normal ml-1">({filteredTasks.length})</span>
-            </h2>
-            <p className="text-[11px] text-gray-400 font-medium italic">Inclut les mémos et les tâches de tous ses projets.</p>
-          </div>
+          <h2 className="text-[16px] font-bold text-gray-800">
+            Tâches du projet <span className="text-gray-300 font-normal ml-1">({filteredTasks.length})</span>
+          </h2>
           
-          <div className="flex bg-[#F1F3F5] rounded-full p-1 border border-gray-100 shadow-inner ml-4">
+          <div className="flex bg-[#F1F3F5] rounded-full p-1 border border-gray-100 shadow-inner">
             <button 
-              onClick={() => setFilter('en-cours')} 
-              className={`px-8 py-2 text-[11px] font-bold rounded-full transition-all ${filter === 'en-cours' ? 'bg-[#1A1C23] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+              onClick={() => setFilter('en-cours')}
+              className={`px-8 py-2 text-[11px] font-bold rounded-full transition-all ${
+                filter === 'en-cours' ? 'bg-[#1A1C23] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'
+              }`}
             >
               En cours
             </button>
             <button 
-              onClick={() => setFilter('termine')} 
-              className={`px-8 py-2 text-[11px] font-bold rounded-full transition-all ${filter === 'termine' ? 'bg-[#1A1C23] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+              onClick={() => setFilter('termine')}
+              className={`px-8 py-2 text-[11px] font-bold rounded-full transition-all ${
+                filter === 'termine' ? 'bg-[#1A1C23] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'
+              }`}
             >
               Terminé
             </button>
@@ -103,16 +108,30 @@ const ClientTasks: React.FC<ClientTasksProps> = ({ clientId, clientName, userPro
         </div>
 
         <button 
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => setIsAddTaskModalOpen(true)}
           className="flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-200 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:border-[#A886D7] transition-all active:scale-95"
         >
           <Plus size={16} className="text-[#A886D7]" />
-          Ajouter une tâche / mémo
+          <span>Ajouter une tâche</span>
         </button>
       </div>
 
-      {/* Conteneur gris de fond style Tableau XORA */}
-      <div className="bg-[#f8f9fa] border border-gray-100 rounded-[28px] p-6 min-h-[500px] relative overflow-hidden">
+      {/* Barre de Recherche et Filtres secondaires */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+          <input 
+            type="text" 
+            placeholder="Rechercher une tâche..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-3 py-2.5 bg-white border border-gray-100 rounded-xl text-[13px] font-medium focus:outline-none focus:border-purple-300 text-gray-800 shadow-sm"
+          />
+        </div>
+      </div>
+
+      {/* Tableau des tâches (Design TasksMemo) */}
+      <div className="bg-[#f8f9fa] border border-gray-100 rounded-[28px] p-6 min-h-[400px] relative overflow-hidden">
         {isLoading && (
           <div className="absolute inset-0 bg-white/40 flex items-center justify-center z-10">
             <Loader2 className="animate-spin text-[#A886D7]" size={32} />
@@ -130,7 +149,7 @@ const ClientTasks: React.FC<ClientTasksProps> = ({ clientId, clientName, userPro
                 <th className="px-6 pb-2 text-center">Échéance</th>
                 <th className="px-6 pb-2">Collaborateur</th>
                 <th className="px-6 pb-2 text-center">Note</th>
-                <th className="px-6 pb-2">Progression / Action</th>
+                <th className="px-6 pb-2">Progression</th>
                 <th className="px-6 pb-2"></th>
               </tr>
             </thead>
@@ -140,7 +159,7 @@ const ClientTasks: React.FC<ClientTasksProps> = ({ clientId, clientName, userPro
                   <td colSpan={9} className="py-20 text-center">
                     <div className="bg-white border border-dashed border-gray-200 rounded-[24px] py-16 space-y-3">
                        <StickyNote size={40} className="mx-auto text-gray-100" />
-                       <p className="text-[13px] font-bold text-gray-300 italic">Aucune tâche pour ce contact.</p>
+                       <p className="text-[13px] font-bold text-gray-300 italic">Aucune tâche active pour ce projet.</p>
                     </div>
                   </td>
                 </tr>
@@ -156,11 +175,8 @@ const ClientTasks: React.FC<ClientTasksProps> = ({ clientId, clientName, userPro
                     
                     <td className="px-6 py-5 border-y border-gray-50">
                       <div className="flex flex-col">
-                        <span className="text-[13.5px] font-bold text-gray-900 group-hover:text-purple-700 transition-colors truncate max-w-[250px]">{task.title}</span>
-                        <div className="flex items-center gap-2 mt-0.5">
-                           {task.subtitle && <span className="text-[10px] font-black text-indigo-400 uppercase tracking-tight">{task.subtitle}</span>}
-                           {!task.subtitle && <span className="text-[10px] font-bold text-gray-300 uppercase tracking-tight italic">Tâche directe client</span>}
-                        </div>
+                        <span className="text-[13.5px] font-bold text-gray-900 group-hover:text-purple-700 transition-colors">{task.title}</span>
+                        {task.subtitle && <span className="text-[11px] font-bold text-gray-300 uppercase tracking-tight">{task.subtitle}</span>}
                       </div>
                     </td>
 
@@ -174,7 +190,7 @@ const ClientTasks: React.FC<ClientTasksProps> = ({ clientId, clientName, userPro
                       <span className={`px-3 py-1 text-[9px] font-black rounded-full uppercase tracking-widest ${
                         task.tagColor === 'purple' ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-500'
                       }`}>
-                        {task.statusLabel || (task.status === 'completed' ? 'Terminé' : 'En attente')}
+                        {task.statusLabel || 'En attente'}
                       </span>
                     </td>
 
@@ -201,7 +217,7 @@ const ClientTasks: React.FC<ClientTasksProps> = ({ clientId, clientName, userPro
                       </div>
                     </td>
 
-                    <td className="px-6 py-5 border-y border-gray-50 min-w-[220px]">
+                    <td className="px-6 py-5 border-y border-gray-50 min-w-[200px]">
                       {task.statusType === 'progress' ? (
                         <div className="flex items-center gap-3">
                           <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -219,19 +235,19 @@ const ClientTasks: React.FC<ClientTasksProps> = ({ clientId, clientName, userPro
                         <div className="flex bg-[#F8F9FA] rounded-full border border-gray-200 p-0.5 w-full">
                             <button 
                               onClick={() => updateTaskStatus(task.id, 'pending')}
-                              className={`flex-1 py-1.5 text-[10px] font-bold rounded-full transition-all ${task.status === 'pending' ? 'bg-white shadow-sm text-gray-800 border border-gray-100' : 'text-gray-300 hover:text-gray-600'}`}
+                              className={`flex-1 py-1.5 text-[10px] font-bold rounded-full transition-all ${task.status === 'pending' ? 'bg-white shadow-sm text-gray-800 border border-gray-100' : 'text-gray-300'}`}
                             >
-                              À faire
+                              A faire
                             </button>
                             <button 
                               onClick={() => updateTaskStatus(task.id, 'in-progress')}
-                              className={`flex-1 py-1.5 text-[10px] font-bold rounded-full transition-all ${task.status === 'in-progress' ? 'bg-white shadow-sm text-gray-800 border border-gray-100' : 'text-gray-300 hover:text-gray-600'}`}
+                              className={`flex-1 py-1.5 text-[10px] font-bold rounded-full transition-all ${task.status === 'in-progress' ? 'bg-white shadow-sm text-gray-800 border border-gray-100' : 'text-gray-300'}`}
                             >
                               En cours
                             </button>
                             <button 
                               onClick={() => updateTaskStatus(task.id, 'completed')}
-                              className={`flex-1 py-1.5 text-[10px] font-bold rounded-full transition-all ${task.status === 'completed' ? 'bg-white shadow-sm text-gray-800 border border-gray-100' : 'text-gray-300 hover:text-gray-600'}`}
+                              className={`flex-1 py-1.5 text-[10px] font-bold rounded-full transition-all ${task.status === 'completed' ? 'bg-white shadow-sm text-gray-800 border border-gray-100' : 'text-gray-300'}`}
                             >
                               Terminé
                             </button>
@@ -276,13 +292,14 @@ const ClientTasks: React.FC<ClientTasksProps> = ({ clientId, clientName, userPro
       </div>
 
       <AddTaskModal 
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        isOpen={isAddTaskModalOpen}
+        onClose={() => setIsAddTaskModalOpen(false)}
         userProfile={userProfile}
         initialClientId={clientId}
+        initialProjectId={projectId}
       />
     </div>
   );
 };
 
-export default ClientTasks;
+export default ProjectTasks;
