@@ -9,7 +9,8 @@ import {
   Calendar, 
   BarChart2, 
   LogOut, 
-  ChevronsLeft
+  ChevronsLeft,
+  ChevronRight
 } from 'lucide-react';
 import { Page } from '../types';
 
@@ -17,10 +18,19 @@ interface SidebarProps {
   currentPage: Page;
   setCurrentPage: (page: Page) => void;
   onLogout: () => void;
+  isCollapsed: boolean;
+  setIsCollapsed: (collapsed: boolean) => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, onLogout }) => {
+const Sidebar: React.FC<SidebarProps> = ({ 
+  currentPage, 
+  setCurrentPage, 
+  onLogout,
+  isCollapsed,
+  setIsCollapsed
+}) => {
   const LOGO_URL = "https://framerusercontent.com/images/BrlQcPpho2hjJ0qjdKGIdbfXY.png?width=1024&height=276";
+  const MINI_LOGO = "https://framerusercontent.com/images/7u9hI9mH9N3V2H2B3v4V5z.png"; // Placeholder pour logo réduit si existant
 
   const menuItems = [
     { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard, page: 'dashboard' as Page },
@@ -39,59 +49,88 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, setCurrentPage, onLogout
   const isActive = (pageName: string) => currentPage === pageName;
 
   return (
-    <div className="w-64 h-screen bg-white border-r border-gray-200 flex flex-col font-sans text-gray-600 overflow-y-auto hide-scrollbar shrink-0">
-      {/* Header Logo Official */}
-      <div className="p-6 pb-8 flex items-center justify-between">
-        <img src={LOGO_URL} className="h-7 w-auto" alt="Xora Logo" />
-        <button className="p-1 hover:bg-gray-100 rounded transition-colors">
-          <ChevronsLeft size={18} className="text-gray-300" />
+    <div className={`${isCollapsed ? 'w-24' : 'w-72'} h-screen bg-white border-r border-gray-100 flex flex-col font-sans text-gray-600 transition-all duration-300 ease-in-out z-50 shrink-0 shadow-sm overflow-hidden`}>
+      
+      {/* Header Logo & Collapse Toggle */}
+      <div className={`p-6 pb-10 flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
+        {!isCollapsed && (
+          <img src={LOGO_URL} className="h-8 w-auto animate-in fade-in duration-500" alt="Xora Logo" />
+        )}
+        <button 
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className={`p-2 hover:bg-gray-100 rounded-xl transition-all duration-300 text-gray-400 hover:text-gray-900 ${isCollapsed ? 'rotate-180' : ''}`}
+        >
+          <ChevronsLeft size={22} />
         </button>
       </div>
 
-      {/* Main Menu */}
-      <div className="flex-1 px-4 space-y-1">
-        {menuItems.map((item) => (
-          <button
-            key={item.id}
-            onClick={() => setCurrentPage(item.page)}
-            className={`w-full flex items-center px-3 py-2.5 rounded-xl text-sm transition-all ${
-              isActive(item.page) 
-                ? 'bg-gray-100 text-gray-900 font-bold border-l-4 border-gray-900' 
-                : 'hover:bg-gray-50 text-gray-500 font-medium'
-            }`}
-          >
-            <item.icon size={18} className={`mr-3 ${isActive(item.page) ? 'text-gray-900' : 'text-gray-300'}`} />
-            {item.label}
-          </button>
-        ))}
+      {/* Main Menu Scrollable Area */}
+      <div className="flex-1 px-4 space-y-8 overflow-y-auto hide-scrollbar">
+        
+        {/* Navigation Section */}
+        <div className="space-y-1.5">
+          {!isCollapsed && <p className="px-3 text-[10px] font-black text-gray-300 uppercase tracking-widest mb-3 animate-in fade-in">Principal</p>}
+          {menuItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setCurrentPage(item.page)}
+              className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'px-4'} py-3.5 rounded-2xl transition-all duration-200 group relative ${
+                isActive(item.page) 
+                  ? 'bg-gray-900 text-white shadow-lg shadow-gray-200' 
+                  : 'hover:bg-gray-50 text-gray-500 hover:text-gray-900'
+              }`}
+            >
+              <item.icon 
+                size={22} 
+                className={`${isCollapsed ? 'm-0' : 'mr-4'} ${isActive(item.page) ? 'text-white' : 'text-gray-400 group-hover:text-gray-900'}`} 
+              />
+              {!isCollapsed && (
+                <span className={`text-[15px] font-bold whitespace-nowrap animate-in slide-in-from-left-2`}>
+                  {item.label}
+                </span>
+              )}
+              {isCollapsed && isActive(item.page) && (
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-gray-900 rounded-l-full" />
+              )}
+            </button>
+          ))}
+        </div>
 
-        {/* Bottom Items */}
-        <div className="pt-2 border-t border-gray-50 mt-2 space-y-1">
+        {/* Administration Section */}
+        <div className="space-y-1.5">
+          {!isCollapsed && <p className="px-3 text-[10px] font-black text-gray-300 uppercase tracking-widest mb-3 animate-in fade-in">Gestion</p>}
           {bottomItems.map((item) => (
             <button
               key={item.id}
               onClick={() => setCurrentPage(item.page)}
-              className={`w-full flex items-center px-3 py-2.5 rounded-xl text-sm transition-all ${
+              className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'px-4'} py-3.5 rounded-2xl transition-all duration-200 group relative ${
                 isActive(item.page)
-                  ? 'bg-gray-100 text-gray-900 font-bold border-l-4 border-gray-900'
-                  : 'hover:bg-gray-50 text-gray-500 font-medium hover:text-gray-700'
+                  ? 'bg-gray-900 text-white shadow-lg shadow-gray-200'
+                  : 'hover:bg-gray-50 text-gray-500 hover:text-gray-900'
               }`}
             >
-              <item.icon size={18} className={`mr-3 ${isActive(item.page) ? 'text-gray-900' : 'text-gray-300'}`} />
-              {item.label}
+              <item.icon 
+                size={22} 
+                className={`${isCollapsed ? 'm-0' : 'mr-4'} ${isActive(item.page) ? 'text-white' : 'text-gray-400 group-hover:text-gray-900'}`} 
+              />
+              {!isCollapsed && (
+                <span className="text-[15px] font-bold whitespace-nowrap animate-in slide-in-from-left-2">
+                  {item.label}
+                </span>
+              )}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Footer */}
+      {/* Footer / Logout */}
       <div className="p-4 mt-auto border-t border-gray-50">
         <button 
           onClick={onLogout}
-          className="w-full flex items-center px-3 py-3 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl text-sm font-bold transition-all group"
+          className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'px-4'} py-4 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all group overflow-hidden`}
         >
-          Se déconnecter
-          <LogOut size={16} className="ml-auto opacity-40 group-hover:opacity-100" />
+          {!isCollapsed && <span className="text-[15px] font-bold whitespace-nowrap">Se déconnecter</span>}
+          <LogOut size={20} className={`${isCollapsed ? '' : 'ml-auto'} opacity-40 group-hover:opacity-100 transition-opacity`} />
         </button>
       </div>
     </div>

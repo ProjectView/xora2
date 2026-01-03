@@ -31,6 +31,7 @@ function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -211,9 +212,15 @@ function App() {
 
   return (
     <div className="flex h-screen bg-gray-50 font-sans">
-      <Sidebar currentPage={currentPage} setCurrentPage={handlePageChange} onLogout={handleLogout} />
+      <Sidebar 
+        currentPage={currentPage} 
+        setCurrentPage={handlePageChange} 
+        onLogout={handleLogout}
+        isCollapsed={isSidebarCollapsed}
+        setIsCollapsed={setIsSidebarCollapsed}
+      />
       
-      <div className="flex-1 flex flex-col h-screen overflow-hidden">
+      <div className="flex-1 flex flex-col h-screen overflow-hidden transition-all duration-300">
         {(!selectedClient && !selectedProject && currentPage !== 'profile' && currentPage !== 'company' && currentPage !== 'kpi') && (
           <Header title={getHeaderTitle(currentPage)} user={userProfile} onProfileClick={() => setCurrentPage('profile')} />
         )}

@@ -7,7 +7,9 @@ import {
   Image as ImageIcon, 
   Trash2, 
   Loader2,
-  ExternalLink
+  ExternalLink,
+  X,
+  AlertTriangle
 } from 'lucide-react';
 import { db, storage } from '../firebase';
 import { collection, query, where, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp } from '@firebase/firestore';
@@ -35,6 +37,7 @@ const ClientDocuments: React.FC<ClientDocumentsProps> = ({ clientId, userProfile
   const [isUploading, setIsUploading] = useState(false);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [dragActive, setDragActive] = useState(false);
+  const [docToDelete, setDocToDelete] = useState<DocumentMetadata | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -78,17 +81,12 @@ const ClientDocuments: React.FC<ClientDocumentsProps> = ({ clientId, userProfile
         const uniqueId = Date.now() + Math.random().toString(36).substring(7);
         const fileName = `${uniqueId}_${file.name}`;
         
-        // Chemin de stockage structuré
         const storagePath = `clients/${clientId}/documents/${fileName}`;
         const fileRef = ref(storage, storagePath);
 
-        // 1. Upload physique
         const uploadResult = await uploadBytes(fileRef, file);
-        
-        // 2. Récupération URL
         const downloadUrl = await getDownloadURL(uploadResult.ref);
 
-        // 3. Création métadonnées Firestore
         await addDoc(collection(db, 'client_documents'), {
           clientId,
           companyId: userProfile.companyId,
@@ -110,14 +108,12 @@ const ClientDocuments: React.FC<ClientDocumentsProps> = ({ clientId, userProfile
     }
   };
 
-  const handleDelete = async (e: React.MouseEvent, docData: DocumentMetadata) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const confirmDelete = async () => {
+    if (!docToDelete) return;
     
-    if (!window.confirm(`Êtes-vous sûr de vouloir supprimer définitivement le document "${docData.name}" ?\nCette action supprimera le fichier du serveur.`)) {
-      return;
-    }
-    
+    const docData = docToDelete;
+    setDocToDelete(null); // Ferme la modale immédiatement
+
     setDeletingIds(prev => {
       const next = new Set(prev);
       next.add(docData.id);
@@ -125,30 +121,25 @@ const ClientDocuments: React.FC<ClientDocumentsProps> = ({ clientId, userProfile
     });
 
     try {
-      // 1. TENTATIVE de suppression physique dans Firebase Storage
-      if (docData.storagePath) {
-        const fileRef = ref(storage, docData.storagePath);
+      if (docData.url) {
         try {
+          const fileRef = ref(storage, docData.url);
           await deleteObject(fileRef);
-          console.log("Fichier supprimé du Storage avec succès.");
+          console.log("Fichier physique supprimé.");
         } catch (storageErr: any) {
-          // On log l'erreur mais on ne bloque pas la suite si le fichier est introuvable 
-          // ou si les règles Storage sont manquantes (pour permettre au moins le nettoyage DB)
-          console.warn("Problème Storage (peut être ignoré si Firestore est nettoyé):", storageErr.code);
-          
-          if (storageErr.code === 'storage/unauthorized') {
-             console.error("Attention : Vos règles Firebase STORAGE ne permettent pas la suppression. Vérifiez l'onglet Storage > Rules dans votre console Firebase.");
+          if (storageErr.code === 'storage/object-not-found') {
+            console.warn("Fichier absent du Storage.");
+          } else {
+            console.error("Erreur Storage:", storageErr.code);
           }
         }
       }
 
-      // 2. Suppression de l'entrée Firestore (Indispensable pour mettre à jour l'UI)
       await deleteDoc(doc(db, 'client_documents', docData.id));
-      console.log("Document supprimé de Firestore.");
       
     } catch (e: any) {
-      console.error("Erreur critique lors de la suppression Firestore:", e);
-      alert(`Erreur de suppression : ${e.message}`);
+      console.error("Erreur Firestore:", e);
+      alert(`Erreur : ${e.message}`);
     } finally {
       setDeletingIds(prev => {
         const next = new Set(prev);
@@ -207,7 +198,6 @@ const ClientDocuments: React.FC<ClientDocumentsProps> = ({ clientId, userProfile
 
       <div className="bg-[#f8f9fa] border border-gray-100 rounded-[28px] p-6 min-h-[450px] space-y-6">
         
-        {/* Drop Zone */}
         <div 
           onDragEnter={handleDrag}
           onDragOver={handleDrag}
@@ -242,7 +232,6 @@ const ClientDocuments: React.FC<ClientDocumentsProps> = ({ clientId, userProfile
           </div>
         </div>
 
-        {/* Documents List */}
         <div className="space-y-3">
           {isLoading ? (
             <div className="flex items-center justify-center py-20">
@@ -288,7 +277,7 @@ const ClientDocuments: React.FC<ClientDocumentsProps> = ({ clientId, userProfile
                             <ExternalLink size={16} />
                           </button>
                           <button 
-                            onClick={(e) => handleDelete(e, docItem)}
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDocToDelete(docItem); }}
                             className="p-2 text-gray-200 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
                             title="Supprimer du serveur"
                           >
@@ -304,6 +293,39 @@ const ClientDocuments: React.FC<ClientDocumentsProps> = ({ clientId, userProfile
           )}
         </div>
       </div>
+
+      {/* Modal de Confirmation de Suppression */}
+      {docToDelete && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-[28px] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300 border border-gray-100">
+            <div className="p-8 flex flex-col items-center text-center">
+              <div className="w-16 h-16 bg-red-50 rounded-2xl flex items-center justify-center text-red-500 mb-6">
+                <AlertTriangle size={32} />
+              </div>
+              <h3 className="text-[18px] font-bold text-gray-900 mb-2">Confirmer la suppression ?</h3>
+              <p className="text-[14px] text-gray-500 leading-relaxed mb-8">
+                Vous êtes sur le point de supprimer définitivement <br/> 
+                <span className="font-bold text-gray-900">"{docToDelete.name}"</span>. <br/>
+                Cette action est irréversible.
+              </p>
+              <div className="flex gap-3 w-full">
+                <button 
+                  onClick={() => setDocToDelete(null)}
+                  className="flex-1 px-6 py-3.5 bg-gray-50 text-gray-600 rounded-xl font-bold text-[13px] hover:bg-gray-100 transition-all border border-gray-100"
+                >
+                  Annuler
+                </button>
+                <button 
+                  onClick={confirmDelete}
+                  className="flex-1 px-6 py-3.5 bg-red-600 text-white rounded-xl font-bold text-[13px] hover:bg-red-700 shadow-lg shadow-red-100 transition-all active:scale-95"
+                >
+                  Supprimer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
