@@ -8,11 +8,13 @@ import {
   ChevronLeft, 
   ChevronRight, 
   Loader2,
-  Clock
+  Clock,
+  CheckSquare
 } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot } from '@firebase/firestore';
 import { Appointment } from '../types';
+import AddTaskModal from './AddTaskModal';
 
 interface AgendaProps {
   userProfile: any;
@@ -24,6 +26,7 @@ const Agenda: React.FC<AgendaProps> = ({ userProfile }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'Jours' | 'Semaine' | 'Mois'>('Semaine');
   const [filterUser, setFilterUser] = useState(userProfile?.name || '');
+  const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
 
   // --- Gestion du temps (Navigation dynamique) ---
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -126,10 +129,19 @@ const Agenda: React.FC<AgendaProps> = ({ userProfile }) => {
             </div>
           </div>
 
-          <button className="flex items-center gap-2 px-6 py-3 bg-white border border-gray-200 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:border-gray-900 transition-all active:scale-95">
-             <Plus size={16} className="text-gray-400" />
-             Ajouter un rendez-vous
-          </button>
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => setIsAddTaskModalOpen(true)}
+              className="flex items-center gap-2 px-5 py-3 bg-white border border-gray-200 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:bg-gray-50 transition-all active:scale-95"
+            >
+               <CheckSquare size={16} className="text-indigo-500" />
+               Ajouter une tâche
+            </button>
+            <button className="flex items-center gap-2 px-6 py-3 bg-gray-900 text-white rounded-xl text-[12px] font-bold shadow-lg hover:bg-black transition-all active:scale-95">
+               <Plus size={16} className="text-white/70" />
+               Ajouter un rendez-vous
+            </button>
+          </div>
         </div>
 
         {/* Barre de Filtres */}
@@ -252,6 +264,12 @@ const Agenda: React.FC<AgendaProps> = ({ userProfile }) => {
           </div>
         </div>
       </div>
+
+      <AddTaskModal 
+        isOpen={isAddTaskModalOpen}
+        onClose={() => setIsAddTaskModalOpen(false)}
+        userProfile={userProfile}
+      />
     </div>
   );
 };

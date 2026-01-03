@@ -8,11 +8,13 @@ import {
   MoreVertical, 
   GripVertical,
   StickyNote,
-  Loader2
+  Loader2,
+  PenSquare,
+  Trash2
 } from 'lucide-react';
 import { db } from '../firebase';
 // Use @firebase/firestore to fix named export resolution issues
-import { collection, query, where, onSnapshot, orderBy } from '@firebase/firestore';
+import { collection, query, where, onSnapshot, doc, deleteDoc, updateDoc } from '@firebase/firestore';
 import { Task } from '../types';
 import AddTaskModal from './AddTaskModal';
 
@@ -26,13 +28,13 @@ const TasksMemo: React.FC<TasksMemoProps> = ({ userProfile }) => {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   useEffect(() => {
     if (!userProfile?.companyId) return;
 
     const tasksRef = collection(db, 'tasks');
-    // On récupère toutes les tâches de l'entreprise
-    // Note: On évite les filtres complexes ici pour ne pas déclencher d'erreurs d'indexation Firestore immédiates
     const q = query(
       tasksRef, 
       where('companyId', '==', userProfile.companyId)
@@ -44,7 +46,6 @@ const TasksMemo: React.FC<TasksMemoProps> = ({ userProfile }) => {
         ...doc.data()
       })) as Task[];
       
-      // On pourrait trier par date ici si besoin
       setTasks(tasksData);
       setIsLoading(false);
     });
@@ -52,7 +53,32 @@ const TasksMemo: React.FC<TasksMemoProps> = ({ userProfile }) => {
     return () => unsubscribe();
   }, [userProfile?.companyId]);
 
-  // Filtrage côté client pour la réactivité des onglets et de la recherche
+  const handleDeleteTask = async (id: string) => {
+    if (!window.confirm("Attention, vous êtes sur de vouloir supprimer ?")) return;
+    try {
+      await deleteDoc(doc(db, 'tasks', id));
+      setActiveMenuId(null);
+    } catch (e) {
+      console.error("Erreur suppression tâche:", e);
+      alert("Erreur lors de la suppression.");
+    }
+  };
+
+  const handleEditClick = (task: Task) => {
+    setEditingTask(task);
+    setIsAddTaskModalOpen(true);
+    setActiveMenuId(null);
+  };
+
+  const updateTaskStatus = async (id: string, status: string) => {
+    try {
+      await updateDoc(doc(db, 'tasks', id), { status });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Filtrage côté client
   const filteredTasks = tasks.filter(task => {
     const matchesTab = activeStatusTab === 'en-cours' 
       ? task.status !== 'completed' 
@@ -96,7 +122,7 @@ const TasksMemo: React.FC<TasksMemoProps> = ({ userProfile }) => {
           </div>
 
           <button 
-            onClick={() => setIsAddTaskModalOpen(true)}
+            onClick={() => { setEditingTask(null); setIsAddTaskModalOpen(true); }}
             className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-lg text-sm font-semibold text-gray-700 hover:bg-gray-50 shadow-sm transition-colors"
           >
             <Plus size={18} />
@@ -162,11 +188,11 @@ const TasksMemo: React.FC<TasksMemoProps> = ({ userProfile }) => {
                 <tr className="text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">
                   <th className="px-4 pb-2">Ordre</th>
                   <th className="px-4 pb-2">Descriptif</th>
-                  <th className="px-4 pb-2">Type</th>
-                  <th className="px-4 pb-2">Statut</th>
-                  <th className="px-4 pb-2">Échéance</th>
+                  <th className="px-4 pb-2 text-center">Type</th>
+                  <th className="px-4 pb-2 text-center">Statut</th>
+                  <th className="px-4 pb-2 text-center">Échéance</th>
                   <th className="px-4 pb-2">Collaborateur</th>
-                  <th className="px-4 pb-2">Note</th>
+                  <th className="px-4 pb-2 text-center">Note</th>
                   <th className="px-4 pb-2">Progression</th>
                   <th className="px-4 pb-2 text-right"></th>
                 </tr>
@@ -190,13 +216,13 @@ const TasksMemo: React.FC<TasksMemoProps> = ({ userProfile }) => {
                       </div>
                     </td>
 
-                    <td className="px-4 py-4 border-y border-gray-100 group-hover:border-gray-200">
+                    <td className="px-4 py-4 border-y border-gray-100 group-hover:border-gray-200 text-center">
                       <span className="px-2.5 py-1 text-[10px] font-bold bg-gray-100 text-gray-600 rounded-full uppercase tracking-tighter">
                         {task.type}
                       </span>
                     </td>
 
-                    <td className="px-4 py-4 border-y border-gray-100 group-hover:border-gray-200">
+                    <td className="px-4 py-4 border-y border-gray-100 group-hover:border-gray-200 text-center">
                       {task.statusLabel ? (
                         <span className={`px-2.5 py-1 text-[10px] font-bold rounded-full uppercase tracking-tighter ${
                           task.tagColor === 'blue' ? 'bg-cyan-100 text-cyan-700' :
@@ -211,7 +237,7 @@ const TasksMemo: React.FC<TasksMemoProps> = ({ userProfile }) => {
                       )}
                     </td>
 
-                    <td className="px-4 py-4 border-y border-gray-100 group-hover:border-gray-200">
+                    <td className="px-4 py-4 border-y border-gray-100 group-hover:border-gray-200 text-center">
                       <span className={`text-xs font-bold ${task.isLate ? 'text-red-500' : 'text-gray-800'}`}>
                         {task.date || 'Non définie'}
                       </span>
@@ -258,13 +284,22 @@ const TasksMemo: React.FC<TasksMemoProps> = ({ userProfile }) => {
                           </>
                         ) : (
                           <div className="flex bg-gray-50 rounded-full border border-gray-200 p-0.5 w-full">
-                            <button className={`flex-1 py-1 text-[10px] font-bold rounded-full transition-all ${task.status === 'pending' ? 'bg-white shadow-sm text-gray-800 border border-gray-100' : 'text-gray-400 hover:text-gray-600'}`}>
+                            <button 
+                              onClick={() => updateTaskStatus(task.id, 'pending')}
+                              className={`flex-1 py-1 text-[10px] font-bold rounded-full transition-all ${task.status === 'pending' ? 'bg-white shadow-sm text-gray-800 border border-gray-100' : 'text-gray-400 hover:text-gray-600'}`}
+                            >
                               A faire
                             </button>
-                            <button className={`flex-1 py-1 text-[10px] font-bold rounded-full transition-all ${task.status === 'in-progress' ? 'bg-white shadow-sm text-gray-800 border border-gray-100' : 'text-gray-400 hover:text-gray-600'}`}>
+                            <button 
+                              onClick={() => updateTaskStatus(task.id, 'in-progress')}
+                              className={`flex-1 py-1 text-[10px] font-bold rounded-full transition-all ${task.status === 'in-progress' ? 'bg-white shadow-sm text-gray-800 border border-gray-100' : 'text-gray-400 hover:text-gray-600'}`}
+                            >
                               En cours
                             </button>
-                            <button className={`flex-1 py-1 text-[10px] font-bold rounded-full transition-all ${task.status === 'completed' ? 'bg-white shadow-sm text-gray-800 border border-gray-100' : 'text-gray-400 hover:text-gray-600'}`}>
+                            <button 
+                              onClick={() => updateTaskStatus(task.id, 'completed')}
+                              className={`flex-1 py-1 text-[10px] font-bold rounded-full transition-all ${task.status === 'completed' ? 'bg-white shadow-sm text-gray-800 border border-gray-100' : 'text-gray-400 hover:text-gray-600'}`}
+                            >
                               Terminé
                             </button>
                           </div>
@@ -272,10 +307,34 @@ const TasksMemo: React.FC<TasksMemoProps> = ({ userProfile }) => {
                       </div>
                     </td>
 
-                    <td className="px-4 py-4 last:rounded-r-xl border-y border-r border-gray-100 group-hover:border-gray-200 text-right">
-                      <button className="p-1.5 hover:bg-gray-100 rounded text-gray-400 hover:text-gray-600">
+                    <td className="px-4 py-4 last:rounded-r-xl border-y border-r border-gray-100 group-hover:border-gray-200 text-right relative">
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setActiveMenuId(activeMenuId === task.id ? null : task.id); }}
+                        className={`p-2 rounded-lg transition-all ${activeMenuId === task.id ? 'bg-gray-100 text-gray-900 shadow-inner' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}
+                      >
                         <MoreVertical size={18} />
                       </button>
+
+                      {activeMenuId === task.id && (
+                        <>
+                          <div className="fixed inset-0 z-40" onClick={() => setActiveMenuId(null)} />
+                          <div className="absolute right-4 top-12 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 py-2 w-48 animate-in fade-in zoom-in-95 duration-150">
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handleEditClick(task); }}
+                              className="w-full text-left px-4 py-2.5 text-[12px] font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                            >
+                              <PenSquare size={14} className="text-gray-400" /> Modifier
+                            </button>
+                            <div className="h-px bg-gray-50 my-1 mx-2" />
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id); }}
+                              className="w-full text-left px-4 py-2.5 text-[12px] font-bold text-red-500 hover:bg-red-50 flex items-center gap-2 transition-colors"
+                            >
+                              <Trash2 size={14} /> Supprimer
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -285,11 +344,12 @@ const TasksMemo: React.FC<TasksMemoProps> = ({ userProfile }) => {
         </div>
       </div>
 
-      {/* New Task Modal */}
+      {/* Task Modal */}
       <AddTaskModal 
         isOpen={isAddTaskModalOpen} 
-        onClose={() => setIsAddTaskModalOpen(false)} 
+        onClose={() => { setIsAddTaskModalOpen(false); setEditingTask(null); }} 
         userProfile={userProfile}
+        taskToEdit={editingTask}
       />
     </div>
   );

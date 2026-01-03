@@ -19,6 +19,7 @@ import ClientTasks from './ClientTasks';
 import ClientContactInfo from './ClientContactInfo';
 import ClientProjects from './ClientProjects';
 import ClientAppointments from './ClientAppointments';
+import ClientDocuments from './ClientDocuments';
 
 interface ClientDetailsProps {
   client: Client;
@@ -58,7 +59,6 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, on
     { label: `Projet (${client.projectCount || 0})`, key: 'Projet' },
     { label: 'Tâches', key: 'Tâches' },
     { label: `Rendez-vous (${appointmentCount})`, key: 'Rendez-vous' },
-    { label: 'Fidélisation', key: 'Fidélisation' },
     { label: 'Documents', key: 'Documents' }
   ];
 
@@ -104,8 +104,8 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, on
           <div className="grid grid-cols-2 gap-2">
             <button className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white border border-gray-100 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:bg-gray-50 transition-all"><MessageSquare size={16} /> Contacter</button>
             <button className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white border border-gray-100 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:bg-gray-50 transition-all"><Calendar size={16} /> Planifier un RDV</button>
-            <button className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white border border-gray-200 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:bg-gray-50 transition-all"><Phone size={16} /> Appeler</button>
-            <button className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white border border-gray-200 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:bg-gray-50 transition-all"><CheckSquare size={16} /> Ajouter une tâche</button>
+            <button className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white border border-gray-100 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:bg-gray-50 transition-all"><Phone size={16} /> Appeler</button>
+            <button className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white border border-gray-100 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:bg-gray-50 transition-all"><CheckSquare size={16} /> Ajouter une tâche</button>
           </div>
         </div>
 
@@ -164,6 +164,10 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, on
 
             {activeTab === 'Projet' && (
               <ClientProjects client={client} userProfile={userProfile} />
+            )}
+
+            {activeTab === 'Documents' && (
+              <ClientDocuments clientId={client.id} userProfile={userProfile} />
             )}
             
             <div className="pb-10"></div>

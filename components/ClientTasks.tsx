@@ -29,6 +29,7 @@ const ClientTasks: React.FC<ClientTasksProps> = ({ clientId, clientName, userPro
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   // Charger TOUTES les tâches liées à ce client (directes ou via projets)
   useEffect(() => {
@@ -53,13 +54,19 @@ const ClientTasks: React.FC<ClientTasksProps> = ({ clientId, clientName, userPro
   }, [clientId]);
 
   const handleDeleteTask = async (id: string) => {
-    if (!window.confirm("Supprimer cette tâche ?")) return;
+    if (!window.confirm("Attention, vous êtes sur de vouloir supprimer ?")) return;
     try {
       await deleteDoc(doc(db, 'tasks', id));
       setActiveMenuId(null);
     } catch (e) {
       console.error(e);
     }
+  };
+
+  const handleEditTask = (task: Task) => {
+    setEditingTask(task);
+    setIsModalOpen(true);
+    setActiveMenuId(null);
   };
 
   const updateTaskStatus = async (id: string, status: string) => {
@@ -103,7 +110,7 @@ const ClientTasks: React.FC<ClientTasksProps> = ({ clientId, clientName, userPro
         </div>
 
         <button 
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => { setEditingTask(null); setIsModalOpen(true); }}
           className="flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-200 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:border-[#A886D7] transition-all active:scale-95"
         >
           <Plus size={16} className="text-[#A886D7]" />
@@ -242,7 +249,7 @@ const ClientTasks: React.FC<ClientTasksProps> = ({ clientId, clientName, userPro
                     <td className="px-6 py-5 last:rounded-r-2xl border-y border-r border-gray-50 text-right">
                        <div className="relative inline-block">
                           <button 
-                            onClick={() => setActiveMenuId(activeMenuId === task.id ? null : task.id)}
+                            onClick={(e) => { e.stopPropagation(); setActiveMenuId(activeMenuId === task.id ? null : task.id); }}
                             className={`p-2 rounded-lg transition-all ${activeMenuId === task.id ? 'bg-gray-100 text-gray-900' : 'text-gray-300 hover:bg-gray-50 hover:text-gray-600'}`}
                           >
                             <MoreVertical size={18} />
@@ -252,12 +259,14 @@ const ClientTasks: React.FC<ClientTasksProps> = ({ clientId, clientName, userPro
                             <>
                               <div className="fixed inset-0 z-40" onClick={() => setActiveMenuId(null)}></div>
                               <div className="absolute right-0 mt-2 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 py-2 w-48 animate-in fade-in zoom-in-95 duration-150">
-                                <button className="w-full text-left px-4 py-2.5 text-[12px] font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); handleEditTask(task); }}
+                                  className="w-full text-left px-4 py-2.5 text-[12px] font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2">
                                   <PenSquare size={14} className="text-gray-400" /> Modifier
                                 </button>
                                 <div className="h-px bg-gray-50 my-1 mx-2" />
                                 <button 
-                                  onClick={() => handleDeleteTask(task.id)}
+                                  onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id); }}
                                   className="w-full text-left px-4 py-2.5 text-[12px] font-bold text-red-500 hover:bg-red-50 flex items-center gap-2"
                                 >
                                   <Trash2 size={14} /> Supprimer
@@ -277,9 +286,10 @@ const ClientTasks: React.FC<ClientTasksProps> = ({ clientId, clientName, userPro
 
       <AddTaskModal 
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={() => { setIsModalOpen(false); setEditingTask(null); }}
         userProfile={userProfile}
         initialClientId={clientId}
+        taskToEdit={editingTask}
       />
     </div>
   );

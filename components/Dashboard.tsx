@@ -25,16 +25,17 @@ import {
 import { db } from '../firebase';
 // Use @firebase/firestore to fix named export resolution issues
 import { collection, query, where, onSnapshot, limit, doc, deleteDoc, updateDoc } from '@firebase/firestore';
-import { FinancialKPI, StatusCard, Task, Client } from '../types';
+import { FinancialKPI, StatusCard, Task, Client, Page } from '../types';
 import AddTaskModal from './AddTaskModal';
 
 interface DashboardProps {
   userProfile?: any;
   onClientClick?: (client: Client) => void;
   onAddClientClick?: () => void;
+  onNavigate?: (page: Page) => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAddClientClick }) => {
+const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAddClientClick, onNavigate }) => {
   const [isKPIOpen, setIsKPIOpen] = useState(true);
   const [kpis, setKpis] = useState<FinancialKPI[]>([]);
   const [statusCards, setStatusCards] = useState<StatusCard[]>([]);
@@ -44,6 +45,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
   const [hasPermissionError, setHasPermissionError] = useState(false);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   // Search states
   const [searchQuery, setSearchQuery] = useState('');
@@ -114,13 +116,19 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
   }, [userProfile?.companyId]);
 
   const handleDeleteTask = async (id: string) => {
-    if (!window.confirm("Supprimer cette tâche ?")) return;
+    if (!window.confirm("Attention, vous êtes sur de vouloir supprimer ?")) return;
     try {
       await deleteDoc(doc(db, 'tasks', id));
       setActiveMenuId(null);
     } catch (e) {
       console.error(e);
     }
+  };
+
+  const handleEditTask = (task: Task) => {
+    setEditingTask(task);
+    setIsAddTaskModalOpen(true);
+    setActiveMenuId(null);
   };
 
   const updateTaskStatus = async (id: string, status: string) => {
@@ -344,15 +352,18 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
                     </div>
                     <div className="flex items-center gap-3">
                         <button 
-                          onClick={() => setIsAddTaskModalOpen(true)}
+                          onClick={() => { setEditingTask(null); setIsAddTaskModalOpen(true); }}
                           className="flex items-center gap-2 px-6 py-3 bg-white border border-gray-200 rounded-xl text-[12px] font-black hover:bg-gray-50 text-gray-800 shadow-sm transition-all active:scale-95"
                         >
                             <Plus size={16} className="text-[#A886D7]" />
                             <span>AJOUTER UNE TÂCHE</span>
                         </button>
-                        <div className="p-3 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer hover:bg-gray-100 transition-colors">
-                            <ArrowUpRight size={18} className="text-gray-400 transform rotate-45" />
-                        </div>
+                        <button 
+                          onClick={() => onNavigate?.('tasks')}
+                          className="p-3 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer hover:bg-gray-100 transition-all text-gray-400 hover:text-gray-900 active:scale-95"
+                        >
+                            <ArrowUpRight size={18} className="" />
+                        </button>
                     </div>
                 </div>
 
@@ -439,7 +450,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
                                       </div>
                                     )}
                                     <button 
-                                      onClick={() => setActiveMenuId(activeMenuId === task.id ? null : task.id)}
+                                      onClick={(e) => { e.stopPropagation(); setActiveMenuId(activeMenuId === task.id ? null : task.id); }}
                                       className={`p-2 rounded-lg transition-all ${activeMenuId === task.id ? 'bg-gray-100 text-gray-900' : 'text-gray-300 hover:bg-gray-50 hover:text-gray-600'}`}
                                     >
                                        <MoreVertical size={20} />
@@ -449,12 +460,15 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
                                       <>
                                         <div className="fixed inset-0 z-40" onClick={() => setActiveMenuId(null)}></div>
                                         <div className="absolute right-0 top-12 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 py-2 w-48 animate-in fade-in zoom-in-95 duration-150">
-                                          <button className="w-full text-left px-4 py-2.5 text-[12px] font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                                          <button 
+                                            onClick={(e) => { e.stopPropagation(); handleEditTask(task); }}
+                                            className="w-full text-left px-4 py-2.5 text-[12px] font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                          >
                                             <PenSquare size={14} className="text-gray-400" /> Modifier
                                           </button>
                                           <div className="h-px bg-gray-50 my-1 mx-2" />
                                           <button 
-                                            onClick={() => handleDeleteTask(task.id)}
+                                            onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id); }}
                                             className="w-full text-left px-4 py-2.5 text-[12px] font-bold text-red-500 hover:bg-red-50 flex items-center gap-2"
                                           >
                                             <Trash2 size={14} /> Supprimer
@@ -483,9 +497,12 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
                             <ChevronDown size={14} className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" />
                         </div>
                     </div>
-                    <div className="p-2 bg-gray-50 rounded-lg border border-gray-100 cursor-pointer hover:bg-gray-100 transition-colors">
-                        <ArrowUpRight size={18} className="text-gray-400 transform rotate-45" />
-                    </div>
+                    <button 
+                      onClick={() => onNavigate?.('agenda')}
+                      className="p-2 bg-gray-50 rounded-lg border border-gray-100 cursor-pointer hover:bg-gray-100 transition-colors active:scale-95"
+                    >
+                        <ArrowUpRight size={18} className="text-gray-400" />
+                    </button>
                 </div>
                 <div className="overflow-x-auto">
                     <div className="grid grid-cols-5 gap-4 min-w-[800px]">
@@ -507,8 +524,9 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
 
       <AddTaskModal 
         isOpen={isAddTaskModalOpen}
-        onClose={() => setIsAddTaskModalOpen(false)}
+        onClose={() => { setIsAddTaskModalOpen(false); setEditingTask(null); }}
         userProfile={userProfile}
+        taskToEdit={editingTask}
       />
     </div>
   );

@@ -3,6 +3,7 @@ import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 // Use @firebase/firestore to fix named export resolution issues
 import { getFirestore, doc, writeBatch, collection, getDoc } from "@firebase/firestore";
+import { getStorage } from "firebase/storage";
 
 const getEnv = (key: string, fallback: string): string => {
   try {
@@ -26,6 +27,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+export const storage = getStorage(app);
 
 export const seedDatabase = async (companyId: string, currentUser: any) => {
   const batch = writeBatch(db);

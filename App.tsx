@@ -159,6 +159,7 @@ function App() {
               setCurrentPage('directory');
             }}
             onAddClientClick={() => setIsModalOpen(true)}
+            onNavigate={handlePageChange}
           />
         );
       case 'directory':
