@@ -25,9 +25,10 @@ interface ClientDetailsProps {
   client: Client;
   onBack: () => void;
   userProfile?: any;
+  onProjectSelect?: (project: any) => void;
 }
 
-const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, onBack, userProfile }) => {
+const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, onBack, userProfile, onProjectSelect }) => {
   const [activeTab, setActiveTab] = useState('Information contact');
   const [client, setClient] = useState<Client>(initialClient);
   const [loading, setLoading] = useState(false);
@@ -62,6 +63,9 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, on
     { label: 'Documents', key: 'Documents' }
   ];
 
+  // Récupération du premier contact secondaire pour le header
+  const secondaryContact = (client as any).details?.additionalContacts?.[0];
+
   return (
     <div className="flex h-screen bg-[#F8F9FA] overflow-hidden font-sans">
       <div className="flex-1 flex flex-col h-full overflow-y-auto hide-scrollbar">
@@ -83,20 +87,37 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, on
                   {client.status === 'Leads' ? 'Etudes à réaliser' : client.status}
                 </span>
               </div>
-              <div className="flex gap-12 items-center">
-                <div className="space-y-2">
-                  <h1 className="text-[17px] font-bold text-gray-900 leading-tight">{client.name}</h1>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-[13px] font-bold text-gray-700">
+              
+              <div className="flex flex-col gap-1.5">
+                {/* Contact Principal */}
+                <div className="flex gap-12 items-center">
+                  <div className="min-w-[180px]">
+                    <h1 className="text-[17px] font-bold text-gray-900 leading-tight uppercase">{client.name}</h1>
+                  </div>
+                  <div className="flex items-center gap-2 text-[13px] font-bold text-gray-700 min-w-[140px]">
                     <Phone size={16} className="text-gray-300" /> {(client as any).details?.phone || 'Non renseigné'}
                   </div>
-                </div>
-                <div className="space-y-2">
                   <div className="flex items-center gap-2 text-[13px] font-bold text-gray-700">
                     <Mail size={16} className="text-gray-300" /> {(client as any).details?.email || 'Non renseigné'}
                   </div>
                 </div>
+
+                {/* Contact Secondaire (Si existe) */}
+                {secondaryContact && (
+                  <div className="flex gap-12 items-center opacity-45 animate-in fade-in slide-in-from-top-1 duration-300">
+                    <div className="min-w-[180px]">
+                      <h2 className="text-[14px] font-bold text-gray-500 leading-tight uppercase">
+                        {secondaryContact.firstName} {secondaryContact.lastName}
+                      </h2>
+                    </div>
+                    <div className="flex items-center gap-2 text-[12px] font-medium text-gray-500 min-w-[140px]">
+                      <Phone size={14} className="text-gray-300" /> {secondaryContact.phone || '-'}
+                    </div>
+                    <div className="flex items-center gap-2 text-[12px] font-medium text-gray-500">
+                      <Mail size={14} className="text-gray-300" /> {secondaryContact.email || '-'}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -163,7 +184,7 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, on
             )}
 
             {activeTab === 'Projet' && (
-              <ClientProjects client={client} userProfile={userProfile} />
+              <ClientProjects client={client} userProfile={userProfile} onProjectSelect={onProjectSelect} />
             )}
 
             {activeTab === 'Documents' && (

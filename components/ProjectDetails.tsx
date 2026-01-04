@@ -13,14 +13,20 @@ import {
   FileText, 
   Loader2, 
   MessageSquare,
-  File as FileIcon
+  File as FileIcon,
+  Check,
+  X
 } from 'lucide-react';
 import { db } from '../firebase';
 // Use @firebase/firestore to fix named export resolution issues
-import { doc, onSnapshot, getDoc, collection, query, where } from '@firebase/firestore';
+import { doc, onSnapshot, getDoc, collection, query, where, updateDoc } from '@firebase/firestore';
 import ProjectGeneralDiscovery from './ProjectGeneralDiscovery';
 import ProjectKitchenDiscovery from './ProjectKitchenDiscovery';
 import ProjectTasks from './ProjectTasks';
+import ProjectAppointments from './ProjectAppointments';
+import ProjectDocuments from './ProjectDocuments';
+import AddAppointmentModal from './AddAppointmentModal';
+import AddTaskModal from './AddTaskModal';
 
 interface ProjectDetailsProps {
   project: any;
@@ -37,18 +43,25 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
   const [loading, setLoading] = useState(true);
   const [taskCount, setTaskCount] = useState(0);
 
+  // États pour les fonctionnalités de header
+  const [isEditTitleMode, setIsEditTitleMode] = useState(false);
+  const [editedTitle, setEditedTitle] = useState(initialProject.projectName);
+  const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+
   useEffect(() => {
     setLoading(true);
     const unsub = onSnapshot(doc(db, 'projects', initialProject.id), (docSnap) => {
       if (docSnap.exists()) {
-        setProject({ id: docSnap.id, ...docSnap.data() });
+        const data = docSnap.data();
+        setProject({ id: docSnap.id, ...data });
+        setEditedTitle(data.projectName);
       }
       setLoading(false);
     });
     return () => unsub();
   }, [initialProject.id]);
 
-  // Écouter le nombre de tâches du projet en temps réel
   useEffect(() => {
     const q = query(collection(db, 'tasks'), where('projectId', '==', initialProject.id));
     const unsubTasks = onSnapshot(q, (snapshot) => {
@@ -66,8 +79,33 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
     fetchClient();
   }, [project?.clientId]);
 
+  const handleSaveTitle = async () => {
+    if (!editedTitle.trim()) return;
+    try {
+      await updateDoc(doc(db, 'projects', project.id), {
+        projectName: editedTitle.trim()
+      });
+      setIsEditTitleMode(false);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleMarkAsLost = async () => {
+    if (!window.confirm("Voulez-vous vraiment marquer ce projet comme PERDU ?")) return;
+    try {
+      await updateDoc(doc(db, 'projects', project.id), {
+        status: 'Projet perdu',
+        statusColor: 'bg-red-100 text-red-700',
+        progress: 0
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const ProgressCircle = ({ progress, color, size = "w-4 h-4" }: { progress: number; color: string; size?: string }) => {
-    const strokeColor = color?.includes('D946EF') ? '#D946EF' : color?.includes('F97316') ? '#F97316' : color?.includes('0EA5E9') ? '#0EA5E9' : '#3B82F6';
+    const strokeColor = color?.includes('D946EF') ? '#D946EF' : color?.includes('F97316') ? '#F97316' : color?.includes('0EA5E9') ? '#0EA5E9' : color?.includes('red') ? '#ef4444' : '#3B82F6';
     return (
       <svg className={`${size} mr-1.5`} viewBox="0 0 36 36">
         <path className="text-gray-100" strokeDasharray="100, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="3.5" />
@@ -83,7 +121,8 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
     { label: 'Documents', key: 'Documents' }
   ];
 
-  const subTabs = ['Découverte', 'Découverte cuisine', 'Présentation commerciale', 'Devis en cours'];
+  // Filtrage des sous-onglets selon la demande utilisateur
+  const subTabs = ['Découverte', 'Découverte cuisine'];
 
   if (loading && !project) {
     return <div className="h-screen flex items-center justify-center bg-white"><Loader2 className="animate-spin text-gray-300" size={48} /></div>;
@@ -106,10 +145,25 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
                   <span className="text-[11px] font-bold text-gray-300">Créé le {project.addedDate}</span>
                 </div>
                 <div className="flex items-center gap-4">
-                  <h1 className="text-[20px] font-bold text-gray-900">{project.projectName}</h1>
+                  {isEditTitleMode ? (
+                    <div className="flex items-center gap-2">
+                      <input 
+                        autoFocus
+                        type="text"
+                        value={editedTitle}
+                        onChange={(e) => setEditedTitle(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSaveTitle()}
+                        className="text-[20px] font-bold text-gray-900 border-b-2 border-indigo-500 outline-none px-1 bg-indigo-50/30"
+                      />
+                      <button onClick={handleSaveTitle} className="p-1 text-green-500 hover:bg-green-50 rounded-full"><Check size={20} /></button>
+                      <button onClick={() => { setIsEditTitleMode(false); setEditedTitle(project.projectName); }} className="p-1 text-red-500 hover:bg-red-50 rounded-full"><X size={20} /></button>
+                    </div>
+                  ) : (
+                    <h1 className="text-[20px] font-bold text-gray-900">{project.projectName}</h1>
+                  )}
                   <div className="flex items-center gap-1.5">
-                    <ProgressCircle progress={project.progress || 0} color="#D946EF" />
-                    <span className="text-[12px] font-bold text-[#D946EF]">{project.progress}%</span>
+                    <ProgressCircle progress={project.progress || 0} color={project.statusColor?.includes('red') ? 'red' : '#D946EF'} />
+                    <span className={`text-[12px] font-bold ${project.statusColor?.includes('red') ? 'text-red-500' : 'text-[#D946EF]'}`}>{project.progress}%</span>
                   </div>
                   <span className={`px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-tight ${project.statusColor || 'bg-gray-100 text-gray-400'}`}>
                     {project.status}
@@ -129,16 +183,28 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
                 </div>
               </div>
               <div className="flex gap-2">
-                <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-[12px] font-bold text-gray-700 hover:bg-gray-50 shadow-sm transition-all">
+                <button 
+                  onClick={() => setIsEditTitleMode(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-[12px] font-bold text-gray-700 hover:bg-gray-50 shadow-sm transition-all"
+                >
                   <PenSquare size={16} /> Modifier le titre
                 </button>
-                <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-[12px] font-bold text-gray-700 hover:bg-gray-50 shadow-sm transition-all">
+                <button 
+                  onClick={() => setIsAppointmentModalOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-[12px] font-bold text-gray-700 hover:bg-gray-50 shadow-sm transition-all"
+                >
                   <Calendar size={16} /> Planifier un RDV
                 </button>
-                <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-[12px] font-bold text-gray-700 hover:bg-gray-50 shadow-sm transition-all">
+                <button 
+                  onClick={() => setIsTaskModalOpen(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-[12px] font-bold text-gray-700 hover:bg-gray-50 shadow-sm transition-all"
+                >
                   <CheckSquare size={16} /> Ajouter une tâche
                 </button>
-                <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-[12px] font-bold text-gray-700 hover:bg-gray-50 shadow-sm transition-all">
+                <button 
+                  onClick={handleMarkAsLost}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-[12px] font-bold text-red-500 hover:bg-red-50 shadow-sm transition-all"
+                >
                   <Trash2 size={16} /> Projet perdu
                 </button>
               </div>
@@ -208,6 +274,24 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
             />
           )}
 
+          {activeTab === 'Calendrier' && (
+            <ProjectAppointments 
+              projectId={project.id} 
+              clientId={project.clientId}
+              projectName={project.projectName}
+              clientName={project.clientName}
+              userProfile={userProfile} 
+            />
+          )}
+
+          {activeTab === 'Documents' && (
+            <ProjectDocuments 
+              projectId={project.id} 
+              clientId={project.clientId}
+              userProfile={userProfile} 
+            />
+          )}
+
           {activeTab === 'Etude client' && (activeSubTab !== 'Découverte' && activeSubTab !== 'Découverte cuisine') && (
             <div className="h-96 flex flex-col items-center justify-center text-center p-12 bg-white border border-gray-100 rounded-3xl animate-in fade-in duration-300 shadow-sm">
               <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-6 text-gray-200">
@@ -228,7 +312,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
         <div className="w-12 h-px bg-gray-50"></div>
         <div className="flex flex-col items-center gap-6">
           <div className="flex flex-col items-center gap-1">
-            <ProgressCircle progress={project.progress || 2} color="#D946EF" size="w-8 h-8" />
+            <ProgressCircle progress={project.progress || 2} color={project.statusColor?.includes('red') ? 'red' : "#D946EF"} size="w-8 h-8" />
             <span className="text-[10px] font-bold text-gray-900">{project.progress || 2}%</span>
           </div>
           <div className="flex flex-col items-center gap-1 opacity-40">
@@ -241,6 +325,24 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
           <button className="p-4 bg-gray-50 text-gray-400 hover:text-indigo-600 rounded-2xl transition-all shadow-sm"><MessageSquare size={22} /></button>
         </div>
       </div>
+
+      {/* Modales pré-remplies */}
+      <AddAppointmentModal 
+        isOpen={isAppointmentModalOpen}
+        onClose={() => setIsAppointmentModalOpen(false)}
+        userProfile={userProfile}
+        clientId={project.clientId}
+        clientName={project.clientName}
+        initialProjectId={project.id}
+      />
+
+      <AddTaskModal 
+        isOpen={isTaskModalOpen}
+        onClose={() => setIsTaskModalOpen(false)}
+        userProfile={userProfile}
+        initialClientId={project.clientId}
+        initialProjectId={project.id}
+      />
     </div>
   );
 };

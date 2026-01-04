@@ -10,9 +10,17 @@ interface AddAppointmentModalProps {
   userProfile: any;
   clientId: string;
   clientName: string;
+  initialProjectId?: string;
 }
 
-const AddAppointmentModal: React.FC<AddAppointmentModalProps> = ({ isOpen, onClose, userProfile, clientId, clientName }) => {
+const AddAppointmentModal: React.FC<AddAppointmentModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  userProfile, 
+  clientId, 
+  clientName,
+  initialProjectId = ''
+}) => {
   const [isLoading, setIsLoading] = useState(false);
   const [projects, setProjects] = useState<any[]>([]);
 
@@ -23,7 +31,7 @@ const AddAppointmentModal: React.FC<AddAppointmentModalProps> = ({ isOpen, onClo
     startTime: '10:00',
     endTime: '12:00',
     location: 'Showroom' as any,
-    projectId: '',
+    projectId: initialProjectId,
     collaboratorIdx: 0
   });
 
@@ -35,6 +43,17 @@ const AddAppointmentModal: React.FC<AddAppointmentModalProps> = ({ isOpen, onClo
     { name: 'Thomas', avatar: 'https://i.pravatar.cc/150?u=admin' },
     { name: 'Céline', avatar: 'https://i.pravatar.cc/150?u=2' },
   ];
+
+  useEffect(() => {
+    if (isOpen) {
+      setFormData(prev => ({
+        ...prev,
+        projectId: initialProjectId,
+        title: '',
+        date: ''
+      }));
+    }
+  }, [isOpen, initialProjectId]);
 
   useEffect(() => {
     if (!isOpen || !clientId) return;

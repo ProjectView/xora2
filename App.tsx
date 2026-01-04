@@ -103,6 +103,11 @@ function App() {
     setSelectedProject(null);
   };
 
+  const handleProjectSelect = (project: any) => {
+    setSelectedProject(project);
+    setCurrentPage('projects');
+  };
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -165,7 +170,12 @@ function App() {
         );
       case 'directory':
         return selectedClient ? (
-          <ClientDetails client={selectedClient} userProfile={userProfile} onBack={() => setSelectedClient(null)} />
+          <ClientDetails 
+            client={selectedClient} 
+            userProfile={userProfile} 
+            onBack={() => setSelectedClient(null)}
+            onProjectSelect={handleProjectSelect}
+          />
         ) : (
           <Directory 
             userProfile={userProfile}

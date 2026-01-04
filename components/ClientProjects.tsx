@@ -9,9 +9,10 @@ import { collection, query, where, onSnapshot } from '@firebase/firestore';
 interface ClientProjectsProps {
   client: any;
   userProfile: any;
+  onProjectSelect?: (project: any) => void;
 }
 
-const ClientProjects: React.FC<ClientProjectsProps> = ({ client, userProfile }) => {
+const ClientProjects: React.FC<ClientProjectsProps> = ({ client, userProfile, onProjectSelect }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [projects, setProjects] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -112,7 +113,11 @@ const ClientProjects: React.FC<ClientProjectsProps> = ({ client, userProfile }) 
                 </tr>
               ) : (
                 projects.map((project) => (
-                  <tr key={project.id} className="hover:bg-gray-50 transition-colors">
+                  <tr 
+                    key={project.id} 
+                    onClick={() => onProjectSelect?.(project)}
+                    className="hover:bg-gray-50 transition-colors cursor-pointer"
+                  >
                     <td className="px-6 py-5 text-[13px] font-bold text-gray-900">{project.metier}</td>
                     <td className="px-6 py-5 text-[13px] font-bold text-gray-900">{project.projectName}</td>
                     <td className="px-6 py-5">
@@ -136,10 +141,19 @@ const ClientProjects: React.FC<ClientProjectsProps> = ({ client, userProfile }) 
                     <td className="px-6 py-5 text-center text-[13px] font-bold text-gray-900">{project.addedDate}</td>
                     <td className="px-6 py-5">
                       <div className="flex justify-end gap-2">
-                        <button className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-100 text-gray-400 transition-all">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onProjectSelect?.(project);
+                          }}
+                          className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-100 text-gray-400 transition-all"
+                        >
                           <Eye size={16} />
                         </button>
-                        <button className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-100 text-gray-400 transition-all">
+                        <button 
+                          onClick={(e) => e.stopPropagation()}
+                          className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-100 text-gray-400 transition-all"
+                        >
                           <MoreHorizontal size={16} />
                         </button>
                       </div>

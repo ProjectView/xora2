@@ -13,7 +13,8 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  CheckSquare
+  CheckSquare,
+  FileText
 } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, doc, deleteDoc, updateDoc } from '@firebase/firestore';
@@ -75,14 +76,17 @@ const TasksMemo: React.FC<TasksMemoProps> = ({ userProfile }) => {
 
   const filteredTasks = tasks.filter(task => {
     const matchesTab = activeStatusTab === 'en-cours' ? task.status !== 'completed' : task.status === 'completed';
-    const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase()) || (task.subtitle?.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesSearch = 
+      task.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      (task.subtitle?.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      ((task as any).note?.toLowerCase().includes(searchQuery.toLowerCase()));
     return matchesTab && matchesSearch;
   });
 
   return (
     <div className="p-6 space-y-4 bg-gray-50 min-h-[calc(100vh-64px)] flex flex-col font-sans">
       
-      {/* BLOC 1 : Titre et Filtres Principaux (Style Annuaire) */}
+      {/* BLOC 1 : Titre et Filtres Principaux */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center space-x-1">
              <div className="flex items-center space-x-2 mr-4">
@@ -130,13 +134,13 @@ const TasksMemo: React.FC<TasksMemoProps> = ({ userProfile }) => {
         </div>
       </div>
 
-      {/* BLOC 2 : Barre de Recherche et Filtres Secondaires (Style Annuaire) */}
+      {/* BLOC 2 : Barre de Recherche et Filtres Secondaires */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
         <div className="md:col-span-4 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
             <input 
                 type="text" 
-                placeholder="Rechercher une tâche, un projet..." 
+                placeholder="Rechercher une tâche, un projet, une note..." 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-md text-sm focus:outline-none focus:border-gray-400 text-gray-800 shadow-sm transition-all"
@@ -153,7 +157,7 @@ const TasksMemo: React.FC<TasksMemoProps> = ({ userProfile }) => {
         ))}
       </div>
 
-      {/* BLOC 3 : Le Tableau (Style Annuaire) */}
+      {/* BLOC 3 : Le Tableau */}
       <div className="flex-1 bg-white rounded-xl border border-gray-200 overflow-hidden relative shadow-sm min-h-[500px] flex flex-col">
         {isLoading ? (
           <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-20">
@@ -172,11 +176,13 @@ const TasksMemo: React.FC<TasksMemoProps> = ({ userProfile }) => {
                     <tr className="bg-gray-50 border-b border-gray-200 text-[11px] text-gray-400 uppercase font-bold tracking-wider">
                         <th className="px-6 py-4 w-12 text-center">#</th>
                         <th className="px-6 py-4">Titre & Projet</th>
+                        <th className="px-6 py-4 text-center">Priorité</th>
+                        <th className="px-6 py-4 text-center min-w-[200px]">Statut</th>
+                        <th className="px-6 py-4">Notes</th>
                         <th className="px-6 py-4 text-center">Type</th>
-                        <th className="px-6 py-4 text-center">Statut</th>
                         <th className="px-6 py-4 text-center">Échéance</th>
                         <th className="px-6 py-4">Collaborateur</th>
-                        <th className="px-6 py-4 text-right">Action rapide</th>
+                        <th className="px-6 py-4 text-right">Action</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -192,16 +198,52 @@ const TasksMemo: React.FC<TasksMemoProps> = ({ userProfile }) => {
                                 </div>
                             </td>
                             <td className="px-6 py-4 text-center">
-                                <span className="px-2 py-0.5 bg-gray-50 border border-gray-100 text-gray-400 text-[10px] font-black rounded uppercase tracking-tighter">
-                                  {task.type}
-                                </span>
-                            </td>
-                            <td className="px-6 py-4 text-center">
                                 <span className={`px-3 py-1 rounded-md text-[11px] font-extrabold uppercase tracking-tight ${
                                     task.tagColor === 'purple' ? 'bg-purple-100 text-purple-700' : 
                                     task.tagColor === 'pink' ? 'bg-pink-100 text-pink-700' : 'bg-gray-100 text-gray-600'
                                 }`}>
-                                    {task.statusLabel || 'Sans marqueur'}
+                                    {task.statusLabel || 'Normal'}
+                                </span>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                                <div className="flex bg-gray-100 rounded-full p-0.5 w-full max-w-[220px] mx-auto border border-gray-200 shadow-inner">
+                                    <button 
+                                      onClick={() => updateTaskStatus(task.id, 'pending')}
+                                      className={`flex-1 py-1 text-[9px] font-black uppercase rounded-full transition-all ${task.status === 'pending' ? 'bg-white shadow-sm text-gray-800 border border-gray-100' : 'text-gray-400 hover:text-gray-600'}`}
+                                    >
+                                      À faire
+                                    </button>
+                                    <button 
+                                      onClick={() => updateTaskStatus(task.id, 'in-progress')}
+                                      className={`flex-1 py-1 text-[9px] font-black uppercase rounded-full transition-all ${task.status === 'in-progress' ? 'bg-white shadow-sm text-gray-800 border border-gray-100' : 'text-gray-400 hover:text-gray-600'}`}
+                                    >
+                                      En cours
+                                    </button>
+                                    <button 
+                                      onClick={() => updateTaskStatus(task.id, 'completed')}
+                                      className={`flex-1 py-1 text-[9px] font-black uppercase rounded-full transition-all ${task.status === 'completed' ? 'bg-white shadow-sm text-gray-800 border border-gray-100' : 'text-gray-400 hover:text-gray-600'}`}
+                                    >
+                                      Terminé
+                                    </button>
+                                </div>
+                            </td>
+                            <td className="px-6 py-4">
+                                <div className="flex items-start gap-2 max-w-[200px]">
+                                    {((task as any).note) ? (
+                                      <>
+                                        <FileText size={14} className="text-gray-300 mt-0.5 shrink-0" />
+                                        <span className="text-[12px] text-gray-500 italic font-medium truncate" title={(task as any).note}>
+                                            {(task as any).note}
+                                        </span>
+                                      </>
+                                    ) : (
+                                      <span className="text-gray-200 text-[11px] italic font-medium">Aucune note</span>
+                                    )}
+                                </div>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                                <span className="px-2 py-0.5 bg-gray-50 border border-gray-100 text-gray-400 text-[10px] font-black rounded uppercase tracking-tighter">
+                                  {task.type}
                                 </span>
                             </td>
                             <td className="px-6 py-4 text-center text-sm font-bold text-gray-700">

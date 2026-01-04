@@ -2,7 +2,6 @@
 import React, { useState } from 'react';
 import { X, UserPlus, Mail, User, ChevronDown, CheckCircle2, Loader2, Send } from 'lucide-react';
 import { db } from '../firebase';
-// Use @firebase/firestore to fix named export resolution issues
 import { collection, addDoc, serverTimestamp } from '@firebase/firestore';
 
 interface InviteCollaboratorModalProps {
@@ -31,42 +30,54 @@ const InviteCollaboratorModal: React.FC<InviteCollaboratorModalProps> = ({ isOpe
     try {
       const inviteEmail = formData.email.toLowerCase().trim();
       const appUrl = window.location.origin;
-      // Lien qui sera utilisé par le collaborateur pour s'enregistrer
-      const registrationLink = `${appUrl}/register?inviteId=${userProfile.companyId}&email=${encodeURIComponent(inviteEmail)}&role=${formData.role}`;
+      
+      // Le lien vers lequel le collaborateur sera redirigé pour créer son compte
+      // On passe l'ID de la société et le rôle souhaité dans l'URL
+      const registrationLink = `${appUrl}?view=register&inviteId=${userProfile.companyId}&email=${encodeURIComponent(inviteEmail)}&role=${formData.role}`;
 
-      // Structure compatible avec l'extension "Trigger Email from Firestore"
+      // Création du document dans la collection 'invitations'
+      // Ce document sera détecté par l'extension Firebase "Trigger Email"
       await addDoc(collection(db, 'invitations'), {
-        // Champs pour l'extension Email
+        // Champs standards pour l'extension Firebase Email
         to: inviteEmail,
         message: {
-          subject: `🚀 Invitation à rejoindre ${userProfile.companyName || 'Xora'}`,
+          subject: `🚀 Rejoignez l'équipe de ${userProfile.companyName || 'Xora'}`,
           html: `
-            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 12px; padding: 24px;">
-              <h2 style="color: #111827;">Bonjour ${formData.firstName},</h2>
-              <p style="color: #4b5563; line-height: 1.6;">
-                <strong>${userProfile.name}</strong> vous invite à rejoindre l'équipe de <strong>${userProfile.companyName || 'votre agence'}</strong> sur la plateforme XORA en tant que <strong>${formData.role}</strong>.
+            <div style="font-family: 'Inter', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #f3f4f6; border-radius: 24px; padding: 40px; color: #111827; background-color: #ffffff;">
+              <div style="text-align: center; margin-bottom: 32px;">
+                <h1 style="font-size: 24px; font-weight: 800; margin: 0; text-transform: uppercase; letter-spacing: -0.025em;">XORA <span style="color: #6366f1;">CRM</span></h1>
+              </div>
+              
+              <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 16px;">Bonjour ${formData.firstName},</h2>
+              
+              <p style="font-size: 16px; line-height: 1.6; color: #4b5563; margin-bottom: 24px;">
+                <strong>${userProfile.name}</strong> vous invite à rejoindre l'espace collaborateur de <strong>${userProfile.companyName || 'votre agence'}</strong> en tant que <strong>${formData.role}</strong>.
               </p>
-              <div style="margin: 32px 0; text-align: center;">
-                <a href="${registrationLink}" style="background-color: #111827; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; display: inline-block;">
-                  Accepter l'invitation et créer mon mot de passe
+              
+              <div style="text-align: center; margin: 40px 0;">
+                <a href="${registrationLink}" style="background-color: #111827; color: #ffffff; padding: 16px 32px; border-radius: 14px; text-decoration: none; font-weight: 700; font-size: 15px; display: inline-block; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);">
+                  Accepter l'invitation
                 </a>
               </div>
-              <p style="color: #9ca3af; font-size: 12px;">
-                Si vous n'êtes pas à l'origine de cette demande, vous pouvez ignorer cet email.
+              
+              <p style="font-size: 14px; color: #9ca3af; line-height: 1.5; margin-top: 32px; border-top: 1px solid #f3f4f6; pt: 24px;">
+                Si le bouton ne fonctionne pas, copiez ce lien : <br/>
+                <span style="word-break: break-all; color: #6366f1;">${registrationLink}</span>
               </p>
             </div>
           `,
         },
-        // Meta-données pour votre logique interne
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        role: formData.role,
-        companyId: userProfile.companyId,
-        companyName: userProfile.companyName || 'Xora Partner',
-        invitedBy: userProfile.name,
-        invitedByUid: userProfile.uid,
-        status: 'pending',
-        createdAt: serverTimestamp()
+        // Meta-données pour notre propre suivi en base de données
+        meta: {
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          role: formData.role,
+          companyId: userProfile.companyId,
+          invitedBy: userProfile.name,
+          invitedByUid: userProfile.uid,
+          status: 'pending',
+          createdAt: serverTimestamp()
+        }
       });
 
       setSuccess(true);
@@ -93,8 +104,8 @@ const InviteCollaboratorModal: React.FC<InviteCollaboratorModalProps> = ({ isOpe
               <CheckCircle2 size={48} />
             </div>
             <div>
-              <h3 className="text-2xl font-bold text-gray-900">Invitation envoyée !</h3>
-              <p className="text-gray-500 mt-2">Un email a été envoyé à <strong>{formData.email}</strong> pour rejoindre votre équipe.</p>
+              <h3 className="text-2xl font-bold text-gray-900 uppercase tracking-tighter">Invitation envoyée !</h3>
+              <p className="text-gray-400 font-medium mt-2">Un email a été envoyé à <strong>{formData.email}</strong> pour rejoindre votre équipe.</p>
             </div>
           </div>
         ) : (
@@ -105,8 +116,8 @@ const InviteCollaboratorModal: React.FC<InviteCollaboratorModalProps> = ({ isOpe
                   <UserPlus size={24} />
                 </div>
                 <div>
-                  <h2 className="text-[18px] font-bold text-gray-900 tracking-tight">Inviter un membre</h2>
-                  <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest">Société : {userProfile?.companyName}</p>
+                  <h2 className="text-[18px] font-black text-gray-900 tracking-tight uppercase">Inviter un collaborateur</h2>
+                  <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest">Équipe {userProfile?.companyName}</p>
                 </div>
               </div>
               <button type="button" onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-all text-gray-400">
@@ -116,13 +127,13 @@ const InviteCollaboratorModal: React.FC<InviteCollaboratorModalProps> = ({ isOpe
 
             <div className="p-8 space-y-6">
               <div className="space-y-2">
-                <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Adresse Email du collaborateur*</label>
+                <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">Adresse Email*</label>
                 <div className="relative group">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-gray-900 transition-colors" size={18} />
                   <input 
                     required
                     type="email" 
-                    placeholder="exemple@professionnel.com" 
+                    placeholder="pro@agence-cuisine.fr" 
                     value={formData.email}
                     onChange={(e) => setFormData({...formData, email: e.target.value})}
                     className="w-full pl-12 pr-4 py-4 bg-[#F8F9FA] border border-gray-100 rounded-2xl text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-gray-900 transition-all shadow-inner"
@@ -132,7 +143,7 @@ const InviteCollaboratorModal: React.FC<InviteCollaboratorModalProps> = ({ isOpe
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Prénom</label>
+                  <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">Prénom</label>
                   <div className="relative">
                     <User className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" size={18} />
                     <input 
@@ -145,7 +156,7 @@ const InviteCollaboratorModal: React.FC<InviteCollaboratorModalProps> = ({ isOpe
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Nom</label>
+                  <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">Nom</label>
                   <input 
                     type="text" 
                     placeholder="DUBOIS" 
@@ -157,21 +168,20 @@ const InviteCollaboratorModal: React.FC<InviteCollaboratorModalProps> = ({ isOpe
               </div>
 
               <div className="space-y-2">
-                <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Rôle dans l'organisation</label>
+                <label className="block text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">Rôle au sein de l'agence</label>
                 <div className="relative">
                   <select 
                     value={formData.role}
                     onChange={(e) => setFormData({...formData, role: e.target.value})}
-                    className="w-full appearance-none px-4 py-4 bg-[#F8F9FA] border border-gray-100 rounded-2xl text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-gray-900 transition-all shadow-inner"
+                    className="w-full appearance-none px-5 py-4 bg-[#F8F9FA] border border-gray-100 rounded-2xl text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-gray-900 transition-all shadow-inner"
                   >
                     <option>Agenceur</option>
                     <option>Administrateur</option>
+                    <option>Métreur</option>
                     <option>Poseur</option>
-                    <option>Démonstrateur</option>
                   </select>
                   <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                 </div>
-                <p className="text-[10px] text-gray-400 font-medium px-1 mt-2 italic">L'administrateur possède les droits de gestion sur toute la société.</p>
               </div>
             </div>
 
@@ -186,7 +196,7 @@ const InviteCollaboratorModal: React.FC<InviteCollaboratorModalProps> = ({ isOpe
                 ) : (
                   <Send size={20} />
                 )}
-                Envoyer l'invitation par mail
+                Envoyer l'invitation Xora
               </button>
             </div>
           </form>
