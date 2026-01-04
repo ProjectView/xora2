@@ -1,10 +1,9 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { ChevronDown, ChevronUp, Plus, Search, MapPin, Loader2, Trash2, Check, User, Phone, Mail } from 'lucide-react';
+import { ChevronDown, ChevronUp, Plus, Search, MapPin, Loader2, Trash2, Check, User, Phone, Mail, AlertTriangle, X } from 'lucide-react';
 import { Client } from '../types';
 import { db } from '../firebase';
-// Use @firebase/firestore to fix named export resolution issues
-import { doc, updateDoc, onSnapshot, collection, query, where, arrayUnion } from '@firebase/firestore';
+import { doc, updateDoc, onSnapshot } from '@firebase/firestore';
 
 // Structure de données hiérarchique
 const HIERARCHY_DATA: Record<string, Record<string, string[]>> = {
@@ -56,6 +55,153 @@ interface AdditionalContact {
   fixed: string;
 }
 
+interface ContactCardProps {
+  id: string;
+  isMain: boolean;
+  data: any;
+  onFieldChange: (f: string, v: string) => void;
+  onBlur: () => void;
+  onRemove: () => void;
+  isExpanded: boolean;
+  onToggle: () => void;
+}
+
+// Composant extrait pour éviter les re-renders intempestifs et la perte de focus
+const ContactCard: React.FC<ContactCardProps> = ({ 
+  id, 
+  isMain, 
+  data, 
+  onFieldChange, 
+  onBlur, 
+  onRemove, 
+  isExpanded, 
+  onToggle 
+}) => {
+  return (
+    <div className={`border rounded-xl overflow-hidden mb-4 shadow-sm transition-all group ${isMain ? 'border-indigo-100 bg-white' : 'border-gray-200 bg-[#FBFBFB] hover:border-gray-300'}`}>
+      <div 
+        className="px-6 py-4 flex justify-between items-center cursor-pointer hover:bg-gray-50/50 transition-colors" 
+        onClick={onToggle}
+      >
+        <div className="flex items-center gap-3">
+           <div className={`p-2 rounded-lg ${isMain ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-100 text-gray-400'}`}>
+              <User size={16} />
+           </div>
+           <h4 className={`text-sm font-bold ${isMain ? 'text-gray-900' : 'text-gray-600'}`}>
+             {isMain 
+               ? (data.firstName || data.lastName ? `${data.firstName} ${data.lastName}` : "Contact principal") 
+               : (data.firstName || data.lastName ? `${data.firstName} ${data.lastName}` : "Contact supplémentaire")
+             }
+           </h4>
+           {!isMain && <span className="px-2 py-0.5 bg-gray-200 text-gray-500 rounded text-[9px] font-black uppercase tracking-widest">Secondaire</span>}
+        </div>
+        <div className="flex items-center gap-2">
+          {!isMain && (
+            <button 
+              onClick={(e) => { e.stopPropagation(); onRemove(); }}
+              className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+              title="Supprimer ce contact"
+            >
+              <Trash2 size={16} />
+            </button>
+          )}
+          <div className="p-1 hover:bg-gray-100 rounded text-gray-400">
+            {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+          </div>
+        </div>
+      </div>
+      {isExpanded && (
+        <div className="p-6 space-y-6 border-t border-gray-100 bg-white animate-in slide-in-from-top-2 duration-300">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Civilité</label>
+              <div className="relative">
+                <select 
+                  className="w-full appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-gray-900 outline-none focus:border-indigo-400 transition-all shadow-sm" 
+                  value={data.civility} 
+                  onChange={(e) => onFieldChange('civility', e.target.value)}
+                  onBlur={onBlur}
+                >
+                  <option>Mme</option><option>M.</option>
+                </select>
+                <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Nom</label>
+              <input 
+                type="text" 
+                value={data.lastName} 
+                onChange={(e) => onFieldChange('lastName', e.target.value.toUpperCase())}
+                onBlur={onBlur}
+                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm" 
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Prénom</label>
+              <input 
+                type="text" 
+                value={data.firstName} 
+                onChange={(e) => onFieldChange('firstName', e.target.value)}
+                onBlur={onBlur}
+                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm" 
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Email</label>
+              <div className="relative">
+                <Mail size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" />
+                <input 
+                  type="email" 
+                  value={data.email} 
+                  onChange={(e) => onFieldChange('email', e.target.value)}
+                  onBlur={onBlur}
+                  placeholder="email@exemple.com" 
+                  className="w-full bg-white border border-gray-200 rounded-xl pl-10 pr-4 py-2.5 text-sm font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm placeholder:text-gray-300" 
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Portable</label>
+              <div className="flex">
+                <div className="flex items-center gap-1 px-3 border border-r-0 border-gray-200 rounded-l-xl bg-gray-50 text-gray-400">
+                  <span className="text-sm">🇫🇷</span>
+                </div>
+                <input 
+                  type="text" 
+                  value={data.phone} 
+                  onChange={(e) => onFieldChange('phone', e.target.value)}
+                  onBlur={onBlur}
+                  placeholder="06..." 
+                  className="flex-1 bg-white border border-gray-200 rounded-r-xl px-4 py-2.5 text-sm font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm" 
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Fixe</label>
+              <div className="flex">
+                <div className="flex items-center gap-1 px-3 border border-r-0 border-gray-200 rounded-l-xl bg-gray-50 text-gray-400">
+                  <span className="text-sm">🇫🇷</span>
+                </div>
+                <input 
+                  type="text" 
+                  value={data.fixed} 
+                  onChange={(e) => onFieldChange('fixed', e.target.value)}
+                  onBlur={onBlur}
+                  placeholder="04..." 
+                  className="flex-1 bg-white border border-gray-200 rounded-r-xl px-4 py-2.5 text-sm font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm" 
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 interface ClientContactGeneralProps {
   client: Client;
 }
@@ -67,8 +213,9 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
   const [addressSearch, setAddressSearch] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [contactToDelete, setContactToDelete] = useState<string | null>(null);
   
-  // États pour les coordonnées éditables
+  // États locaux synchronisés avec Firestore
   const [mainContact, setMainContact] = useState({
     civility: '', lastName: '', firstName: '', email: '', phone: '', fixed: ''
   });
@@ -143,26 +290,22 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
     } catch (e) { console.error(e); }
   };
 
-  const updateAdditionalContact = async (id: string, field: keyof AdditionalContact, value: string) => {
-    const updated = additionalContacts.map(c => c.id === id ? { ...c, [field]: value } : c);
-    setAdditionalContacts(updated);
-  };
-
-  const saveAdditionalContact = async (id: string) => {
+  const saveAdditionalContacts = async (list: AdditionalContact[]) => {
     try {
       await updateDoc(doc(db, 'clients', client.id), {
-        "details.additionalContacts": additionalContacts
+        "details.additionalContacts": list
       });
     } catch (e) { console.error(e); }
   };
 
-  const removeAdditionalContact = async (id: string) => {
-    if (!confirm("Supprimer ce contact ?")) return;
+  const handleConfirmDelete = async () => {
+    if (!contactToDelete) return;
     try {
-      const updated = additionalContacts.filter(c => c.id !== id);
+      const updated = additionalContacts.filter(c => c.id !== contactToDelete);
       await updateDoc(doc(db, 'clients', client.id), {
         "details.additionalContacts": updated
       });
+      setContactToDelete(null);
     } catch (e) { console.error(e); }
   };
 
@@ -233,137 +376,13 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
     await updateDoc(doc(db, 'clients', client.id), { "origin": val, "details.subOrigin": "" });
   };
 
-  const ContactCard = ({ id, title, isMain, data, onFieldChange, onBlur, onRemove }: any) => {
-    const isExpanded = expandedIds.has(id);
-    return (
-      <div className={`border rounded-xl overflow-hidden mb-4 shadow-sm transition-all group ${isMain ? 'border-indigo-100 bg-white' : 'border-gray-200 bg-[#FBFBFB] hover:border-gray-300'}`}>
-        <div 
-          className="px-6 py-4 flex justify-between items-center cursor-pointer hover:bg-gray-50/50 transition-colors" 
-          onClick={() => toggleExpand(id)}
-        >
-          <div className="flex items-center gap-3">
-             <div className={`p-2 rounded-lg ${isMain ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-100 text-gray-400'}`}>
-                <User size={16} />
-             </div>
-             <h4 className={`text-sm font-bold ${isMain ? 'text-gray-900' : 'text-gray-600'}`}>
-               {isMain ? (data.firstName || data.lastName ? `${data.firstName} ${data.lastName}` : "Contact principal") : (data.firstName || data.lastName ? `${data.firstName} ${data.lastName}` : "Contact supplémentaire")}
-             </h4>
-             {!isMain && <span className="px-2 py-0.5 bg-gray-200 text-gray-500 rounded text-[9px] font-black uppercase tracking-widest">Secondaire</span>}
-          </div>
-          <div className="flex items-center gap-2">
-            {!isMain && (
-              <button 
-                onClick={(e) => { e.stopPropagation(); onRemove(); }}
-                className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                title="Supprimer ce contact"
-              >
-                <Trash2 size={16} />
-              </button>
-            )}
-            <div className="p-1 hover:bg-gray-100 rounded text-gray-400">
-              {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-            </div>
-          </div>
-        </div>
-        {isExpanded && (
-          <div className="p-6 space-y-6 border-t border-gray-100 bg-white animate-in slide-in-from-top-2 duration-300">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Civilité</label>
-                <div className="relative">
-                  <select 
-                    className="w-full appearance-none bg-white border border-gray-100 rounded-xl px-4 py-2.5 text-sm font-bold text-gray-900 outline-none focus:border-indigo-400 transition-all shadow-sm" 
-                    value={data.civility} 
-                    onChange={(e) => { onFieldChange('civility', e.target.value); if(isMain) saveMainContactField('civility', e.target.value); }}
-                    onBlur={() => !isMain && onBlur()}
-                  >
-                    <option>Mme</option><option>M.</option>
-                  </select>
-                  <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Nom</label>
-                <input 
-                  type="text" 
-                  value={data.lastName} 
-                  onChange={(e) => onFieldChange('lastName', e.target.value.toUpperCase())}
-                  onBlur={() => isMain ? saveMainContactField('lastName', data.lastName) : onBlur()}
-                  className="w-full bg-white border border-gray-100 rounded-xl px-4 py-2.5 text-sm font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm" 
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Prénom</label>
-                <input 
-                  type="text" 
-                  value={data.firstName} 
-                  onChange={(e) => onFieldChange('firstName', e.target.value)}
-                  onBlur={() => isMain ? saveMainContactField('firstName', data.firstName) : onBlur()}
-                  className="w-full bg-white border border-gray-100 rounded-xl px-4 py-2.5 text-sm font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm" 
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Email</label>
-                <div className="relative">
-                  <Mail size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300" />
-                  <input 
-                    type="email" 
-                    value={data.email} 
-                    onChange={(e) => onFieldChange('email', e.target.value)}
-                    onBlur={() => isMain ? saveMainContactField('email', data.email) : onBlur()}
-                    placeholder="email@exemple.com" 
-                    className="w-full bg-white border border-gray-100 rounded-xl pl-10 pr-4 py-2.5 text-sm font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm placeholder:text-gray-300" 
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Portable</label>
-                <div className="flex">
-                  <div className="flex items-center gap-1 px-3 border border-r-0 border-gray-100 rounded-l-xl bg-gray-50 text-gray-400">
-                    <span className="text-sm">🇫🇷</span>
-                  </div>
-                  <input 
-                    type="text" 
-                    value={data.phone} 
-                    onChange={(e) => onFieldChange('phone', e.target.value)}
-                    onBlur={() => isMain ? saveMainContactField('phone', data.phone) : onBlur()}
-                    placeholder="06..." 
-                    className="flex-1 bg-white border border-gray-100 rounded-r-xl px-4 py-2.5 text-sm font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm" 
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Fixe</label>
-                <div className="flex">
-                  <div className="flex items-center gap-1 px-3 border border-r-0 border-gray-100 rounded-l-xl bg-gray-50 text-gray-400">
-                    <span className="text-sm">🇫🇷</span>
-                  </div>
-                  <input 
-                    type="text" 
-                    value={data.fixed} 
-                    onChange={(e) => onFieldChange('fixed', e.target.value)}
-                    onBlur={() => isMain ? saveMainContactField('fixed', data.fixed) : onBlur()}
-                    placeholder="04..." 
-                    className="flex-1 bg-white border border-gray-100 rounded-r-xl px-4 py-2.5 text-sm font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm" 
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
   return (
     <div className="space-y-6 max-w-full animate-in fade-in duration-500 pb-20">
       
       {/* Section Coordonnées Dynamique */}
       <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
         <div className="flex justify-between items-center mb-6">
-          <h3 className="text-[16px] font-black text-gray-900 uppercase tracking-tight">Coordonnées & Contacts</h3>
+          <h3 className="text-[15px] font-black text-gray-900 uppercase tracking-tight">Coordonnées & Contacts</h3>
           <button 
             onClick={addContact}
             className="flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-200 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:border-[#A886D7] transition-all active:scale-95"
@@ -373,23 +392,38 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
         </div>
 
         <div className="space-y-2">
-          {/* Contact Principal */}
           <ContactCard 
             id="main" 
             isMain 
             data={mainContact} 
-            onFieldChange={(f: string, v: string) => setMainContact({...mainContact, [f]: v})}
+            isExpanded={expandedIds.has('main')}
+            onToggle={() => toggleExpand('main')}
+            onFieldChange={(f, v) => setMainContact(prev => ({...prev, [f]: v}))}
+            onBlur={() => {
+              saveMainContactField('civility', mainContact.civility);
+              saveMainContactField('lastName', mainContact.lastName);
+              saveMainContactField('firstName', mainContact.firstName);
+              saveMainContactField('email', mainContact.email);
+              saveMainContactField('phone', mainContact.phone);
+              saveMainContactField('fixed', mainContact.fixed);
+            }}
+            onRemove={() => {}}
           />
 
-          {/* Contacts Supplémentaires */}
           {additionalContacts.map((contact) => (
             <ContactCard 
               key={contact.id} 
               id={contact.id} 
+              isMain={false}
               data={contact} 
-              onFieldChange={(f: string, v: string) => updateAdditionalContact(contact.id, f as any, v)}
-              onBlur={() => saveAdditionalContact(contact.id)}
-              onRemove={() => removeAdditionalContact(contact.id)}
+              isExpanded={expandedIds.has(contact.id)}
+              onToggle={() => toggleExpand(contact.id)}
+              onFieldChange={(f, v) => {
+                const newList = additionalContacts.map(c => c.id === contact.id ? { ...c, [f]: v } : c);
+                setAdditionalContacts(newList);
+              }}
+              onBlur={() => saveAdditionalContacts(additionalContacts)}
+              onRemove={() => setContactToDelete(contact.id)}
             />
           ))}
         </div>
@@ -481,6 +515,38 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
           </div>
         </div>
       </div>
+
+      {/* Modale de confirmation de suppression In-App */}
+      {contactToDelete && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300 border border-gray-100">
+            <div className="p-10 flex flex-col items-center text-center">
+              <div className="w-20 h-20 bg-red-50 rounded-[28px] flex items-center justify-center text-red-500 mb-8 shadow-inner">
+                <AlertTriangle size={40} />
+              </div>
+              <h3 className="text-xl font-black text-gray-900 mb-2 uppercase tracking-tighter">Supprimer ce contact ?</h3>
+              <p className="text-[14px] text-gray-500 leading-relaxed mb-10">
+                Vous êtes sur le point de retirer ce contact secondaire du foyer. <br/>
+                Cette action est immédiate.
+              </p>
+              <div className="flex gap-4 w-full">
+                <button 
+                  onClick={() => setContactToDelete(null)} 
+                  className="flex-1 px-6 py-4 bg-gray-50 text-gray-600 rounded-2xl font-bold text-[13px] hover:bg-gray-100 transition-all border border-gray-100"
+                >
+                  Annuler
+                </button>
+                <button 
+                  onClick={handleConfirmDelete} 
+                  className="flex-1 px-6 py-4 bg-red-600 text-white rounded-2xl font-bold text-[13px] hover:bg-red-700 shadow-xl shadow-red-100 transition-all active:scale-95"
+                >
+                  Supprimer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
