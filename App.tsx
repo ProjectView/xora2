@@ -65,7 +65,8 @@ function App() {
           },
           (error) => {
             console.error("Erreur Permission Firestore:", error);
-            if (error.code === 'permission-denied') {
+            // Si on est en train de se déconnecter, on ignore l'erreur de permission
+            if (error.code === 'permission-denied' && auth.currentUser) {
               setAuthError("Accès refusé : Veuillez configurer les règles de sécurité Firestore dans la console Firebase.");
             }
             setIsLoadingAuth(false);
@@ -73,8 +74,10 @@ function App() {
         );
         return () => unsubDoc();
       } else {
+        // Reset complet lors de la déconnexion
         setIsAuthenticated(false);
         setUserProfile(null);
+        setAuthError(null); // Crucial : on efface l'erreur pour ne pas bloquer l'écran au prochain login
         setIsLoadingAuth(false);
       }
     });
@@ -110,8 +113,13 @@ function App() {
 
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      // Nettoyage local préventif
+      setAuthError(null);
+      setIsAuthenticated(false);
+      setUserProfile(null);
       setCurrentPage('dashboard');
+      
+      await signOut(auth);
     } catch (error) {
       console.error("Erreur lors de la déconnexion:", error);
     }
@@ -128,7 +136,8 @@ function App() {
     );
   }
 
-  if (authError) {
+  // Si on a une erreur ET qu'on est censé être connecté, on affiche l'erreur
+  if (authError && isAuthenticated) {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-[#F8F9FA] p-6">
         <div className="max-w-md w-full bg-white p-10 rounded-[32px] shadow-xl border border-red-50 text-center space-y-6">
@@ -150,6 +159,7 @@ function App() {
     );
   }
 
+  // Si pas authentifié, on affiche toujours la page de login
   if (!isAuthenticated) {
     return <LoginPage onLogin={() => {}} />;
   }
