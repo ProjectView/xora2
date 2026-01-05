@@ -16,16 +16,14 @@ import {
   TrendingUp,
   PieChart,
   BarChart3,
-  StickyNote,
   PenSquare,
   Trash2,
   CheckCircle2,
   Clock
 } from 'lucide-react';
 import { db } from '../firebase';
-// Use @firebase/firestore to fix named export resolution issues
 import { collection, query, where, onSnapshot, limit, doc, deleteDoc, updateDoc } from '@firebase/firestore';
-import { FinancialKPI, StatusCard, Task, Client, Page } from '../types';
+import { FinancialKPI, Task, Client, Page } from '../types';
 import AddTaskModal from './AddTaskModal';
 
 interface DashboardProps {
@@ -38,9 +36,9 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAddClientClick, onNavigate }) => {
   const [isKPIOpen, setIsKPIOpen] = useState(true);
   const [kpis, setKpis] = useState<FinancialKPI[]>([]);
-  const [statusCards, setStatusCards] = useState<StatusCard[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [allClients, setAllClients] = useState<Client[]>([]);
+  const [allProjects, setAllProjects] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hasPermissionError, setHasPermissionError] = useState(false);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
@@ -61,59 +59,82 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
     };
 
     // 1. Charger les KPIs financiers
-    const kpisRef = collection(db, 'kpis');
-    const kpisQuery = query(kpisRef, where('companyId', '==', userProfile.companyId));
-    
-    const unsubscribeKpis = onSnapshot(kpisQuery, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as FinancialKPI[];
-      setKpis(data);
-    }, errorHandler);
-
-    // 2. Charger les compteurs de statut
-    const statusRef = collection(db, 'status_overview');
-    const statusQuery = query(statusRef, where('companyId', '==', userProfile.companyId));
-    
-    const unsubscribeStatus = onSnapshot(statusQuery, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as StatusCard[];
-      const sortedData = [...data].sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
-      setStatusCards(sortedData);
-    }, errorHandler);
-
-    // 3. Charger les tâches prioritaires
-    const tasksRef = collection(db, 'tasks');
-    const tasksQuery = query(
-      tasksRef, 
-      where('companyId', '==', userProfile.companyId),
-      limit(20)
+    const unsubscribeKpis = onSnapshot(
+      query(collection(db, 'kpis'), where('companyId', '==', userProfile.companyId)),
+      (snapshot) => {
+        setKpis(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as FinancialKPI[]);
+      }, errorHandler
     );
-    
-    const unsubscribeTasks = onSnapshot(tasksQuery, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Task[];
-      // On affiche les tâches non terminées, triées par date de création ou retard
-      const filteredTasks = data
-        .filter(t => t.status !== 'completed')
-        .slice(0, 8);
-      
-      setTasks(filteredTasks);
-      setIsLoading(false);
-    }, errorHandler);
 
-    // 4. Charger TOUS les clients de l'entreprise pour la recherche locale
-    const clientsRef = collection(db, 'clients');
-    const clientsQuery = query(clientsRef, where('companyId', '==', userProfile.companyId));
-    
-    const unsubscribeClients = onSnapshot(clientsQuery, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Client[];
-      setAllClients(data);
-    }, errorHandler);
+    // 2. Charger TOUS les clients (pour les compteurs et la recherche)
+    const unsubscribeClients = onSnapshot(
+      query(collection(db, 'clients'), where('companyId', '==', userProfile.companyId)),
+      (snapshot) => {
+        setAllClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Client[]);
+      }, errorHandler
+    );
+
+    // 3. Charger TOUS les projets (pour les compteurs)
+    const unsubscribeProjects = onSnapshot(
+      query(collection(db, 'projects'), where('companyId', '==', userProfile.companyId)),
+      (snapshot) => {
+        setAllProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        setIsLoading(false);
+      }, errorHandler
+    );
+
+    // 4. Charger les tâches prioritaires
+    const unsubscribeTasks = onSnapshot(
+      query(collection(db, 'tasks'), where('companyId', '==', userProfile.companyId), limit(20)),
+      (snapshot) => {
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Task[];
+        setTasks(data.filter(t => t.status !== 'completed').slice(0, 8));
+      }, errorHandler
+    );
 
     return () => {
       unsubscribeKpis();
-      unsubscribeStatus();
-      unsubscribeTasks();
       unsubscribeClients();
+      unsubscribeProjects();
+      unsubscribeTasks();
     };
   }, [userProfile?.companyId]);
+
+  // --- CALCUL DYNAMIQUE DES COMPTEURS ---
+  const statusCards = useMemo(() => {
+    return [
+      { 
+        id: 'leads', 
+        label: 'Leads', 
+        count: allClients.filter(c => c.status === 'Leads').length, 
+        color: 'purple' 
+      },
+      { 
+        id: 'etudes', 
+        label: 'Etudes en cours', 
+        count: allProjects.filter(p => p.status === 'Études à réaliser' || p.status?.includes('Étude')).length, 
+        color: 'fuchsia' 
+      },
+      { 
+        id: 'commandes', 
+        label: 'Commandes clients', 
+        count: allProjects.filter(p => p.status?.toLowerCase().includes('command') || p.status?.toLowerCase().includes('sign')).length, 
+        color: 'blue' 
+      },
+      { 
+        id: 'dossiers', 
+        label: 'Dossiers tech & install', 
+        count: allProjects.filter(p => p.status?.toLowerCase().includes('tech') || p.status?.toLowerCase().includes('install') || p.status?.toLowerCase().includes('pose')).length, 
+        color: 'cyan' 
+      },
+      { 
+        id: 'sav', 
+        label: 'SAV', 
+        count: allProjects.filter(p => p.status?.toLowerCase().includes('sav')).length, 
+        color: 'orange' 
+      },
+    ];
+  }, [allClients, allProjects]);
 
   const handleDeleteTask = async (id: string) => {
     if (!window.confirm("Attention, vous êtes sur de vouloir supprimer ?")) return;
@@ -139,7 +160,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
     }
   };
 
-  // Filtrage local des résultats de recherche
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
     const normalizedQuery = searchQuery.toLowerCase();
@@ -179,7 +199,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
         <div className="bg-red-50 border border-red-100 p-8 rounded-3xl text-center space-y-4 max-w-md">
           <AlertTriangle className="text-red-500 mx-auto" size={48} />
           <h2 className="text-lg font-bold text-red-900">Erreur de permission Firestore</h2>
-          <p className="text-sm text-red-700">L'application ne peut pas lire les données. Veuillez vérifier que les règles de sécurité Firestore sont configurées sur votre console Firebase.</p>
+          <p className="text-sm text-red-700">L'application ne peut pas lire les données. Vérifiez vos règles de sécurité.</p>
         </div>
       </div>
     );
@@ -194,7 +214,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
   }
 
   return (
-    <div className="p-6 space-y-6 bg-gray-50 min-h-[calc(100vh-64px)]">
+    <div className="p-6 space-y-6 bg-gray-50 min-h-[calc(100vh-64px)] font-sans">
       {/* Search Bar Section */}
       <div ref={searchRef} className="relative z-30">
         <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center">
@@ -214,7 +234,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
           </div>
         </div>
 
-        {/* Search Results Dropdown */}
         {showSearchDropdown && (searchQuery.length > 0 || searchResults.length >= 0) && (
           <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-50">
             <div className="p-2 space-y-1">
@@ -246,13 +265,9 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
                 </div>
               ) : null}
 
-              {/* Add Client Button */}
               <div className="px-3 pb-3">
                 <button 
-                  onClick={() => {
-                    onAddClientClick?.();
-                    setShowSearchDropdown(false);
-                  }}
+                  onClick={() => { onAddClientClick?.(); setShowSearchDropdown(false); }}
                   className="w-full flex items-center justify-center gap-2 py-2.5 bg-gray-50 border border-gray-200/60 rounded-xl text-[13px] font-bold text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-all"
                 >
                   <Plus size={16} className="text-gray-400" />
@@ -309,11 +324,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-3 flex flex-col gap-3">
-             {statusCards.length === 0 ? (
-               <div className="p-10 border border-dashed border-gray-200 rounded-xl text-center text-gray-400 text-xs">
-                 Statistiques vides
-               </div>
-             ) : statusCards.map((card) => {
+             {statusCards.map((card) => {
                 let bgClass = "bg-purple-100";
                 let textClass = "text-purple-900";
                 let arrowClass = "text-purple-700";
@@ -327,11 +338,11 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
                     <div key={card.id} className={`${bgClass} rounded-xl p-4 flex flex-col justify-between relative group hover:shadow-md transition-all min-h-[95px] border border-white/50`}>
                         <div className="flex justify-between items-start">
                              <span className={`font-bold text-[11px] uppercase tracking-wider ${textClass}`}>{card.label}</span>
-                             <div className="bg-white/60 p-1 rounded-md cursor-pointer hover:bg-white transition-colors">
+                             <div className="bg-white/60 p-1 rounded-md cursor-pointer hover:bg-white transition-colors" onClick={() => card.id === 'leads' ? onNavigate?.('directory') : onNavigate?.('projects')}>
                                 <ArrowUpRight size={14} className={arrowClass} />
                              </div>
                         </div>
-                        <span className="text-2xl font-bold text-gray-900 mt-1">{card.count}</span>
+                        <span className="text-2xl font-bold text-gray-900 mt-1">{card.count || 0}</span>
                     </div>
                 );
              })}
@@ -358,11 +369,8 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
                             <Plus size={16} className="text-[#A886D7]" />
                             <span>AJOUTER UNE TÂCHE</span>
                         </button>
-                        <button 
-                          onClick={() => onNavigate?.('tasks')}
-                          className="p-3 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer hover:bg-gray-100 transition-all text-gray-400 hover:text-gray-900 active:scale-95"
-                        >
-                            <ArrowUpRight size={18} className="" />
+                        <button onClick={() => onNavigate?.('tasks')} className="p-3 bg-gray-50 rounded-xl border border-gray-100 cursor-pointer hover:bg-gray-100 transition-all text-gray-400 hover:text-gray-900 active:scale-95">
+                            <ArrowUpRight size={18} />
                         </button>
                     </div>
                 </div>
@@ -376,7 +384,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
                         <p className="text-[14px] font-bold text-gray-400">Toutes les tâches sont à jour ! 🎉</p>
                       </div>
                     ) : tasks.map((task, index) => (
-                        <div key={task.id} className="group bg-white border border-gray-100 rounded-[20px] p-5 flex flex-col lg:flex-row lg:items-center justify-between hover:border-indigo-100 hover:shadow-lg hover:shadow-indigo-50/20 transition-all">
+                        <div key={task.id} className="group bg-white border border-gray-100 rounded-[20px] p-5 flex flex-col lg:flex-row lg:items-center justify-between hover:border-indigo-100 hover:shadow-lg transition-all">
                             <div className="flex items-center space-x-5 mb-4 lg:mb-0">
                                 <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-[#FBFBFB] border border-gray-100 rounded-xl text-[12px] font-black text-gray-300 group-hover:bg-indigo-50 group-hover:text-indigo-400 transition-colors">
                                     {index + 1}
@@ -387,15 +395,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
                                         <span className="px-2.5 py-1 text-[9px] font-black bg-gray-50 border border-gray-100 text-gray-400 rounded-lg uppercase tracking-tight">
                                            {task.type}
                                         </span>
-                                        {task.statusLabel && (
-                                            <span className={`px-3 py-1 text-[9px] font-black rounded-full uppercase tracking-widest ${
-                                                task.tagColor === 'purple' ? 'bg-purple-100 text-purple-600' :
-                                                task.tagColor === 'blue' ? 'bg-cyan-100 text-cyan-600' :
-                                                'bg-gray-100 text-gray-500'
-                                            }`}>
-                                                {task.statusLabel}
-                                            </span>
-                                        )}
                                     </div>
                                     <div className="flex items-center gap-4 mt-1.5">
                                        <div className="flex items-center gap-1.5">
@@ -405,7 +404,6 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
                                        <span className={`text-[11px] font-black uppercase tracking-widest ${task.isLate ? 'text-red-500' : 'text-gray-300'}`}>
                                           {task.date || 'Sans échéance'}
                                        </span>
-                                       {task.subtitle && <span className="text-[10px] font-black text-indigo-300 uppercase tracking-tight">• {task.subtitle}</span>}
                                     </div>
                                 </div>
                             </div>
@@ -421,58 +419,22 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
                                       </div>
                                   ) : (
                                       <div className="flex bg-[#F8F9FA] rounded-full border border-gray-200 p-0.5 w-full">
-                                          <button 
-                                            onClick={() => updateTaskStatus(task.id, 'pending')}
-                                            className={`flex-1 py-1.5 text-[9px] font-black uppercase rounded-full transition-all ${task.status === 'pending' ? 'bg-white shadow-sm text-gray-800 border border-gray-100' : 'text-gray-300 hover:text-gray-600'}`}
-                                          >
-                                             À faire
-                                          </button>
-                                          <button 
-                                            onClick={() => updateTaskStatus(task.id, 'in-progress')}
-                                            className={`flex-1 py-1.5 text-[9px] font-black uppercase rounded-full transition-all ${task.status === 'in-progress' ? 'bg-white shadow-sm text-gray-800 border border-gray-100' : 'text-gray-300 hover:text-gray-600'}`}
-                                          >
-                                             En cours
-                                          </button>
-                                          <button 
-                                            onClick={() => updateTaskStatus(task.id, 'completed')}
-                                            className={`flex-1 py-1.5 text-[9px] font-black uppercase rounded-full transition-all ${task.status === 'completed' ? 'bg-white shadow-sm text-gray-800 border border-gray-100' : 'text-gray-300 hover:text-gray-600'}`}
-                                          >
-                                             Terminé
-                                          </button>
+                                          <button onClick={() => updateTaskStatus(task.id, 'pending')} className={`flex-1 py-1.5 text-[9px] font-black uppercase rounded-full transition-all ${task.status === 'pending' ? 'bg-white shadow-sm text-gray-800 border border-gray-100' : 'text-gray-300 hover:text-gray-600'}`}>À faire</button>
+                                          <button onClick={() => updateTaskStatus(task.id, 'in-progress')} className={`flex-1 py-1.5 text-[9px] font-black uppercase rounded-full transition-all ${task.status === 'in-progress' ? 'bg-white shadow-sm text-gray-800 border border-gray-100' : 'text-gray-300 hover:text-gray-600'}`}>En cours</button>
+                                          <button onClick={() => updateTaskStatus(task.id, 'completed')} className={`flex-1 py-1.5 text-[9px] font-black uppercase rounded-full transition-all ${task.status === 'completed' ? 'bg-white shadow-sm text-gray-800 border border-gray-100' : 'text-gray-300 hover:text-gray-600'}`}>Terminé</button>
                                       </div>
                                   )}
                                 </div>
-                                
-                                <div className="flex items-center space-x-1 relative shrink-0">
-                                    {task.isLate && (
-                                      <div className="p-2 bg-red-50 text-red-500 rounded-lg animate-pulse">
-                                         <AlertTriangle size={16} />
-                                      </div>
-                                    )}
-                                    <button 
-                                      onClick={(e) => { e.stopPropagation(); setActiveMenuId(activeMenuId === task.id ? null : task.id); }}
-                                      className={`p-2 rounded-lg transition-all ${activeMenuId === task.id ? 'bg-gray-100 text-gray-900' : 'text-gray-300 hover:bg-gray-50 hover:text-gray-600'}`}
-                                    >
-                                       <MoreVertical size={20} />
-                                    </button>
-
+                                <div className="relative shrink-0 flex items-center gap-1">
+                                    {task.isLate && <div className="p-2 bg-red-50 text-red-500 rounded-lg animate-pulse"><AlertTriangle size={16} /></div>}
+                                    <button onClick={(e) => { e.stopPropagation(); setActiveMenuId(activeMenuId === task.id ? null : task.id); }} className={`p-2 rounded-lg transition-all ${activeMenuId === task.id ? 'bg-gray-100 text-gray-900' : 'text-gray-300 hover:bg-gray-50'}`}><MoreVertical size={20} /></button>
                                     {activeMenuId === task.id && (
                                       <>
                                         <div className="fixed inset-0 z-40" onClick={() => setActiveMenuId(null)}></div>
                                         <div className="absolute right-0 top-12 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 py-2 w-48 animate-in fade-in zoom-in-95 duration-150">
-                                          <button 
-                                            onClick={(e) => { e.stopPropagation(); handleEditTask(task); }}
-                                            className="w-full text-left px-4 py-2.5 text-[12px] font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                                          >
-                                            <PenSquare size={14} className="text-gray-400" /> Modifier
-                                          </button>
+                                          <button onClick={(e) => { e.stopPropagation(); handleEditTask(task); }} className="w-full text-left px-4 py-2.5 text-[12px] font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2"><PenSquare size={14} className="text-gray-400" /> Modifier</button>
                                           <div className="h-px bg-gray-50 my-1 mx-2" />
-                                          <button 
-                                            onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id); }}
-                                            className="w-full text-left px-4 py-2.5 text-[12px] font-bold text-red-500 hover:bg-red-50 flex items-center gap-2"
-                                          >
-                                            <Trash2 size={14} /> Supprimer
-                                          </button>
+                                          <button onClick={(e) => { e.stopPropagation(); handleDeleteTask(task.id); }} className="w-full text-left px-4 py-2.5 text-[12px] font-bold text-red-500 hover:bg-red-50 flex items-center gap-2"><Trash2 size={14} /> Supprimer</button>
                                         </div>
                                       </>
                                     )}
@@ -497,12 +459,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
                             <ChevronDown size={14} className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none" />
                         </div>
                     </div>
-                    <button 
-                      onClick={() => onNavigate?.('agenda')}
-                      className="p-2 bg-gray-50 rounded-lg border border-gray-100 cursor-pointer hover:bg-gray-100 transition-colors active:scale-95"
-                    >
-                        <ArrowUpRight size={18} className="text-gray-400" />
-                    </button>
+                    <button onClick={() => onNavigate?.('agenda')} className="p-2 bg-gray-50 rounded-lg border border-gray-100 cursor-pointer hover:bg-gray-100 transition-colors active:scale-95"><ArrowUpRight size={18} className="text-gray-400" /></button>
                 </div>
                 <div className="overflow-x-auto">
                     <div className="grid grid-cols-5 gap-4 min-w-[800px]">
