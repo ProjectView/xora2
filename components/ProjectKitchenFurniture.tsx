@@ -1,20 +1,27 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Plus, Minus, Check, Search } from 'lucide-react';
+import { ChevronDown, ChevronUp, Plus, Minus, Check, Search, Layers, MoveHorizontal, Layout } from 'lucide-react';
 import { db } from '../firebase';
 // Use @firebase/firestore to fix named export resolution issues
 import { doc, updateDoc } from '@firebase/firestore';
 
 // --- Sous-composants UI modernisés (Design épuré XORA) ---
 
-const Section = ({ title, children }: { title: string; children?: React.ReactNode }) => (
+const Section = ({ title, children, icon: Icon }: { title: string; children?: React.ReactNode; icon?: any }) => (
   <div className="bg-white border border-gray-100 rounded-[24px] p-8 space-y-6 shadow-sm mb-6">
-    <h3 className="text-[15px] font-bold text-gray-800 flex items-center gap-2">
+    <h3 className="text-[15px] font-bold text-gray-800 flex items-center gap-3">
+      {Icon && <div className="p-1.5 bg-gray-50 rounded-lg text-gray-400"><Icon size={16} /></div>}
       {title}
     </h3>
     <div className="grid grid-cols-1 md:grid-cols-12 gap-x-8 gap-y-6">
       {children}
     </div>
+  </div>
+);
+
+const SubHeader = ({ title }: { title: string }) => (
+  <div className="col-span-12 pt-2 pb-1 border-b border-gray-50 mb-2">
+    <h4 className="text-[11px] font-black text-indigo-500 uppercase tracking-[0.2em]">{title}</h4>
   </div>
 );
 
@@ -69,7 +76,6 @@ const CustomDropdown = ({
     if (multiple) {
       const current = Array.isArray(value) ? value : [];
       if (current.length === 0) return placeholder;
-      // Affichage propre séparé par des virgules sans accolades
       return current.join(', ');
     }
     return value || placeholder;
@@ -136,7 +142,7 @@ const NumberInput = ({ value, onChange, unit }: { value: any; onChange: (v: numb
   </div>
 );
 
-// TextArea - Calqué sur le design de l'input numérique (plus de shadow-inner)
+// TextArea - Calqué sur le design de l'input numérique
 const LongTextField = ({ value, onChange, placeholder = "Saisir ici...", rows = 3 }: any) => (
   <textarea 
     rows={rows}
@@ -178,7 +184,7 @@ const ProjectKitchenFurniture: React.FC<ProjectKitchenFurnitureProps> = ({ proje
     <div className="animate-in fade-in duration-300 pb-10">
       
       {/* 1. Rangements */}
-      <Section title="Rangements">
+      <Section title="Rangements" icon={Layers}>
         <Field label="Volume de rangement actuel" colSpan="col-span-12 md:col-span-6">
           <NumberInput value={furnitureData.volumeActuel} onChange={(v) => handleUpdate('details.kitchen.furniture.volumeActuel', v)} />
         </Field>
@@ -187,8 +193,56 @@ const ProjectKitchenFurniture: React.FC<ProjectKitchenFurnitureProps> = ({ proje
         </Field>
       </Section>
 
-      {/* 2. Accessoire de meuble */}
-      <Section title="Accessoire de meuble">
+      {/* 2. Type de rangements */}
+      <Section title="Type de rangements" icon={Layout}>
+        <Field label="Meubles bas (Sélection multiple)" colSpan="col-span-12 md:col-span-4">
+          <CustomDropdown 
+            multiple
+            value={furnitureData.typeMeublesBas || []} 
+            options={['Coulissants', 'Tiroirs', 'Portes battantes', 'Meuble d\'angle', 'Sous-évier', 'Four encastré', 'Range-bouteilles']} 
+            onChange={(v: string[]) => handleUpdate('details.kitchen.furniture.typeMeublesBas', v)} 
+          />
+        </Field>
+        <Field label="Meubles hauts (Sélection multiple)" colSpan="col-span-12 md:col-span-4">
+          <CustomDropdown 
+            multiple
+            value={furnitureData.typeMeublesHauts || []} 
+            options={['Relevants', 'Portes battantes', 'Niches ouvertes', 'Hotte intégrée', 'Sur-mesure plafond', 'Étagères éclairées']} 
+            onChange={(v: string[]) => handleUpdate('details.kitchen.furniture.typeMeublesHauts', v)} 
+          />
+        </Field>
+        <Field label="Colonnes" colSpan="col-span-12 md:col-span-4">
+          <CustomDropdown 
+            value={furnitureData.colonnes} 
+            options={['Garde-manger', 'Frigo intégré', 'Four & MO', 'Pharmacie', 'Balai / Entretien', 'Sans colonne']} 
+            onChange={(v: string) => handleUpdate('details.kitchen.furniture.colonnes', v)} 
+          />
+        </Field>
+
+        <Field label="Description meubles bas" colSpan="col-span-12 md:col-span-4">
+          <LongTextField rows={1} value={furnitureData.descMeublesBas} onChange={(v: string) => handleUpdate('details.kitchen.furniture.descMeublesBas', v)} />
+        </Field>
+        <Field label="Description meubles haut" colSpan="col-span-12 md:col-span-4">
+          <LongTextField rows={1} value={furnitureData.descMeublesHauts} onChange={(v: string) => handleUpdate('details.kitchen.furniture.descMeublesHauts', v)} />
+        </Field>
+        <Field label="Description colonnes" colSpan="col-span-12 md:col-span-4">
+          <LongTextField rows={1} value={furnitureData.descColonnes} onChange={(v: string) => handleUpdate('details.kitchen.furniture.descColonnes', v)} />
+        </Field>
+
+        <Field label="Gestion des déchets" colSpan="col-span-12 md:col-span-4">
+          <CustomDropdown 
+            value={furnitureData.gestionDechets} 
+            options={['Poubelle de sol', 'Poubelle sur porte', 'Coulissant dédié (2 bacs)', 'Coulissant dédié (3 bacs)', 'Trie sélectif sous évier']} 
+            onChange={(v: string) => handleUpdate('details.kitchen.furniture.gestionDechets', v)} 
+          />
+        </Field>
+        <Field label="Description Gestion des déchets" colSpan="col-span-12 md:col-span-8">
+          <LongTextField rows={1} value={furnitureData.descGestionDechets} onChange={(v: string) => handleUpdate('details.kitchen.furniture.descGestionDechets', v)} />
+        </Field>
+      </Section>
+
+      {/* 3. Accessoire de meuble */}
+      <Section title="Accessoire de meuble" icon={Plus}>
         <Field label="Sélectionner les accessoires" colSpan="col-span-12 md:col-span-6">
           <CustomDropdown 
             multiple
@@ -206,8 +260,59 @@ const ProjectKitchenFurniture: React.FC<ProjectKitchenFurnitureProps> = ({ proje
         </Field>
       </Section>
 
-      {/* 3. Éclairages */}
-      <Section title="Éclairages">
+      {/* 4. Plans (Nouveau Bloc regroupé) */}
+      <Section title="Plans" icon={MoveHorizontal}>
+        
+        {/* Sous-bloc : Plan de travail */}
+        <SubHeader title="Plan de travail" />
+        <Field label="Hauteur actuelle" colSpan="col-span-12 md:col-span-6">
+          <NumberInput unit="mm" value={furnitureData.hauteurPlanActuelle} onChange={(v) => handleUpdate('details.kitchen.furniture.hauteurPlanActuelle', v)} />
+        </Field>
+        <Field label="Hauteur souhaitée" colSpan="col-span-12 md:col-span-6">
+          <NumberInput unit="mm" value={furnitureData.hauteurPlanSouhaitee} onChange={(v) => handleUpdate('details.kitchen.furniture.hauteurPlanSouhaitee', v)} />
+        </Field>
+
+        {/* Sous-bloc : Plan de dépose */}
+        <div className="col-span-12 mt-4">
+          <SubHeader title="Plan de dépose" />
+        </div>
+        <Field label="Appareil.s à poser" colSpan="col-span-12 md:col-span-6">
+          <CustomDropdown 
+            multiple
+            value={furnitureData.appareilsAPoser || []} 
+            options={['Cafetière', 'Grille-pain', 'Robot culinaire', 'Micro-ondes', 'Bouilloire', 'Plancha', 'Airfryer', 'Balance']} 
+            onChange={(v: string[]) => handleUpdate('details.kitchen.furniture.appareilsAPoser', v)} 
+          />
+        </Field>
+        <Field label="Longueur à prévoir" colSpan="col-span-12 md:col-span-2">
+          <NumberInput unit="mm" value={furnitureData.longueurDepose} onChange={(v) => handleUpdate('details.kitchen.furniture.longueurDepose', v)} />
+        </Field>
+        <Field label="Description" colSpan="col-span-12 md:col-span-4">
+          <LongTextField 
+            rows={1}
+            value={furnitureData.descriptionDepose} 
+            onChange={(v: string) => handleUpdate('details.kitchen.furniture.descriptionDepose', v)} 
+          />
+        </Field>
+
+        {/* Sous-bloc : Plan de préparation */}
+        <div className="col-span-12 mt-4">
+          <SubHeader title="Plan de préparation" />
+        </div>
+        <Field label="Longueur à prévoir" colSpan="col-span-12 md:col-span-4">
+          <NumberInput unit="mm" value={furnitureData.longueurPreparation} onChange={(v) => handleUpdate('details.kitchen.furniture.longueurPreparation', v)} />
+        </Field>
+        <Field label="Description gestion des déchets" colSpan="col-span-12 md:col-span-8">
+          <LongTextField 
+            rows={1}
+            value={furnitureData.descriptionDechetsPrepa} 
+            onChange={(v: string) => handleUpdate('details.kitchen.furniture.descriptionDechetsPrepa', v)} 
+          />
+        </Field>
+      </Section>
+
+      {/* 5. Éclairages */}
+      <Section title="Éclairages" icon={Plus}>
         <Field label="Luminosité pièce" colSpan="col-span-12 md:col-span-6">
           <CustomDropdown 
             value={furnitureData.luminosite} 
@@ -231,54 +336,8 @@ const ProjectKitchenFurniture: React.FC<ProjectKitchenFurnitureProps> = ({ proje
         </Field>
       </Section>
 
-      {/* 4. Plan de dépose */}
-      <Section title="Plan de dépose">
-        <Field label="Appareil.s à poser" colSpan="col-span-12 md:col-span-6">
-          <CustomDropdown 
-            multiple
-            value={furnitureData.appareilsAPoser || []} 
-            options={['Cafetière', 'Grille-pain', 'Robot culinaire', 'Micro-ondes', 'Bouilloire', 'Plancha', 'Airfryer', 'Balance']} 
-            onChange={(v: string[]) => handleUpdate('details.kitchen.furniture.appareilsAPoser', v)} 
-          />
-        </Field>
-        <Field label="Longueur à prévoir" colSpan="col-span-12 md:col-span-2">
-          <NumberInput unit="mm" value={furnitureData.longueurDepose} onChange={(v) => handleUpdate('details.kitchen.furniture.longueurDepose', v)} />
-        </Field>
-        <Field label="Description" colSpan="col-span-12 md:col-span-4">
-          <LongTextField 
-            rows={1}
-            value={furnitureData.descriptionDepose} 
-            onChange={(v: string) => handleUpdate('details.kitchen.furniture.descriptionDepose', v)} 
-          />
-        </Field>
-      </Section>
-
-      {/* 5. Plan de préparation */}
-      <Section title="Plan de préparation">
-        <Field label="Longueur à prévoir" colSpan="col-span-12 md:col-span-4">
-          <NumberInput unit="mm" value={furnitureData.longueurPreparation} onChange={(v) => handleUpdate('details.kitchen.furniture.longueurPreparation', v)} />
-        </Field>
-        <Field label="Description gestion des déchets" colSpan="col-span-12 md:col-span-8">
-          <LongTextField 
-            rows={1}
-            value={furnitureData.descriptionDechetsPrepa} 
-            onChange={(v: string) => handleUpdate('details.kitchen.furniture.descriptionDechetsPrepa', v)} 
-          />
-        </Field>
-      </Section>
-
-      {/* 6. Plan de travail */}
-      <Section title="Plan de travail">
-        <Field label="Hauteur actuelle" colSpan="col-span-12 md:col-span-6">
-          <NumberInput unit="mm" value={furnitureData.hauteurPlanActuelle} onChange={(v) => handleUpdate('details.kitchen.furniture.hauteurPlanActuelle', v)} />
-        </Field>
-        <Field label="Hauteur souhaitée" colSpan="col-span-12 md:col-span-6">
-          <NumberInput unit="mm" value={furnitureData.hauteurPlanSouhaitee} onChange={(v) => handleUpdate('details.kitchen.furniture.hauteurPlanSouhaitee', v)} />
-        </Field>
-      </Section>
-
-      {/* 7. Usage Cuisine */}
-      <Section title="Usage Cuisine">
+      {/* 6. Espace Repas (anciennement Usage Cuisine) */}
+      <Section title="Espace Repas" icon={Plus}>
         <Field label="Repas quotidiennement" colSpan="col-span-12 md:col-span-6">
           <div className="flex gap-4">
             <UsageCounter label="Adultes" value={furnitureData.repasQuotidienAdultes} onChange={(v) => handleUpdate('details.kitchen.furniture.repasQuotidienAdultes', v)} />
@@ -305,57 +364,6 @@ const ProjectKitchenFurniture: React.FC<ProjectKitchenFurnitureProps> = ({ proje
             value={furnitureData.usageDescriptionDechets} 
             onChange={(v: string) => handleUpdate('details.kitchen.furniture.usageDescriptionDechets', v)} 
           />
-        </Field>
-      </Section>
-
-      {/* 8. Type de rangements */}
-      <Section title="Type de rangements">
-        {/* Ligne 1 : Meubles */}
-        <Field label="Meubles bas (Sélection multiple)" colSpan="col-span-12 md:col-span-4">
-          <CustomDropdown 
-            multiple
-            value={furnitureData.typeMeublesBas || []} 
-            options={['Coulissants', 'Tiroirs', 'Portes battantes', 'Meuble d\'angle', 'Sous-évier', 'Four encastré', 'Range-bouteilles']} 
-            onChange={(v: string[]) => handleUpdate('details.kitchen.furniture.typeMeublesBas', v)} 
-          />
-        </Field>
-        <Field label="Meubles hauts (Sélection multiple)" colSpan="col-span-12 md:col-span-4">
-          <CustomDropdown 
-            multiple
-            value={furnitureData.typeMeublesHauts || []} 
-            options={['Relevants', 'Portes battantes', 'Niches ouvertes', 'Hotte intégrée', 'Sur-mesure plafond', 'Étagères éclairées']} 
-            onChange={(v: string[]) => handleUpdate('details.kitchen.furniture.typeMeublesHauts', v)} 
-          />
-        </Field>
-        <Field label="Colonnes" colSpan="col-span-12 md:col-span-4">
-          <CustomDropdown 
-            value={furnitureData.colonnes} 
-            options={['Garde-manger', 'Frigo intégré', 'Four & MO', 'Pharmacie', 'Balai / Entretien', 'Sans colonne']} 
-            onChange={(v: string) => handleUpdate('details.kitchen.furniture.colonnes', v)} 
-          />
-        </Field>
-
-        {/* Ligne 2 : Descriptions */}
-        <Field label="Description meubles bas" colSpan="col-span-12 md:col-span-4">
-          <LongTextField rows={1} value={furnitureData.descMeublesBas} onChange={(v: string) => handleUpdate('details.kitchen.furniture.descMeublesBas', v)} />
-        </Field>
-        <Field label="Description meubles haut" colSpan="col-span-12 md:col-span-4">
-          <LongTextField rows={1} value={furnitureData.descMeublesHauts} onChange={(v: string) => handleUpdate('details.kitchen.furniture.descMeublesHauts', v)} />
-        </Field>
-        <Field label="Description colonnes" colSpan="col-span-12 md:col-span-4">
-          <LongTextField rows={1} value={furnitureData.descColonnes} onChange={(v: string) => handleUpdate('details.kitchen.furniture.descColonnes', v)} />
-        </Field>
-
-        {/* Ligne 3 : Déchets */}
-        <Field label="Gestion des déchets" colSpan="col-span-12 md:col-span-4">
-          <CustomDropdown 
-            value={furnitureData.gestionDechets} 
-            options={['Poubelle de sol', 'Poubelle sur porte', 'Coulissant dédié (2 bacs)', 'Coulissant dédié (3 bacs)', 'Trie sélectif sous évier']} 
-            onChange={(v: string) => handleUpdate('details.kitchen.furniture.gestionDechets', v)} 
-          />
-        </Field>
-        <Field label="Description Gestion des déchets" colSpan="col-span-12 md:col-span-8">
-          <LongTextField rows={1} value={furnitureData.descGestionDechets} onChange={(v: string) => handleUpdate('details.kitchen.furniture.descGestionDechets', v)} />
         </Field>
       </Section>
 
