@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Clock } from 'lucide-react';
+import { Clock, CheckSquare } from 'lucide-react';
 import { Appointment } from '../types';
 
 interface AgendaWeekViewProps {
@@ -10,7 +10,7 @@ interface AgendaWeekViewProps {
   onAppointmentClick?: (rdv: Appointment) => void;
 }
 
-const AgendaWeekView: React.FC<AgendaWeekViewProps> = ({ currentDate, weekDays, appointments }) => {
+const AgendaWeekView: React.FC<AgendaWeekViewProps> = ({ currentDate, weekDays, appointments, onAppointmentClick }) => {
   const hours = Array.from({ length: 11 }, (_, i) => i + 8);
 
   const getPositionStyles = (startTime: string, endTime: string) => {
@@ -25,20 +25,12 @@ const AgendaWeekView: React.FC<AgendaWeekViewProps> = ({ currentDate, weekDays, 
     };
   };
 
-  /**
-   * Calcule le layout pour les rendez-vous d'une journée afin de gérer les chevauchements
-   */
   const getLayoutMap = (dayApps: Appointment[]) => {
     if (dayApps.length === 0) return new Map();
-
-    // 1. Trier par heure de début
     const sorted = [...dayApps].sort((a, b) => a.startTime.localeCompare(b.startTime));
-    
-    // 2. Regrouper par clusters de collisions
     const clusters: Appointment[][] = [];
     let currentCluster: Appointment[] = [];
     let clusterEnd = "";
-
     sorted.forEach(app => {
       if (currentCluster.length > 0 && app.startTime < clusterEnd) {
         currentCluster.push(app);
@@ -50,44 +42,33 @@ const AgendaWeekView: React.FC<AgendaWeekViewProps> = ({ currentDate, weekDays, 
       }
     });
     if (currentCluster.length > 0) clusters.push(currentCluster);
-
     const results = new Map<string, { width: string; left: string }>();
-
-    // 3. Pour chaque cluster, assigner des "colonnes" (lanes)
     clusters.forEach(cluster => {
-      const columns: string[][] = []; // Tableau de colonnes, chaque colonne contient des IDs
-      
+      const columns: string[][] = [];
       cluster.forEach(app => {
         let placed = false;
         for (let i = 0; i < columns.length; i++) {
-          // Vérifier si l'app chevauche n'importe quelle app déjà dans cette colonne
           const hasOverlap = cluster
             .filter(c => columns[i].includes(c.id))
             .some(other => app.startTime < other.endTime && app.endTime > other.startTime);
-            
           if (!hasOverlap) {
             columns[i].push(app.id);
             placed = true;
             break;
           }
         }
-        if (!placed) {
-          columns.push([app.id]);
-        }
+        if (!placed) { columns.push([app.id]); }
       });
-
-      // 4. Calculer largeur et position pour chaque app du cluster
       const totalCols = columns.length;
       columns.forEach((colIds, colIndex) => {
         colIds.forEach(id => {
           results.set(id, {
-            width: `${(100 / totalCols) - 1}%`, // -1% pour laisser un petit interstice
+            width: `${(100 / totalCols) - 1}%`,
             left: `${(100 / totalCols) * colIndex + 0.5}%`
           });
         });
       });
     });
-
     return results;
   };
 
@@ -134,11 +115,13 @@ const AgendaWeekView: React.FC<AgendaWeekViewProps> = ({ currentDate, weekDays, 
                 {dayApps.map(rdv => {
                   const timeStyles = getPositionStyles(rdv.startTime, rdv.endTime);
                   const layoutStyles = layoutMap.get(rdv.id) || { width: '97%', left: '1.5%' };
+                  const isTask = !!(rdv as any).taskId;
                   
                   return (
                     <div 
                       key={rdv.id}
-                      className="absolute rounded-xl bg-[#C6F6D5] border-l-4 border-[#38A169] p-2.5 cursor-pointer hover:shadow-2xl hover:scale-[1.02] transition-all z-20 overflow-hidden flex flex-col justify-between shadow-md"
+                      onClick={() => onAppointmentClick?.(rdv)}
+                      className={`absolute rounded-xl border-l-4 p-2.5 cursor-pointer hover:shadow-2xl hover:scale-[1.02] transition-all z-20 overflow-hidden flex flex-col justify-between shadow-md ${isTask ? 'bg-indigo-50 border-indigo-500' : 'bg-[#C6F6D5] border-[#38A169]'}`}
                       style={{ 
                         ...timeStyles, 
                         width: layoutStyles.width, 
@@ -146,16 +129,19 @@ const AgendaWeekView: React.FC<AgendaWeekViewProps> = ({ currentDate, weekDays, 
                       }}
                     >
                       <div className="space-y-0.5 overflow-hidden">
-                        <h4 className="text-[11px] font-black text-[#22543D] leading-tight truncate uppercase tracking-tighter" title={rdv.title}>
-                          {rdv.title}
-                        </h4>
-                        <p className="text-[9px] font-bold text-[#2F855A] truncate opacity-80">{rdv.clientName}</p>
+                        <div className="flex justify-between items-start gap-1">
+                          <h4 className={`text-[11px] font-black leading-tight truncate uppercase tracking-tighter flex-1 ${isTask ? 'text-indigo-900' : 'text-[#22543D]'}`} title={rdv.title}>
+                            {rdv.title}
+                          </h4>
+                          {isTask && <CheckSquare size={12} className="text-indigo-400 shrink-0 mt-0.5" />}
+                        </div>
+                        <p className={`text-[9px] font-bold truncate opacity-80 ${isTask ? 'text-indigo-700' : 'text-[#2F855A]'}`}>{rdv.clientName}</p>
                       </div>
                       <div className="flex justify-between items-end mt-1">
-                        <span className="text-[8px] font-black px-1 py-0.5 bg-white/40 rounded uppercase text-[#22543D] truncate max-w-[50%]">
+                        <span className={`text-[8px] font-black px-1 py-0.5 rounded uppercase truncate max-w-[50%] ${isTask ? 'bg-indigo-200/50 text-indigo-800' : 'bg-white/40 text-[#22543D]'}`}>
                           {rdv.type}
                         </span>
-                        <span className="text-[8px] font-black text-[#38A169] whitespace-nowrap">
+                        <span className={`text-[8px] font-black whitespace-nowrap ${isTask ? 'text-indigo-600' : 'text-[#38A169]'}`}>
                           {rdv.startTime}
                         </span>
                       </div>

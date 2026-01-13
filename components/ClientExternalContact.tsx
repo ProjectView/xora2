@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Phone, Mail, User, Trash2, ExternalLink } from 'lucide-react';
+import { Plus, Phone, Mail, User, Trash2, ExternalLink, PenSquare, Check, X, Loader2 } from 'lucide-react';
 import AddExternalContactModal from './AddExternalContactModal';
 import AddDirectoryContactModal from './AddDirectoryContactModal';
 import { Client } from '../types';
@@ -16,8 +16,13 @@ const ClientExternalContact: React.FC<ClientExternalContactProps> = ({ client: i
   const [client, setClient] = useState<Client>(initialClient);
   const [isExternalModalOpen, setIsExternalModalOpen] = useState(false);
   const [isDirectoryModalOpen, setIsDirectoryModalOpen] = useState(false);
+  
+  // States for Inline Editing
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editData, setEditData] = useState<any>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  // Écouter les mises à jour du client pour les listes de contacts
+  // Écouter les mises à jour du client
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'clients', initialClient.id), (docSnap) => {
       if (docSnap.exists()) {
@@ -30,7 +35,39 @@ const ClientExternalContact: React.FC<ClientExternalContactProps> = ({ client: i
   const externalContacts = (client as any).details?.externalContacts || [];
   const directoryContacts = (client as any).details?.directoryContacts || [];
 
+  const startEditing = (contact: any) => {
+    setEditingId(contact.id);
+    setEditData({ ...contact });
+  };
+
+  const cancelEditing = () => {
+    setEditingId(null);
+    setEditData(null);
+  };
+
+  const saveEdit = async () => {
+    if (!editingId || !editData) return;
+    setIsSaving(true);
+    try {
+      const oldContact = externalContacts.find((c: any) => c.id === editingId);
+      const updatedList = externalContacts.map((c: any) => 
+        c.id === editingId ? { ...editData } : c
+      );
+
+      await updateDoc(doc(db, 'clients', client.id), {
+        "details.externalContacts": updatedList
+      });
+      setEditingId(null);
+      setEditData(null);
+    } catch (e) {
+      console.error("Erreur sauvegarde contact externe:", e);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const removeExternalContact = async (contact: any) => {
+    if (!window.confirm("Supprimer ce contact externe ?")) return;
     try {
       await updateDoc(doc(db, 'clients', client.id), {
         "details.externalContacts": arrayRemove(contact)
@@ -39,11 +76,19 @@ const ClientExternalContact: React.FC<ClientExternalContactProps> = ({ client: i
   };
 
   const removeDirectoryContact = async (contact: any) => {
+    if (!window.confirm("Retirer le lien avec ce contact de l'annuaire ?")) return;
     try {
       await updateDoc(doc(db, 'clients', client.id), {
         "details.directoryContacts": arrayRemove(contact)
       });
     } catch (e) { console.error(e); }
+  };
+
+  // Formateur de téléphone local
+  const formatPhone = (val: string) => {
+    const numbers = val.replace(/\D/g, ''); 
+    const limited = numbers.substring(0, 10);
+    return limited.replace(/(\d{2})(?=\d)/g, '$1 ').trim();
   };
 
   return (
@@ -66,23 +111,102 @@ const ClientExternalContact: React.FC<ClientExternalContactProps> = ({ client: i
 
         <div className="bg-[#f8f9fa] border border-gray-100 rounded-[24px] p-6">
           {externalContacts.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {externalContacts.map((contact: any, idx: number) => (
-                <div key={idx} className="bg-white border border-gray-100 rounded-2xl p-5 flex items-center justify-between shadow-sm hover:shadow-md transition-all group">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400">
-                      <User size={24} />
+            <div className="grid grid-cols-1 gap-4">
+              {externalContacts.map((contact: any) => (
+                <div key={contact.id} className={`bg-white border rounded-2xl p-5 transition-all shadow-sm group ${editingId === contact.id ? 'border-indigo-500 ring-2 ring-indigo-50' : 'border-gray-100 hover:shadow-md'}`}>
+                  {editingId === contact.id ? (
+                    /* MODE ÉDITION */
+                    <div className="space-y-4 animate-in fade-in duration-200">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Type</label>
+                          <select 
+                            value={editData.type} 
+                            onChange={(e) => setEditData({...editData, type: e.target.value})}
+                            className="w-full bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-xs font-bold"
+                          >
+                            <option>Conjoint / Conjointe</option>
+                            <option>Famille</option>
+                            <option>Ami / Voisin</option>
+                            <option>Autre</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Nom</label>
+                          <input 
+                            type="text" 
+                            value={editData.lastName} 
+                            onChange={(e) => setEditData({...editData, lastName: e.target.value.toUpperCase()})}
+                            className="w-full bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-xs font-bold"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Prénom</label>
+                          <input 
+                            type="text" 
+                            value={editData.firstName} 
+                            onChange={(e) => setEditData({...editData, firstName: e.target.value})}
+                            className="w-full bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-xs font-bold"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest ml-1">Portable</label>
+                          <input 
+                            type="text" 
+                            value={editData.phone} 
+                            onChange={(e) => setEditData({...editData, phone: formatPhone(e.target.value)})}
+                            className="w-full bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-xs font-bold"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex justify-end items-center gap-3 pt-2 border-t border-gray-50">
+                        <button onClick={cancelEditing} className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-gray-500 hover:text-gray-800 transition-colors">
+                          <X size={14} /> Annuler
+                        </button>
+                        <button 
+                          onClick={saveEdit} 
+                          disabled={isSaving}
+                          className="flex items-center gap-1.5 px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-[10px] font-bold shadow-md shadow-indigo-100 hover:bg-indigo-700 transition-all disabled:opacity-50"
+                        >
+                          {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                          Enregistrer les modifications
+                        </button>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="text-[14px] font-bold text-gray-900">{contact.firstName} {contact.lastName}</h4>
-                      <p className="text-[11px] font-bold text-indigo-500 uppercase tracking-tight">{contact.type}</p>
+                  ) : (
+                    /* MODE AFFICHAGE */
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
+                          <User size={24} />
+                        </div>
+                        <div>
+                          <h4 className="text-[14px] font-bold text-gray-900 uppercase">{contact.firstName} {contact.lastName}</h4>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">{contact.type}</p>
+                            {contact.phone && <span className="text-[11px] text-gray-400 font-medium">• {contact.phone}</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={() => startEditing(contact)}
+                          className="p-2 text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                          title="Modifier"
+                        >
+                          <PenSquare size={18} />
+                        </button>
+                        {contact.phone && <button className="p-2 bg-gray-50 text-gray-400 hover:text-gray-900 rounded-lg transition-colors"><Phone size={16} /></button>}
+                        {contact.email && <button className="p-2 bg-gray-50 text-gray-400 hover:text-gray-900 rounded-lg transition-colors"><Mail size={16} /></button>}
+                        <button 
+                          onClick={() => removeExternalContact(contact)} 
+                          className="p-2 text-gray-200 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {contact.phone && <button className="p-2 bg-gray-50 text-gray-400 hover:text-gray-900 rounded-lg transition-colors"><Phone size={16} /></button>}
-                    {contact.email && <button className="p-2 bg-gray-50 text-gray-400 hover:text-gray-900 rounded-lg transition-colors"><Mail size={16} /></button>}
-                    <button onClick={() => removeExternalContact(contact)} className="p-2 text-gray-200 hover:text-red-500 rounded-lg transition-colors opacity-0 group-hover:opacity-100"><Trash2 size={16} /></button>
-                  </div>
+                  )}
                 </div>
               ))}
             </div>

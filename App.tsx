@@ -28,6 +28,7 @@ function App() {
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
+  const [directoryActiveTab, setDirectoryActiveTab] = useState('Tous');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
@@ -100,10 +101,15 @@ function App() {
     }
   };
 
-  const handlePageChange = (page: Page) => {
+  const handlePageChange = (page: Page, options?: { tab?: string }) => {
     setCurrentPage(page);
     setSelectedClient(null);
     setSelectedProject(null);
+    if (page === 'directory' && options?.tab) {
+      setDirectoryActiveTab(options.tab);
+    } else if (page === 'directory') {
+      setDirectoryActiveTab('Tous');
+    }
   };
 
   const handleProjectSelect = (project: any) => {
@@ -175,7 +181,7 @@ function App() {
               setCurrentPage('directory');
             }}
             onAddClientClick={() => setIsModalOpen(true)}
-            onNavigate={handlePageChange}
+            onNavigate={(page, options) => handlePageChange(page, options)}
           />
         );
       case 'directory':
@@ -189,6 +195,7 @@ function App() {
         ) : (
           <Directory 
             userProfile={userProfile}
+            initialTab={directoryActiveTab}
             onAddClick={() => setIsModalOpen(true)} 
             onClientClick={(client) => setSelectedClient(client)} 
           />
@@ -234,7 +241,7 @@ function App() {
     <div className="flex h-screen bg-gray-50 font-sans">
       <Sidebar 
         currentPage={currentPage} 
-        setCurrentPage={handlePageChange} 
+        setCurrentPage={(page) => handlePageChange(page)} 
         onLogout={handleLogout}
         isCollapsed={isSidebarCollapsed}
         setIsCollapsed={setIsSidebarCollapsed}

@@ -1,5 +1,6 @@
 
 import React, { useMemo } from 'react';
+import { CheckSquare } from 'lucide-react';
 import { Appointment } from '../types';
 
 interface AgendaMonthViewProps {
@@ -8,20 +9,15 @@ interface AgendaMonthViewProps {
   onAppointmentClick?: (rdv: Appointment) => void;
 }
 
-const AgendaMonthView: React.FC<AgendaMonthViewProps> = ({ currentDate, appointments }) => {
+const AgendaMonthView: React.FC<AgendaMonthViewProps> = ({ currentDate, appointments, onAppointmentClick }) => {
   const monthDays = useMemo(() => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
-    
-    // Ajustement pour commencer par Lundi (Lundi = 1, ..., Dimanche = 0)
     let startOffset = firstDay.getDay();
     startOffset = startOffset === 0 ? 6 : startOffset - 1;
-
     const days = [];
-    
-    // Jours du mois précédent
     const prevMonthLastDay = new Date(year, month, 0).getDate();
     for (let i = startOffset - 1; i >= 0; i--) {
       days.push({ 
@@ -30,8 +26,6 @@ const AgendaMonthView: React.FC<AgendaMonthViewProps> = ({ currentDate, appointm
         date: new Date(year, month - 1, prevMonthLastDay - i)
       });
     }
-
-    // Jours du mois en cours
     for (let i = 1; i <= lastDay.getDate(); i++) {
       days.push({ 
         day: i, 
@@ -39,8 +33,6 @@ const AgendaMonthView: React.FC<AgendaMonthViewProps> = ({ currentDate, appointm
         date: new Date(year, month, i)
       });
     }
-
-    // Compléter jusqu'à 42 cases (6 semaines)
     const remaining = 42 - days.length;
     for (let i = 1; i <= remaining; i++) {
       days.push({ 
@@ -49,7 +41,6 @@ const AgendaMonthView: React.FC<AgendaMonthViewProps> = ({ currentDate, appointm
         date: new Date(year, month + 1, i)
       });
     }
-
     return days;
   }, [currentDate]);
 
@@ -83,11 +74,19 @@ const AgendaMonthView: React.FC<AgendaMonthViewProps> = ({ currentDate, appointm
               </div>
               
               <div className="space-y-1 overflow-hidden">
-                {dayAppointments.slice(0, 3).map(rdv => (
-                  <div key={rdv.id} className="px-2 py-1 bg-[#C6F6D5] border-l-2 border-[#38A169] rounded-md text-[9px] font-black text-[#22543D] truncate uppercase">
-                    {rdv.startTime} • {rdv.title}
-                  </div>
-                ))}
+                {dayAppointments.slice(0, 3).map(rdv => {
+                  const isTask = !!(rdv as any).taskId;
+                  return (
+                    <div 
+                      key={rdv.id} 
+                      onClick={() => onAppointmentClick?.(rdv)}
+                      className={`px-2 py-1 border-l-2 rounded-md text-[9px] font-black truncate uppercase flex items-center justify-between cursor-pointer hover:brightness-95 transition-all ${isTask ? 'bg-indigo-50 border-indigo-500 text-indigo-900' : 'bg-[#C6F6D5] border-[#38A169] text-[#22543D]'}`}
+                    >
+                      <span className="truncate flex-1">{rdv.startTime} • {rdv.title}</span>
+                      {isTask && <CheckSquare size={10} className="text-indigo-400 ml-1 shrink-0" />}
+                    </div>
+                  );
+                })}
                 {dayAppointments.length > 3 && (
                   <div className="text-center text-[8px] font-black text-gray-400 uppercase tracking-tighter mt-1">+ {dayAppointments.length - 3} autres</div>
                 )}

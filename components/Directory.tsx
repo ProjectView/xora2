@@ -22,13 +22,14 @@ import DirectoryMap from './DirectoryMap';
 
 interface DirectoryProps {
   userProfile: any;
+  initialTab?: string;
   onAddClick: () => void;
   onClientClick: (client: Client) => void;
 }
 
-const Directory: React.FC<DirectoryProps> = ({ userProfile, onAddClick, onClientClick }) => {
+const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous', onAddClick, onClientClick }) => {
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
-  const [activeTab, setActiveTab] = useState('Tous');
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [clients, setClients] = useState<Client[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -41,6 +42,13 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, onAddClick, onClient
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Mettre à jour l'onglet actif si la prop change
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
 
   // Charger les clients
   useEffect(() => {

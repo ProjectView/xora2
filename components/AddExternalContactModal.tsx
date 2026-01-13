@@ -5,6 +5,13 @@ import { db } from '../firebase';
 // Use @firebase/firestore to fix named export resolution issues
 import { doc, updateDoc, arrayUnion } from '@firebase/firestore';
 
+// Formateur de téléphone : ajoute un espace tous les 2 chiffres
+const formatPhone = (val: string) => {
+  const numbers = val.replace(/\D/g, ''); 
+  const limited = numbers.substring(0, 10);
+  return limited.replace(/(\d{2})(?=\d)/g, '$1 ').trim();
+};
+
 interface AddExternalContactModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -143,8 +150,9 @@ const AddExternalContactModal: React.FC<AddExternalContactModalProps> = ({ isOpe
                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Téléphone mobile</label>
                 <input 
                   type="text" 
+                  placeholder="06 12 34 56 78"
                   value={formData.phone}
-                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                  onChange={(e) => setFormData({...formData, phone: formatPhone(e.target.value)})}
                   className="w-full bg-[#F8F9FA] border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-indigo-400 transition-all shadow-sm"
                 />
               </div>
@@ -152,8 +160,9 @@ const AddExternalContactModal: React.FC<AddExternalContactModalProps> = ({ isOpe
                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Téléphone fixe</label>
                 <input 
                   type="text" 
+                  placeholder="04 67 00 00 00"
                   value={formData.fixed}
-                  onChange={(e) => setFormData({...formData, fixed: e.target.value})}
+                  onChange={(e) => setFormData({...formData, fixed: formatPhone(e.target.value)})}
                   className="w-full bg-[#F8F9FA] border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-indigo-400 transition-all shadow-sm"
                 />
               </div>

@@ -17,7 +17,7 @@ import {
   FileText
 } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot, doc, deleteDoc, updateDoc } from '@firebase/firestore';
+import { collection, query, where, onSnapshot, doc, deleteDoc, updateDoc, writeBatch } from '@firebase/firestore';
 import { Task } from '../types';
 import AddTaskModal from './AddTaskModal';
 
@@ -33,17 +33,73 @@ const TasksMemo: React.FC<TasksMemoProps> = ({ userProfile }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  
+  // Drag and Drop state
+  const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (!userProfile?.companyId) return;
     const tasksRef = collection(db, 'tasks');
     const q = query(tasksRef, where('companyId', '==', userProfile.companyId));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setTasks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Task[]);
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+      
+      // Tri côté client par orderIndex (évite l'erreur d'index composite Firestore)
+      const sortedData = data.sort((a, b) => {
+        const indexA = a.orderIndex ?? 9999;
+        const indexB = b.orderIndex ?? 9999;
+        return indexA - indexB;
+      });
+
+      setTasks(sortedData);
       setIsLoading(false);
     });
     return () => unsubscribe();
   }, [userProfile?.companyId]);
+
+  // Logic pour le Drag & Drop
+  const onDragStart = (index: number) => {
+    if (activeStatusTab !== 'en-cours') return;
+    setDraggedItemIndex(index);
+  };
+
+  const onDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedItemIndex === null || draggedItemIndex === index || activeStatusTab !== 'en-cours') return;
+
+    const filtered = getFilteredTasks();
+    const newFiltered = [...filtered];
+    const draggedItem = newFiltered[draggedItemIndex];
+    
+    newFiltered.splice(draggedItemIndex, 1);
+    newFiltered.splice(index, 0, draggedItem);
+    
+    // Mettre à jour l'état global en conservant les tâches de l'autre onglet
+    const otherTasks = tasks.filter(t => 
+      activeStatusTab === 'en-cours' ? t.status === 'completed' : t.status !== 'completed'
+    );
+    
+    setTasks([...newFiltered, ...otherTasks]);
+    setDraggedItemIndex(index);
+  };
+
+  const onDragEnd = async () => {
+    setDraggedItemIndex(null);
+    if (!userProfile?.companyId) return;
+
+    // Persister le nouvel ordre dans Firestore pour les tâches visibles
+    try {
+      const batch = writeBatch(db);
+      const filtered = getFilteredTasks();
+      filtered.forEach((task, idx) => {
+        const taskRef = doc(db, 'tasks', task.id);
+        batch.update(taskRef, { orderIndex: idx });
+      });
+      await batch.commit();
+    } catch (e) {
+      console.error("Erreur sauvegarde ordre tâches:", e);
+    }
+  };
 
   const handleDeleteTask = async (id: string) => {
     if (!window.confirm("Supprimer cette tâche ?")) return;
@@ -74,14 +130,18 @@ const TasksMemo: React.FC<TasksMemoProps> = ({ userProfile }) => {
     termine: tasks.filter(t => t.status === 'completed').length
   };
 
-  const filteredTasks = tasks.filter(task => {
-    const matchesTab = activeStatusTab === 'en-cours' ? task.status !== 'completed' : task.status === 'completed';
-    const matchesSearch = 
-      task.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      (task.subtitle?.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      ((task as any).note?.toLowerCase().includes(searchQuery.toLowerCase()));
-    return matchesTab && matchesSearch;
-  });
+  const getFilteredTasks = () => {
+    return tasks.filter(task => {
+      const matchesTab = activeStatusTab === 'en-cours' ? task.status !== 'completed' : task.status === 'completed';
+      const matchesSearch = 
+        task.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+        (task.subtitle?.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        ((task as any).note?.toLowerCase().includes(searchQuery.toLowerCase()));
+      return matchesTab && matchesSearch;
+    });
+  };
+
+  const filteredTasks = getFilteredTasks();
 
   return (
     <div className="p-6 space-y-4 bg-gray-50 min-h-[calc(100vh-64px)] flex flex-col font-sans">
@@ -186,14 +246,24 @@ const TasksMemo: React.FC<TasksMemoProps> = ({ userProfile }) => {
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                    {filteredTasks.map((task) => (
-                        <tr key={task.id} className="hover:bg-gray-50 transition-colors group">
+                    {filteredTasks.map((task, index) => (
+                        <tr 
+                          key={task.id} 
+                          draggable={activeStatusTab === 'en-cours'}
+                          onDragStart={() => onDragStart(index)}
+                          onDragOver={(e) => onDragOver(e, index)}
+                          onDragEnd={onDragEnd}
+                          className={`group hover:bg-gray-50 transition-all ${draggedItemIndex === index ? 'opacity-40 bg-indigo-50 border-y-2 border-indigo-200' : 'bg-white'}`}
+                        >
                             <td className="px-6 py-4 text-center">
-                              <GripVertical size={16} className="text-gray-200 mx-auto group-hover:text-gray-400 transition-colors" />
+                              <GripVertical 
+                                size={16} 
+                                className={`mx-auto transition-colors ${activeStatusTab === 'en-cours' ? 'text-gray-300 group-hover:text-indigo-500 cursor-grab active:cursor-grabbing' : 'text-gray-100'}`} 
+                              />
                             </td>
                             <td className="px-6 py-4">
                                 <div className="flex flex-col">
-                                    <span className="text-sm font-bold text-gray-900">{task.title}</span>
+                                    <span className={`text-sm font-bold transition-colors ${draggedItemIndex === index ? 'text-indigo-600' : 'text-gray-900'}`}>{task.title}</span>
                                     {task.subtitle && <span className="text-[11px] font-bold text-indigo-400 uppercase">{task.subtitle}</span>}
                                 </div>
                             </td>

@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { X, ChevronDown, Plus, CheckSquare, Calendar as CalendarIcon, Loader2, Save, CalendarClock, Clock, Search, User as UserIcon, AlertTriangle } from 'lucide-react';
+import { X, ChevronDown, Plus, CheckSquare, Calendar as CalendarIcon, Loader2, Save, CalendarClock, Clock, Search, User as UserIcon, AlertTriangle, Trash2 } from 'lucide-react';
 import { db } from '../firebase';
 // Use @firebase/firestore to fix named export resolution issues
-import { collection, addDoc, query, where, onSnapshot, getDocs, doc, updateDoc } from '@firebase/firestore';
+import { collection, addDoc, query, where, onSnapshot, getDocs, doc, updateDoc, getCountFromServer, deleteDoc } from '@firebase/firestore';
 import { Task } from '../types';
 
 interface AddTaskModalProps {
@@ -26,6 +26,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
   const isEdit = !!taskToEdit;
   const [isMemo, setIsMemo] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isDeletingAppointment, setIsDeletingAppointment] = useState(false);
   
   // Form States
   const [title, setTitle] = useState('');
@@ -35,6 +36,10 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
   const [selectedStatusLabel, setSelectedStatusLabel] = useState('A faire');
   const [endDate, setEndDate] = useState('');
   const [note, setNote] = useState('');
+
+  // Refs for Date Pickers
+  const endDateRef = useRef<HTMLInputElement>(null);
+  const agendaDateRef = useRef<HTMLInputElement>(null);
 
   // Collaborators from Database
   const [collaborators, setCollaborators] = useState<any[]>([]);
@@ -49,6 +54,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
   const [agendaDate, setAgendaDate] = useState('');
   const [startTime, setStartTime] = useState('09:00');
   const [endTime, setEndTime] = useState('10:00');
+  const [linkedAppointmentId, setLinkedAppointmentId] = useState<string | null>(null);
   
   // Conflict Detection
   const [allAppointments, setAllAppointments] = useState<any[]>([]);
@@ -66,7 +72,22 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
     'Appel à passer'
   ];
 
-  // Load Collaborators from Firestore
+  // Helper to trigger native date picker
+  const handleDatePickerClick = (ref: React.RefObject<HTMLInputElement>) => {
+    if (ref.current) {
+      try {
+        if ('showPicker' in HTMLInputElement.prototype) {
+          ref.current.showPicker();
+        } else {
+          ref.current.click();
+        }
+      } catch (e) {
+        ref.current.click();
+      }
+    }
+  };
+
+  // Load Collaborators
   useEffect(() => {
     if (!isOpen || !userProfile?.companyId) return;
 
@@ -78,7 +99,6 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
       }));
       setCollaborators(users);
       
-      // Default selection to current user if found
       if (userProfile) {
         const idx = users.findIndex(u => u.uid === userProfile.uid);
         if (idx !== -1) setSelectedCollaboratorIdx(idx);
@@ -87,6 +107,41 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
 
     return () => unsubscribe();
   }, [isOpen, userProfile?.companyId]);
+
+  // Load Linked Appointment for the task
+  useEffect(() => {
+    if (!isOpen || !userProfile?.companyId || !isEdit || !taskToEdit) {
+      setLinkedAppointmentId(null);
+      return;
+    }
+
+    const q = query(
+      collection(db, 'appointments'), 
+      where('taskId', '==', taskToEdit.id),
+      where('companyId', '==', userProfile.companyId)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (!snapshot.empty) {
+        const linked = snapshot.docs[0];
+        const data = linked.data();
+        setLinkedAppointmentId(linked.id);
+        setIsScheduled(true);
+        setStartTime(data.startTime || '09:00');
+        setEndTime(data.endTime || '10:00');
+        
+        if (data.date && data.date.includes('/')) {
+           const [d, m, y] = data.date.split('/');
+           setAgendaDate(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`);
+        }
+      } else {
+        setLinkedAppointmentId(null);
+        setIsScheduled(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, [isOpen, userProfile?.companyId, isEdit, taskToEdit]);
 
   // Load All Appointments for conflict checking
   useEffect(() => {
@@ -100,7 +155,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
     return () => unsubscribe();
   }, [isOpen, userProfile?.companyId]);
 
-  // Real-time Conflict Checking
+  // Conflict Detection Logic
   useEffect(() => {
     if (!isScheduled || !agendaDate || collaborators.length === 0) {
       setConflictingEvents([]);
@@ -111,18 +166,15 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
     const targetDateFormatted = new Date(agendaDate).toLocaleDateString('fr-FR');
     
     const conflicts = allAppointments.filter(rdv => {
-      // Meme jour et meme collaborateur
+      if (linkedAppointmentId && rdv.id === linkedAppointmentId) return false;
       if (rdv.date !== targetDateFormatted || rdv.collaborator.name !== selectedCollab.name) return false;
-      
-      // Verification chevauchement (Overlap)
-      // (StartA < EndB) and (EndA > StartB)
       return (startTime < rdv.endTime) && (endTime > rdv.startTime);
     });
 
     setConflictingEvents(conflicts);
-  }, [isScheduled, agendaDate, startTime, endTime, selectedCollaboratorIdx, collaborators, allAppointments]);
+  }, [isScheduled, agendaDate, startTime, endTime, selectedCollaboratorIdx, collaborators, allAppointments, linkedAppointmentId]);
 
-  // Click outside to close client search results
+  // Click outside search
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (clientSearchRef.current && !clientSearchRef.current.contains(event.target as Node)) {
@@ -133,7 +185,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Pré-remplissage en mode édition ou reset en mode création
+  // Form Initial Load
   useEffect(() => {
     if (isOpen) {
       if (taskToEdit) {
@@ -151,14 +203,10 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
 
         if (taskToEdit.date && taskToEdit.date.includes('/')) {
           const [d, m, y] = taskToEdit.date.split('/');
-          const formattedDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-          setEndDate(formattedDate);
-          setAgendaDate(formattedDate); 
+          setEndDate(`${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`);
         } else {
           setEndDate('');
-          setAgendaDate('');
         }
-        setIsScheduled(false);
       } else {
         setTitle('');
         setIsMemo(false);
@@ -169,10 +217,12 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
         setEndDate('');
         setAgendaDate('');
         setIsScheduled(false);
+        setLinkedAppointmentId(null);
       }
     }
   }, [isOpen, taskToEdit, initialClientId, initialProjectId, collaborators]);
 
+  // Clients & Projects Loading
   useEffect(() => {
     if (!isOpen || !userProfile?.companyId) return;
 
@@ -182,37 +232,70 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
       const loadedClients = clientsSnap.docs.map(doc => ({ id: doc.id, name: doc.data().name }));
       setClients(loadedClients);
 
-      // Sync search query with loaded clients
-      if (selectedClientId) {
-        const found = loadedClients.find(c => c.id === selectedClientId);
-        if (found) setClientSearchQuery(found.name);
-      } else {
-        setClientSearchQuery('');
+      const currentClientId = taskToEdit ? (taskToEdit as any).clientId : initialClientId;
+      if (currentClientId) {
+        const found = loadedClients.find(c => c.id === currentClientId);
+        if (found) {
+          setClientSearchQuery(found.name);
+          setSelectedClientId(found.id);
+        }
       }
 
       const projectsQ = query(collection(db, 'projects'), where('companyId', '==', userProfile.companyId));
       const projectsSnap = await getDocs(projectsQ);
-      setAllProjects(projectsSnap.docs.map(doc => ({ 
+      const loadedProjects = projectsSnap.docs.map(doc => ({ 
         id: doc.id, 
         name: doc.data().projectName,
-        clientId: doc.data().clientId
-      })));
+        clientId: doc.data().clientId,
+        agenceurUid: doc.data().agenceur?.uid || ''
+      }));
+      setAllProjects(loadedProjects);
+
+      // Si on vient de créer un projet, on pré-remplit le titre
+      if (initialProjectId && !isEdit) {
+        const currentProject = loadedProjects.find(p => p.id === initialProjectId);
+        if (currentProject) {
+          setTitle(`Suivi : ${currentProject.name}`);
+          // On essaie aussi de matcher le collaborateur avec l'agenceur du projet
+          if (collaborators.length > 0 && currentProject.agenceurUid) {
+            const collabIdx = collaborators.findIndex(c => c.uid === currentProject.agenceurUid);
+            if (collabIdx !== -1) setSelectedCollaboratorIdx(collabIdx);
+          }
+        }
+      }
     };
 
     fetchData();
-  }, [isOpen, userProfile?.companyId]);
+  }, [isOpen, userProfile?.companyId, initialClientId, initialProjectId, taskToEdit, collaborators]);
 
-  // Filtrage dynamique des clients pour l'autocomplétion
   const filteredClients = useMemo(() => {
     if (!clientSearchQuery.trim()) return clients;
-    const normalized = clientSearchQuery.toLowerCase();
-    return clients.filter(c => c.name.toLowerCase().includes(normalized));
+    return clients.filter(c => c.name.toLowerCase().includes(clientSearchQuery.toLowerCase()));
   }, [clientSearchQuery, clients]);
 
   const filteredProjects = useMemo(() => {
     if (!selectedClientId) return [];
     return allProjects.filter(p => p.clientId === selectedClientId);
   }, [selectedClientId, allProjects]);
+
+  // Action: Supprimer de l'agenda
+  const handleRemoveFromAgenda = async () => {
+    if (!linkedAppointmentId) return;
+    if (!window.confirm("Voulez-vous retirer cet événement de votre agenda ?")) return;
+
+    setIsDeletingAppointment(true);
+    try {
+      await deleteDoc(doc(db, 'appointments', linkedAppointmentId));
+      setIsScheduled(false);
+      setLinkedAppointmentId(null);
+      setAgendaDate('');
+    } catch (e) {
+      console.error("Erreur suppression RDV:", e);
+      alert("Une erreur est survenue lors de la suppression.");
+    } finally {
+      setIsDeletingAppointment(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -221,16 +304,16 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
     setIsLoading(true);
     try {
       const selectedCollab = collaborators[selectedCollaboratorIdx];
-      const selectedProjectName = allProjects.find(p => p.id === selectedProjectId)?.name || '';
-      const selectedClientName = clients.find(c => c.id === selectedClientId)?.name || '';
+      const selectedProjectName = !isMemo ? (allProjects.find(p => p.id === selectedProjectId)?.name || '') : '';
+      const selectedClientName = !isMemo ? (clients.find(c => c.id === selectedClientId)?.name || '') : '';
 
       const taskData: any = {
         title: title,
         subtitle: selectedProjectName,
         type: isMemo ? 'Mémo' : 'Tâche manuelle',
-        statusLabel: selectedStatusLabel,
-        tagColor: selectedStatusLabel === 'Prioritaire' ? 'purple' : 
-                  selectedStatusLabel === 'Urgent' ? 'pink' : 'gray',
+        statusLabel: isMemo ? '' : selectedStatusLabel,
+        tagColor: isMemo ? 'gray' : (selectedStatusLabel === 'Prioritaire' ? 'purple' : 
+                  selectedStatusLabel === 'Urgent' ? 'pink' : 'gray'),
         date: endDate ? new Date(endDate).toLocaleDateString('fr-FR') : '',
         collaborator: {
           name: selectedCollab.name,
@@ -238,8 +321,8 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
         },
         hasNote: !!note,
         note: note,
-        clientId: selectedClientId,
-        projectId: selectedProjectId,
+        clientId: isMemo ? '' : selectedClientId,
+        projectId: isMemo ? '' : selectedProjectId,
       };
 
       let taskId = '';
@@ -248,11 +331,16 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
         taskId = taskToEdit.id;
         await updateDoc(doc(db, 'tasks', taskToEdit.id), taskData);
       } else {
+        const countQuery = query(collection(db, 'tasks'), where('companyId', '==', userProfile.companyId));
+        const countSnap = await getCountFromServer(countQuery);
+        const nextIndex = countSnap.data().count;
+
         const docRef = await addDoc(collection(db, 'tasks'), {
           ...taskData,
           status: 'pending',
           statusType: 'toggle',
           companyId: userProfile.companyId,
+          orderIndex: nextIndex,
           createdAt: new Date().toISOString()
         });
         taskId = docRef.id;
@@ -260,12 +348,12 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
 
       if (isScheduled && agendaDate) {
         const rdvDate = new Date(agendaDate).toLocaleDateString('fr-FR');
-        await addDoc(collection(db, 'appointments'), {
+        const appointmentData: any = {
           clientId: selectedClientId || null,
           clientName: selectedClientName || 'Client divers',
           projectId: selectedProjectId || null,
           projectName: selectedProjectName || null,
-          title: `[Tâche] ${title}`,
+          title: `[${isMemo ? 'Mémo' : 'Tâche'}] ${title}`,
           type: 'Autre',
           date: rdvDate,
           startTime: startTime,
@@ -279,7 +367,16 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
           companyId: userProfile.companyId,
           taskId: taskId,
           createdAt: new Date().toISOString()
-        });
+        };
+
+        if (linkedAppointmentId) {
+          await updateDoc(doc(db, 'appointments', linkedAppointmentId), appointmentData);
+        } else {
+          await addDoc(collection(db, 'appointments'), appointmentData);
+        }
+      } else if (!isScheduled && linkedAppointmentId) {
+        // Si l'utilisateur a décoché "Placer dans l'agenda" sans cliquer sur le bouton supprimer spécifique
+        await deleteDoc(doc(db, 'appointments', linkedAppointmentId));
       }
       
       onClose();
@@ -306,7 +403,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
               </div>
               <div>
                 <h2 className="text-xl font-bold text-gray-900 tracking-tight">
-                  {isEdit ? `Modifier : ${taskToEdit?.title}` : "Créer une tâche manuelle ou un mémo"}
+                  {isEdit ? `Modifier : ${taskToEdit?.title}` : `Créer une ${isMemo ? 'note mémo' : 'tâche manuelle'}`}
                 </h2>
                 {isEdit && <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mt-0.5">Mode édition actif</p>}
               </div>
@@ -316,22 +413,19 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
             </button>
           </div>
 
-          {/* Content */}
           <div className="p-8 space-y-8">
-            
             <div className="space-y-2">
-              <label className="block text-xs font-bold text-gray-500 ml-1">Titre de la tâche / mémo*</label>
+              <label className="block text-xs font-bold text-gray-500 ml-1">{isMemo ? 'Titre du mémo*' : 'Titre de la tâche*'}</label>
               <input 
                 required
                 type="text" 
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="Ex: Appeler M. Dubois pour le devis"
+                placeholder={isMemo ? "Ex: Liste de courses showroom" : "Ex: Appeler M. Dubois pour le devis"}
                 className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 focus:border-gray-900 outline-none transition-all"
               />
             </div>
 
-            {/* Toggle Type Section */}
             <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100 shadow-inner">
               <label className="block text-[10px] font-bold text-gray-400 mb-4 uppercase tracking-[0.1em]">Nature de l'entrée</label>
               <div className="flex items-center gap-6">
@@ -347,7 +441,6 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
               </div>
             </div>
 
-            {/* Collaborator and Dates */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
               <div className="md:col-span-6 space-y-2">
                 <label className="block text-xs font-bold text-gray-500 ml-1">Collaborateur assigné</label>
@@ -375,15 +468,23 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
               </div>
 
               <div className="md:col-span-6 space-y-2">
-                <label className="block text-xs font-bold text-gray-500 ml-1">Échéance de la tâche</label>
-                <div className="relative">
+                <label className="block text-xs font-bold text-gray-500 ml-1">Échéance de la {isMemo ? 'note' : 'tâche'}</label>
+                <div 
+                  className="relative group cursor-pointer"
+                  onClick={() => handleDatePickerClick(endDateRef)}
+                >
                   <input 
+                    ref={endDateRef}
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 focus:ring-2 focus:ring-purple-50 outline-none transition-all cursor-pointer"
+                    className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-800 focus:ring-4 focus:ring-indigo-50 focus:border-gray-900 outline-none transition-all cursor-pointer"
+                    style={{ colorScheme: 'light' }}
                   />
-                  <CalendarIcon size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  <CalendarIcon 
+                    size={18} 
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-indigo-600 transition-colors pointer-events-none" 
+                  />
                 </div>
               </div>
             </div>
@@ -397,16 +498,29 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
                   </div>
                   <div>
                     <h3 className="text-sm font-bold text-gray-900">Placer dans l'agenda</h3>
-                    <p className="text-[10px] text-gray-400 font-medium">Bloquer un créneau pour réaliser cette tâche</p>
+                    <p className="text-[10px] text-gray-400 font-medium">Bloquer un créneau pour réaliser cette {isMemo ? 'note' : 'tâche'}</p>
                   </div>
                 </div>
-                <button 
-                  type="button"
-                  onClick={() => setIsScheduled(!isScheduled)}
-                  className={`relative w-12 h-6 rounded-full transition-all duration-300 shadow-sm ${isScheduled ? 'bg-indigo-600' : 'bg-gray-200'}`}
-                >
-                  <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-300 ${isScheduled ? 'translate-x-6' : 'translate-x-0'}`} />
-                </button>
+                <div className="flex items-center gap-3">
+                  {linkedAppointmentId && (
+                    <button 
+                      type="button" 
+                      onClick={handleRemoveFromAgenda}
+                      disabled={isDeletingAppointment}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-red-500 hover:bg-red-50 rounded-lg transition-all border border-red-100"
+                    >
+                      {isDeletingAppointment ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                      Supprimer de l'agenda
+                    </button>
+                  )}
+                  <button 
+                    type="button"
+                    onClick={() => setIsScheduled(!isScheduled)}
+                    className={`relative w-12 h-6 rounded-full transition-all duration-300 shadow-sm ${isScheduled ? 'bg-indigo-600' : 'bg-gray-200'}`}
+                  >
+                    <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform duration-300 ${isScheduled ? 'translate-x-6' : 'translate-x-0'}`} />
+                  </button>
+                </div>
               </div>
 
               {isScheduled && (
@@ -414,43 +528,47 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-1.5">
                       <label className="block text-[10px] font-bold text-indigo-400 uppercase tracking-wider ml-1">Jour de réalisation</label>
-                      <div className="relative">
+                      <div 
+                        className="relative group cursor-pointer"
+                        onClick={() => handleDatePickerClick(agendaDateRef)}
+                      >
                         <input 
+                          ref={agendaDateRef}
                           type="date"
                           value={agendaDate}
                           onChange={(e) => setAgendaDate(e.target.value)}
                           className="w-full pl-10 pr-4 py-2.5 bg-white border border-indigo-100 rounded-xl text-sm font-bold text-indigo-900 outline-none focus:border-indigo-400 transition-all cursor-pointer"
+                          style={{ colorScheme: 'light' }}
                         />
-                        <CalendarIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-300 pointer-events-none" />
+                        <CalendarIcon size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-300 group-hover:text-indigo-600 transition-colors pointer-events-none" />
                       </div>
                     </div>
                     <div className="space-y-1.5">
                       <label className="block text-[10px] font-bold text-indigo-400 uppercase tracking-wider ml-1">Heure de début</label>
-                      <div className="relative">
+                      <div className="relative group">
                         <input 
                           type="time"
                           value={startTime}
                           onChange={(e) => setStartTime(e.target.value)}
                           className="w-full pl-10 pr-4 py-2.5 bg-white border border-indigo-100 rounded-xl text-sm font-bold text-indigo-900 outline-none focus:border-indigo-400 transition-all"
                         />
-                        <Clock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-300 pointer-events-none" />
+                        <Clock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-300 group-focus-within:text-indigo-600 transition-colors pointer-events-none" />
                       </div>
                     </div>
                     <div className="space-y-1.5">
                       <label className="block text-[10px] font-bold text-indigo-400 uppercase tracking-wider ml-1">Heure de fin</label>
-                      <div className="relative">
+                      <div className="relative group">
                         <input 
                           type="time"
                           value={endTime}
                           onChange={(e) => setEndTime(e.target.value)}
                           className="w-full pl-10 pr-4 py-2.5 bg-white border border-indigo-100 rounded-xl text-sm font-bold text-indigo-900 outline-none focus:border-indigo-400 transition-all"
                         />
-                        <Clock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-300 pointer-events-none" />
+                        <Clock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-indigo-300 group-focus-within:text-indigo-600 transition-colors pointer-events-none" />
                       </div>
                     </div>
                   </div>
 
-                  {/* Conflict Alert Section */}
                   {conflictingEvents.length > 0 && (
                     <div className="p-4 bg-orange-50 border border-orange-200 rounded-xl flex items-start gap-4 animate-in slide-in-from-left-4 duration-300">
                       <div className="p-2 bg-orange-100 text-orange-600 rounded-lg">
@@ -462,7 +580,6 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
                           Attention, <strong>{collaborators[selectedCollaboratorIdx]?.name}</strong> a déjà des événements placés sur ce créneau : <br/>
                           <span className="italic">{conflictingEvents.map(c => c.title).join(', ')}</span>.
                         </p>
-                        <p className="text-[11px] text-orange-600 font-black uppercase tracking-tighter mt-1 italic">⚠️ Attention au surmenage</p>
                       </div>
                     </div>
                   )}
@@ -476,117 +593,114 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
               )}
             </div>
 
-            {/* Client, Project, Status */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* COMPOSANT RECHERCHE CLIENT MODERNISÉ */}
-              <div className="space-y-2 relative" ref={clientSearchRef}>
-                <label className="block text-xs font-bold text-gray-500 ml-1">Client lié (optionnel)</label>
-                <div className="relative">
-                  <input 
-                    type="text"
-                    value={clientSearchQuery}
-                    onChange={(e) => {
-                      setClientSearchQuery(e.target.value);
-                      setShowClientResults(true);
-                      if (!e.target.value) setSelectedClientId('');
-                    }}
-                    onFocus={() => setShowClientResults(true)}
-                    placeholder="Chercher un client..."
-                    className="w-full pl-10 pr-10 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 focus:border-[#A886D7] outline-none transition-all shadow-sm"
-                  />
-                  <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-300" />
-                  {selectedClientId && (
-                    <button 
-                      type="button"
-                      onClick={() => { setSelectedClientId(''); setClientSearchQuery(''); }}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full text-gray-400"
-                    >
-                      <X size={14} />
-                    </button>
+            {!isMemo && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <div className="space-y-2 relative" ref={clientSearchRef}>
+                  <label className="block text-xs font-bold text-gray-500 ml-1">Client lié (optionnel)</label>
+                  <div className="relative">
+                    <input 
+                      type="text"
+                      value={clientSearchQuery}
+                      onChange={(e) => {
+                        setClientSearchQuery(e.target.value);
+                        setShowClientResults(true);
+                        if (!e.target.value) setSelectedClientId('');
+                      }}
+                      onFocus={() => setShowClientResults(true)}
+                      placeholder="Chercher un client..."
+                      className="w-full pl-10 pr-10 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 focus:border-[#A886D7] outline-none transition-all shadow-sm"
+                    />
+                    <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-300" />
+                    {selectedClientId && (
+                      <button 
+                        type="button"
+                        onClick={() => { setSelectedClientId(''); setClientSearchQuery(''); }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full text-gray-400"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+
+                  {showClientResults && (
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[110] overflow-hidden max-h-60 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
+                      <div className="p-2 space-y-1">
+                        {filteredClients.length > 0 ? (
+                          filteredClients.map(client => (
+                            <button
+                              key={client.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedClientId(client.id);
+                                setClientSearchQuery(client.name);
+                                setShowClientResults(false);
+                              }}
+                              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-left ${selectedClientId === client.id ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50 text-gray-700'}`}
+                            >
+                              <div className={`p-1.5 rounded-lg ${selectedClientId === client.id ? 'bg-white text-indigo-600' : 'bg-gray-100 text-gray-400'}`}>
+                                <UserIcon size={14} />
+                              </div>
+                              <span className="text-sm font-bold">{client.name}</span>
+                            </button>
+                          ))
+                        ) : (
+                          <div className="p-4 text-center text-gray-400 text-xs font-medium italic">
+                            Aucun client trouvé pour "{clientSearchQuery}"
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
 
-                {/* Dropdown de résultats */}
-                {showClientResults && (
-                  <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[110] overflow-hidden max-h-60 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="p-2 space-y-1">
-                      {filteredClients.length > 0 ? (
-                        filteredClients.map(client => (
-                          <button
-                            key={client.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedClientId(client.id);
-                              setClientSearchQuery(client.name);
-                              setShowClientResults(false);
-                            }}
-                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-left ${selectedClientId === client.id ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50 text-gray-700'}`}
-                          >
-                            <div className={`p-1.5 rounded-lg ${selectedClientId === client.id ? 'bg-white text-indigo-600' : 'bg-gray-100 text-gray-400'}`}>
-                              <UserIcon size={14} />
-                            </div>
-                            <span className="text-sm font-bold">{client.name}</span>
-                          </button>
-                        ))
-                      ) : (
-                        <div className="p-4 text-center text-gray-400 text-xs font-medium italic">
-                          Aucun client trouvé pour "{clientSearchQuery}"
-                        </div>
-                      )}
-                    </div>
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-gray-500 ml-1">Projet lié (optionnel)</label>
+                  <div className="relative">
+                    <select 
+                      className="w-full appearance-none px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 hover:border-[#A886D7] outline-none transition-all cursor-pointer disabled:bg-gray-50 disabled:text-gray-400"
+                      disabled={!selectedClientId}
+                      value={selectedProjectId}
+                      onChange={(e) => setSelectedProjectId(e.target.value)}
+                    >
+                      <option value="">{!selectedClientId ? 'Choisir un client d\'abord' : 'Aucun'}</option>
+                      {filteredProjects.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                   </div>
-                )}
-              </div>
+                </div>
 
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-gray-500 ml-1">Projet lié (optionnel)</label>
-                <div className="relative">
-                  <select 
-                    className="w-full appearance-none px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 hover:border-[#A886D7] outline-none transition-all cursor-pointer disabled:bg-gray-50 disabled:text-gray-400"
-                    disabled={!selectedClientId}
-                    value={selectedProjectId}
-                    onChange={(e) => setSelectedProjectId(e.target.value)}
-                  >
-                    <option value="">{!selectedClientId ? 'Choisir un client d\'abord' : 'Aucun'}</option>
-                    {filteredProjects.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                  <ChevronDown size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-gray-500 ml-1">Marqueur Statut</label>
+                  <div className="relative">
+                    <select 
+                      className="w-full appearance-none px-4 py-3 bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-800 hover:border-[#A886D7] outline-none transition-all cursor-pointer"
+                      value={selectedStatusLabel}
+                      onChange={(e) => setSelectedStatusLabel(e.target.value)}
+                    >
+                      {statusOptions.map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                  </div>
                 </div>
               </div>
+            )}
 
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-gray-500 ml-1">Marqueur Statut</label>
-                <div className="relative">
-                  <select 
-                    className="w-full appearance-none px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 hover:border-[#A886D7] outline-none transition-all cursor-pointer"
-                    value={selectedStatusLabel}
-                    onChange={(e) => setSelectedStatusLabel(e.target.value)}
-                  >
-                    {statusOptions.map(s => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                  <ChevronDown size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                </div>
-              </div>
-            </div>
-
-            {/* Note Section */}
             <div className="space-y-3">
-              <label className="block text-xs font-bold text-gray-500 ml-1 uppercase tracking-wider">Note de la tâche / mémo</label>
+              <label className="block text-xs font-bold text-gray-500 ml-1 uppercase tracking-wider">{isMemo ? 'Contenu du mémo' : 'Note de la tâche'}</label>
               <textarea 
-                rows={4}
+                rows={isMemo ? 6 : 4}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="Ex: Précisions sur la demande du client..."
+                placeholder={isMemo ? "Saisissez ici vos notes, listes ou rappels..." : "Ex: Précisions sur la demande du client..."}
                 className="w-full bg-white border border-gray-200 rounded-2xl p-5 text-sm font-medium text-gray-800 focus:outline-none focus:border-[#A886D7] focus:ring-4 focus:ring-purple-50/50 placeholder:text-gray-300 resize-none transition-all shadow-sm"
               />
             </div>
           </div>
 
-          {/* Footer */}
           <div className="p-8 border-t border-gray-100 flex justify-center bg-gray-50/10">
             <button 
               type="submit"
@@ -598,7 +712,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
               ) : (
                 isEdit ? <Save size={20} /> : <Plus size={20} className="group-hover:rotate-90 transition-transform duration-300" />
               )}
-              <span>{isLoading ? 'Traitement...' : (isEdit ? 'Mettre à jour la tâche' : `Créer la ${isMemo ? 'note mémo' : 'tâche manuelle'}`)}</span>
+              <span>{isLoading ? 'Traitement...' : (isEdit ? 'Mettre à jour' : `Créer la ${isMemo ? 'note mémo' : 'tâche'}`)}</span>
             </button>
           </div>
         </form>

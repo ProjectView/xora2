@@ -311,32 +311,7 @@ const ProjectKitchenFurniture: React.FC<ProjectKitchenFurnitureProps> = ({ proje
         </Field>
       </Section>
 
-      {/* 5. Éclairages */}
-      <Section title="Éclairages" icon={Plus}>
-        <Field label="Luminosité pièce" colSpan="col-span-12 md:col-span-6">
-          <CustomDropdown 
-            value={furnitureData.luminosite} 
-            options={['Très sombre', 'Sombre', 'Normale', 'Claire', 'Très claire']} 
-            onChange={(v: string) => handleUpdate('details.kitchen.furniture.luminosite', v)} 
-          />
-        </Field>
-        <Field label="Température de l’éclairage" colSpan="col-span-12 md:col-span-6">
-          <CustomDropdown 
-            value={furnitureData.temperatureEclairage} 
-            options={['Blanc chaud (3000K)', 'Blanc neutre (4000K)', 'Blanc froid (6000K)']} 
-            onChange={(v: string) => handleUpdate('details.kitchen.furniture.temperatureEclairage', v)} 
-          />
-        </Field>
-        <Field label="Description de l’éclairage" colSpan="col-span-12">
-          <LongTextField 
-            rows={2}
-            value={furnitureData.descriptionEclairage} 
-            onChange={(v: string) => handleUpdate('details.kitchen.furniture.descriptionEclairage', v)} 
-          />
-        </Field>
-      </Section>
-
-      {/* 6. Espace Repas (anciennement Usage Cuisine) */}
+      {/* 5. Espace Repas */}
       <Section title="Espace Repas" icon={Plus}>
         <Field label="Repas quotidiennement" colSpan="col-span-12 md:col-span-6">
           <div className="flex gap-4">
@@ -363,6 +338,31 @@ const ProjectKitchenFurniture: React.FC<ProjectKitchenFurnitureProps> = ({ proje
             rows={2}
             value={furnitureData.usageDescriptionDechets} 
             onChange={(v: string) => handleUpdate('details.kitchen.furniture.usageDescriptionDechets', v)} 
+          />
+        </Field>
+      </Section>
+
+      {/* 6. Éclairages (DÉPLACÉ ICI TOUT EN BAS) */}
+      <Section title="Éclairages" icon={Plus}>
+        <Field label="Luminosité pièce" colSpan="col-span-12 md:col-span-6">
+          <CustomDropdown 
+            value={furnitureData.luminosite} 
+            options={['Très sombre', 'Sombre', 'Normale', 'Claire', 'Très claire']} 
+            onChange={(v: string) => handleUpdate('details.kitchen.furniture.luminosite', v)} 
+          />
+        </Field>
+        <Field label="Température de l’éclairage" colSpan="col-span-12 md:col-span-6">
+          <CustomDropdown 
+            value={furnitureData.temperatureEclairage} 
+            options={['Blanc chaud (3000K)', 'Blanc neutre (4000K)', 'Blanc froid (6000K)']} 
+            onChange={(v: string) => handleUpdate('details.kitchen.furniture.temperatureEclairage', v)} 
+          />
+        </Field>
+        <Field label="Description de l’éclairage" colSpan="col-span-12">
+          <LongTextField 
+            rows={2}
+            value={furnitureData.descriptionEclairage} 
+            onChange={(v: string) => handleUpdate('details.kitchen.furniture.descriptionEclairage', v)} 
           />
         </Field>
       </Section>

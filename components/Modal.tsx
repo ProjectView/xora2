@@ -1,8 +1,9 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { X, ChevronDown, Plus, Loader2, MapPin, Search, Check } from 'lucide-react';
+import { X, ChevronDown, Plus, Loader2, MapPin, Search, Check, User, Info, ShieldCheck } from 'lucide-react';
 import { db } from '../firebase';
 // Use @firebase/firestore to fix named export resolution issues
-import { collection, addDoc } from '@firebase/firestore';
+import { collection, addDoc, getDocs, query, where } from '@firebase/firestore';
 
 // Structure de données hiérarchique identique aux autres composants
 const HIERARCHY_DATA: Record<string, Record<string, string[]>> = {
@@ -58,6 +59,16 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile }) => {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
+  // États pour le parrainage
+  const [sponsorSearch, setSponsorSearch] = useState('');
+  const [sponsorSuggestions, setSponsorSuggestions] = useState<any[]>([]);
+  const [showSponsorResults, setShowSponsorResults] = useState(false);
+  const sponsorSearchRef = useRef<HTMLDivElement>(null);
+  const [selectedSponsor, setSelectedSponsor] = useState<{id: string, name: string} | null>(null);
+
+  // État pour la popup info RGPD
+  const [showRgpdInfo, setShowRgpdInfo] = useState(false);
+
   const [formData, setFormData] = useState({
     civility: 'Mme',
     lastName: '',
@@ -99,6 +110,8 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile }) => {
         rgpd: false
       }));
       setAddressSearch('');
+      setSponsorSearch('');
+      setSelectedSponsor(null);
     }
   }, [isOpen, userProfile]);
 
@@ -127,6 +140,34 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile }) => {
     return () => clearTimeout(timer);
   }, [addressSearch]);
 
+  // Recherche parrain dans l'annuaire
+  useEffect(() => {
+    const searchSponsor = async () => {
+      if (sponsorSearch.length < 2 || !userProfile?.companyId) {
+        setSponsorSuggestions([]);
+        return;
+      }
+      try {
+        const q = query(
+          collection(db, 'clients'), 
+          where('companyId', '==', userProfile.companyId)
+        );
+        const snap = await getDocs(q);
+        const normalizedQuery = sponsorSearch.toLowerCase();
+        const results = snap.docs
+          .map(d => ({ id: d.id, ...d.data() } as any))
+          .filter(c => c.name.toLowerCase().includes(normalizedQuery))
+          .slice(0, 5);
+        setSponsorSuggestions(results);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
+    const timer = setTimeout(searchSponsor, 300);
+    return () => clearTimeout(timer);
+  }, [sponsorSearch, userProfile?.companyId]);
+
   // Logic pour la cascade d'origines
   const categories = useMemo(() => Object.keys(HIERARCHY_DATA), []);
   const origins = useMemo(() => formData.category ? Object.keys(HIERARCHY_DATA[formData.category] || {}) : [], [formData.category]);
@@ -136,7 +177,6 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile }) => {
     const props = feature.properties;
     const [lng, lat] = feature.geometry.coordinates;
 
-    // props.label contient le numéro de voie complet
     setFormData({
       ...formData,
       address: props.label, 
@@ -147,6 +187,23 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile }) => {
     });
     setAddressSearch(props.label);
     setShowSuggestions(false);
+  };
+
+  // Formateur de téléphone : ajoute un espace tous les 2 chiffres
+  const formatPhone = (val: string) => {
+    const numbers = val.replace(/\D/g, ''); 
+    const limited = numbers.substring(0, 10);
+    return limited.replace(/(\d{2})(?=\d)/g, '$1 ').trim();
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPhone(e.target.value);
+    setFormData({ ...formData, phone: formatted });
+  };
+
+  const handleAcceptRgpd = () => {
+    setFormData(prev => ({ ...prev, rgpd: true }));
+    setShowRgpdInfo(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -167,13 +224,15 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile }) => {
           name: userProfile.name,
           avatar: userProfile.avatar
         },
-        origin: formData.origin, // Niveau 2 de la hiérarchie
+        origin: formData.origin,
         location: formData.city || 'Non renseignée',
         status: 'Leads', 
         dateAdded: new Date().toLocaleDateString('fr-FR'),
         companyId: companyId,
         details: {
           ...formData,
+          sponsorId: selectedSponsor?.id || null,
+          sponsorName: selectedSponsor?.name || null,
           createdAt: new Date().toISOString()
         },
         projectCount: 0
@@ -194,6 +253,9 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile }) => {
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
         setShowSuggestions(false);
       }
+      if (sponsorSearchRef.current && !sponsorSearchRef.current.contains(event.target as Node)) {
+        setShowSponsorResults(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -213,7 +275,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile }) => {
                        <Plus size={20} />
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-gray-900 tracking-tight">Créer une fiche contact</h2>
+                    <h2 className="text-xl font-bold text-gray-900 tracking-tight">Créer une fiche lead</h2>
                     <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mt-0.5">Société : {userProfile?.companyName || 'Chargement...'}</p>
                   </div>
               </div>
@@ -286,7 +348,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile }) => {
                           </div>
                           <input 
                             value={formData.phone}
-                            onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                            onChange={handlePhoneChange}
                             type="text" 
                             placeholder="06 12 34 56 78" 
                             className="flex-1 bg-white border border-gray-200 rounded-r-xl py-3 px-4 text-sm font-semibold text-gray-800 focus:outline-none focus:border-gray-900 transition-all placeholder:text-gray-300" 
@@ -377,7 +439,10 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile }) => {
                               <select 
                                 disabled={!formData.category}
                                 value={formData.origin}
-                                onChange={(e) => setFormData({...formData, origin: e.target.value, subOrigin: ''})}
+                                onChange={(e) => {
+                                    setFormData({...formData, origin: e.target.value, subOrigin: ''});
+                                    if(e.target.value !== 'Parrainage') setSelectedSponsor(null);
+                                }}
                                 className="w-full appearance-none bg-white border border-gray-200 rounded-xl py-2.5 px-4 text-sm font-bold text-gray-800 focus:outline-none focus:border-indigo-500 transition-all shadow-sm disabled:opacity-50 disabled:bg-gray-100"
                               >
                                   <option value="">Sélectionner</option>
@@ -402,6 +467,88 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile }) => {
                           </div>
                       </div>
                   </div>
+
+                  {/* Bloc Parrainage (Conditionnel) */}
+                  {formData.origin === 'Parrainage' && (
+                    <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100 animate-in slide-in-from-top-2 duration-300">
+                        <div className="flex items-center gap-2 mb-4">
+                            <Plus size={14} className="text-indigo-600" />
+                            <h4 className="text-[11px] font-black text-indigo-600 uppercase tracking-widest">Identification du Parrain</h4>
+                        </div>
+                        
+                        <div className="relative" ref={sponsorSearchRef}>
+                            {selectedSponsor ? (
+                                <div className="flex items-center justify-between bg-white border border-indigo-200 rounded-xl px-5 py-4 shadow-sm animate-in zoom-in-95">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
+                                            <User size={16} />
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Parrain sélectionné</p>
+                                            <p className="text-sm font-black text-gray-900 uppercase">{selectedSponsor.name}</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Check size={18} className="text-green-500" />
+                                        <button 
+                                            type="button"
+                                            onClick={() => { setSelectedSponsor(null); setSponsorSearch(''); }}
+                                            className="p-2 hover:bg-red-50 text-gray-300 hover:text-red-500 rounded-lg transition-all"
+                                        >
+                                            <X size={18} />
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="relative group">
+                                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-300 group-focus-within:text-indigo-600 transition-colors" size={18} />
+                                        <input 
+                                            value={sponsorSearch}
+                                            onChange={(e) => {
+                                                setSponsorSearch(e.target.value);
+                                                setShowSponsorResults(true);
+                                            }}
+                                            onFocus={() => setShowSponsorResults(true)}
+                                            type="text" 
+                                            placeholder="Rechercher le parrain dans l'annuaire (ex: DUBOIS)..." 
+                                            className="w-full pl-12 pr-10 py-3.5 bg-white border border-indigo-100 rounded-xl text-sm font-bold text-gray-800 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 transition-all placeholder:text-indigo-200" 
+                                        />
+                                    </div>
+
+                                    {showSponsorResults && sponsorSuggestions.length > 0 && (
+                                        <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-100 rounded-2xl shadow-2xl overflow-hidden z-50 animate-in zoom-in-95">
+                                            {sponsorSuggestions.map((sponsor) => (
+                                                <button
+                                                    key={sponsor.id}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setSelectedSponsor({ id: sponsor.id, name: sponsor.name });
+                                                        setShowSponsorResults(false);
+                                                    }}
+                                                    className="w-full px-5 py-4 text-left hover:bg-indigo-50 flex items-center gap-4 border-b border-gray-50 last:border-0 group transition-all"
+                                                >
+                                                    <div className="p-1.5 bg-gray-50 rounded-lg text-gray-300 group-hover:text-indigo-600 transition-all">
+                                                        <User size={16} />
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-[13px] font-bold text-gray-900 uppercase">{sponsor.name}</span>
+                                                        <span className="text-[11px] text-gray-400 font-medium">{sponsor.location || 'Localisation non définie'}</span>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                    {showSponsorResults && sponsorSearch.length >= 2 && sponsorSuggestions.length === 0 && (
+                                        <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-100 rounded-2xl shadow-2xl p-6 text-center z-50">
+                                            <p className="text-xs font-bold text-gray-400 italic">Aucun client trouvé pour cette recherche.</p>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    </div>
+                  )}
               </div>
 
               {/* Agenceur référent */}
@@ -425,7 +572,17 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile }) => {
               <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100 shadow-inner">
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex flex-col">
-                      <p className="text-[11px] font-bold text-gray-900 uppercase tracking-wider">Consentement RGPD</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-[11px] font-bold text-gray-900 uppercase tracking-wider">Consentement RGPD</p>
+                        <button 
+                          type="button" 
+                          onClick={() => setShowRgpdInfo(true)}
+                          className="text-indigo-500 hover:text-indigo-700 transition-colors flex items-center gap-1"
+                        >
+                          <Info size={12} />
+                          <span className="text-[10px] font-bold border-b border-indigo-200">En savoir plus</span>
+                        </button>
+                      </div>
                       <p className="text-[10px] text-gray-400 font-medium italic mt-0.5">Obligatoire pour les communications marketing</p>
                     </div>
                     <div className="flex items-center space-x-4">
@@ -450,7 +607,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile }) => {
           <div className="p-8 border-t border-gray-100 flex justify-center bg-[#FBFBFB]">
               <button 
                 type="submit"
-                disabled={isLoading || !formData.lastName || !formData.firstName || !addressSearch || !formData.category || !formData.origin || !userProfile?.companyId}
+                disabled={isLoading || !formData.lastName || !formData.firstName || !addressSearch || !formData.category || !formData.origin || (formData.origin === 'Parrainage' && !selectedSponsor) || !userProfile?.companyId}
                 className="flex items-center space-x-3 px-12 py-4 bg-gray-900 text-white rounded-2xl text-[15px] font-bold shadow-2xl shadow-gray-200 hover:bg-black hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
               >
                   {isLoading ? (
@@ -458,11 +615,83 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile }) => {
                   ) : (
                     <Plus size={20} className="group-hover:rotate-90 transition-transform duration-300" />
                   )}
-                  <span>{isLoading ? 'Enregistrement en cours...' : 'Créer la fiche contact'}</span>
+                  <span>{isLoading ? 'Enregistrement en cours...' : 'Créer la fiche lead'}</span>
               </button>
           </div>
         </form>
       </div>
+
+      {/* Popup Informative RGPD */}
+      {showRgpdInfo && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600">
+                  <ShieldCheck size={20} />
+                </div>
+                <h3 className="text-lg font-bold text-gray-900">Protection de vos données</h3>
+              </div>
+              <button 
+                onClick={() => setShowRgpdInfo(false)}
+                className="p-2 hover:bg-gray-100 rounded-full transition-all text-gray-400"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
+              <p className="text-sm text-gray-600 leading-relaxed font-medium">
+                En validant, vous acceptez que vos données personnelles soient traitées par <strong>Xora</strong>, logiciel de gestion pour agenceurs :
+              </p>
+              
+              <div className="space-y-4">
+                <div className="space-y-1">
+                  <h4 className="text-[11px] font-black text-indigo-600 uppercase tracking-widest">Responsable du traitement</h4>
+                  <p className="text-[13px] text-gray-700 font-medium">Xora (éditeur du logiciel).</p>
+                </div>
+                
+                <div className="space-y-1">
+                  <h4 className="text-[11px] font-black text-indigo-600 uppercase tracking-widest">Finalité du traitement</h4>
+                  <p className="text-[13px] text-gray-700 font-medium leading-relaxed">Gestion de votre projet d’agencement, suivi de chantier, communication avec l’agenceur, facturation et support.</p>
+                </div>
+
+                <div className="space-y-1">
+                  <h4 className="text-[11px] font-black text-indigo-600 uppercase tracking-widest">Base légale</h4>
+                  <p className="text-[13px] text-gray-700 font-medium leading-relaxed">Votre consentement et/ou l’exécution d’un contrat.</p>
+                </div>
+
+                <div className="space-y-1">
+                  <h4 className="text-[11px] font-black text-indigo-600 uppercase tracking-widest">Durée de conservation</h4>
+                  <p className="text-[13px] text-gray-700 font-medium leading-relaxed">Vos données sont conservées pendant la durée du projet et jusqu’à 3 ans après le dernier contact, sauf obligation légale contraire.</p>
+                </div>
+
+                <div className="space-y-1">
+                  <h4 className="text-[11px] font-black text-indigo-600 uppercase tracking-widest">Accès aux données</h4>
+                  <p className="text-[13px] text-gray-700 font-medium leading-relaxed">Vos informations sont accessibles uniquement à l’agenceur et à Xora en tant que prestataire technique. Elles ne sont jamais revendues ni utilisées à d’autres fins.</p>
+                </div>
+
+                <div className="space-y-1">
+                  <h4 className="text-[11px] font-black text-indigo-600 uppercase tracking-widest">Vos droits</h4>
+                  <p className="text-[13px] text-gray-700 font-medium leading-relaxed">Conformément au Règlement Général sur la Protection des Données (RGPD), vous disposez d’un droit d’accès, de rectification, d’opposition, de suppression et de portabilité de vos données.</p>
+                </div>
+
+                <div className="space-y-1">
+                  <h4 className="text-[11px] font-black text-indigo-600 uppercase tracking-widest">Contact</h4>
+                  <p className="text-[13px] text-gray-700 font-medium leading-relaxed">Pour exercer vos droits, vous pouvez écrire à : <span className="text-indigo-600 font-bold">contact@xora.fr</span></p>
+                </div>
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-100 bg-gray-50/50 flex justify-end">
+              <button 
+                onClick={handleAcceptRgpd}
+                className="px-8 py-3 bg-gray-900 text-white rounded-xl text-sm font-bold shadow-lg hover:bg-black transition-all"
+              >
+                Compris
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

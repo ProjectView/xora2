@@ -10,8 +10,8 @@ import {
   CheckSquare
 } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot } from '@firebase/firestore';
-import { Appointment } from '../types';
+import { collection, query, where, onSnapshot, doc, getDoc } from '@firebase/firestore';
+import { Appointment, Task } from '../types';
 import AddTaskModal from './AddTaskModal';
 
 // Import des nouvelles vues
@@ -32,6 +32,9 @@ const Agenda: React.FC<AgendaProps> = ({ userProfile }) => {
   const [filterUser, setFilterUser] = useState(userProfile?.name || '');
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
+  
+  // State pour l'édition de tâche depuis l'agenda
+  const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
 
   // --- Chargement des collaborateurs de la société ---
   useEffect(() => {
@@ -73,6 +76,28 @@ const Agenda: React.FC<AgendaProps> = ({ userProfile }) => {
       return matchesSearch && matchesUser;
     });
   }, [appointments, searchQuery, filterUser]);
+
+  // --- Logique d'ouverture de tâche depuis l'agenda ---
+  const handleAppointmentClick = async (rdv: Appointment) => {
+    // On vérifie si ce RDV est lié à une tâche (champ taskId présent en base)
+    const taskId = (rdv as any).taskId;
+    if (taskId) {
+      setIsLoading(true);
+      try {
+        const taskSnap = await getDoc(doc(db, 'tasks', taskId));
+        if (taskSnap.exists()) {
+          setTaskToEdit({ id: taskSnap.id, ...taskSnap.data() } as Task);
+          setIsAddTaskModalOpen(true);
+        } else {
+          alert("La tâche liée à ce rendez-vous n'existe plus.");
+        }
+      } catch (e) {
+        console.error("Erreur chargement tâche liée:", e);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  };
 
   // --- Logique de Navigation Temporelle ---
   const changeDate = (direction: 'next' | 'prev') => {
@@ -146,7 +171,7 @@ const Agenda: React.FC<AgendaProps> = ({ userProfile }) => {
 
           <div className="flex items-center gap-3">
             <button 
-              onClick={() => setIsAddTaskModalOpen(true)}
+              onClick={() => { setTaskToEdit(null); setIsAddTaskModalOpen(true); }}
               className="flex items-center gap-2 px-5 py-3 bg-white border border-gray-200 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:bg-gray-50 transition-all active:scale-95"
             >
                <CheckSquare size={16} className="text-indigo-500" />
@@ -200,7 +225,8 @@ const Agenda: React.FC<AgendaProps> = ({ userProfile }) => {
             {viewMode === 'Jours' && (
               <AgendaDayView 
                 currentDate={currentDate} 
-                appointments={filteredAppointments} 
+                appointments={filteredAppointments}
+                onAppointmentClick={handleAppointmentClick}
               />
             )}
             {viewMode === 'Semaine' && (
@@ -208,12 +234,14 @@ const Agenda: React.FC<AgendaProps> = ({ userProfile }) => {
                 currentDate={currentDate} 
                 weekDays={weekDays} 
                 appointments={filteredAppointments} 
+                onAppointmentClick={handleAppointmentClick}
               />
             )}
             {viewMode === 'Mois' && (
               <AgendaMonthView 
                 currentDate={currentDate} 
                 appointments={filteredAppointments} 
+                onAppointmentClick={handleAppointmentClick}
               />
             )}
           </div>
@@ -222,8 +250,9 @@ const Agenda: React.FC<AgendaProps> = ({ userProfile }) => {
 
       <AddTaskModal 
         isOpen={isAddTaskModalOpen}
-        onClose={() => setIsAddTaskModalOpen(false)}
+        onClose={() => { setIsAddTaskModalOpen(false); setTaskToEdit(null); }}
         userProfile={userProfile}
+        taskToEdit={taskToEdit}
       />
     </div>
   );

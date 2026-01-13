@@ -19,10 +19,11 @@ import {
   PenSquare,
   Trash2,
   CheckCircle2,
-  Clock
+  Clock,
+  GripVertical
 } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot, limit, doc, deleteDoc, updateDoc } from '@firebase/firestore';
+import { collection, query, where, onSnapshot, limit, doc, deleteDoc, updateDoc, writeBatch } from '@firebase/firestore';
 import { FinancialKPI, Task, Client, Page } from '../types';
 import AddTaskModal from './AddTaskModal';
 
@@ -30,7 +31,7 @@ interface DashboardProps {
   userProfile?: any;
   onClientClick?: (client: Client) => void;
   onAddClientClick?: () => void;
-  onNavigate?: (page: Page) => void;
+  onNavigate?: (page: Page, options?: { tab?: string }) => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAddClientClick, onNavigate }) => {
@@ -44,6 +45,9 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  
+  // Drag and Drop state
+  const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
 
   // Search states
   const [searchQuery, setSearchQuery] = useState('');
@@ -66,7 +70,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
       }, errorHandler
     );
 
-    // 2. Charger TOUS les clients (pour les compteurs et la recherche)
+    // 2. Charger TOUS les clients
     const unsubscribeClients = onSnapshot(
       query(collection(db, 'clients'), where('companyId', '==', userProfile.companyId)),
       (snapshot) => {
@@ -74,7 +78,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
       }, errorHandler
     );
 
-    // 3. Charger TOUS les projets (pour les compteurs)
+    // 3. Charger TOUS les projets
     const unsubscribeProjects = onSnapshot(
       query(collection(db, 'projects'), where('companyId', '==', userProfile.companyId)),
       (snapshot) => {
@@ -83,12 +87,25 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
       }, errorHandler
     );
 
-    // 4. Charger les tâches prioritaires
+    // 4. Charger les tâches (Tri côté client pour éviter l'erreur d'index composite Firestore)
     const unsubscribeTasks = onSnapshot(
-      query(collection(db, 'tasks'), where('companyId', '==', userProfile.companyId), limit(20)),
+      query(
+        collection(db, 'tasks'), 
+        where('companyId', '==', userProfile.companyId),
+        limit(50)
+      ),
       (snapshot) => {
-        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Task[];
-        setTasks(data.filter(t => t.status !== 'completed').slice(0, 8));
+        const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+        
+        // Tri manuel côté client par orderIndex (ou date de création si absent)
+        const sortedData = data.sort((a, b) => {
+          const indexA = a.orderIndex ?? 999;
+          const indexB = b.orderIndex ?? 999;
+          return indexA - indexB;
+        });
+
+        // On affiche uniquement les tâches non terminées pour le Dashboard
+        setTasks(sortedData.filter(t => t.status !== 'completed').slice(0, 8));
       }, errorHandler
     );
 
@@ -100,7 +117,41 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
     };
   }, [userProfile?.companyId]);
 
-  // --- CALCUL DYNAMIQUE DES COMPTEURS ---
+  // Logic pour le Drag & Drop
+  const onDragStart = (index: number) => {
+    setDraggedItemIndex(index);
+  };
+
+  const onDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    if (draggedItemIndex === null || draggedItemIndex === index) return;
+
+    const newTasks = [...tasks];
+    const draggedItem = newTasks[draggedItemIndex];
+    newTasks.splice(draggedItemIndex, 1);
+    newTasks.splice(index, 0, draggedItem);
+    
+    setDraggedItemIndex(index);
+    setTasks(newTasks);
+  };
+
+  const onDragEnd = async () => {
+    setDraggedItemIndex(null);
+    if (!userProfile?.companyId) return;
+
+    // Persister le nouvel ordre dans Firestore
+    try {
+      const batch = writeBatch(db);
+      tasks.forEach((task, idx) => {
+        const taskRef = doc(db, 'tasks', task.id);
+        batch.update(taskRef, { orderIndex: idx });
+      });
+      await batch.commit();
+    } catch (e) {
+      console.error("Erreur sauvegarde ordre tâches:", e);
+    }
+  };
+
   const statusCards = useMemo(() => {
     return [
       { 
@@ -334,11 +385,19 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
                 if(card.color === 'cyan') { bgClass = "bg-[#CFFAFE]"; textClass = "text-cyan-900"; arrowClass = "text-cyan-700"; }
                 if(card.color === 'orange') { bgClass = "bg-[#FFEDD5]"; textClass = "text-orange-900"; arrowClass = "text-orange-700"; }
 
+                const handleCardClick = () => {
+                  if (card.id === 'leads') {
+                    onNavigate?.('directory', { tab: 'Leads' });
+                  } else {
+                    onNavigate?.('projects');
+                  }
+                };
+
                 return (
                     <div key={card.id} className={`${bgClass} rounded-xl p-4 flex flex-col justify-between relative group hover:shadow-md transition-all min-h-[95px] border border-white/50`}>
                         <div className="flex justify-between items-start">
                              <span className={`font-bold text-[11px] uppercase tracking-wider ${textClass}`}>{card.label}</span>
-                             <div className="bg-white/60 p-1 rounded-md cursor-pointer hover:bg-white transition-colors" onClick={() => card.id === 'leads' ? onNavigate?.('directory') : onNavigate?.('projects')}>
+                             <div className="bg-white/60 p-1 rounded-md cursor-pointer hover:bg-white transition-colors" onClick={handleCardClick}>
                                 <ArrowUpRight size={14} className={arrowClass} />
                              </div>
                         </div>
@@ -384,10 +443,17 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
                         <p className="text-[14px] font-bold text-gray-400">Toutes les tâches sont à jour ! 🎉</p>
                       </div>
                     ) : tasks.map((task, index) => (
-                        <div key={task.id} className="group bg-white border border-gray-100 rounded-[20px] p-5 flex flex-col lg:flex-row lg:items-center justify-between hover:border-indigo-100 hover:shadow-lg transition-all">
+                        <div 
+                          key={task.id} 
+                          draggable 
+                          onDragStart={() => onDragStart(index)}
+                          onDragOver={(e) => onDragOver(e, index)}
+                          onDragEnd={onDragEnd}
+                          className={`group bg-white border border-gray-100 rounded-[20px] p-5 flex flex-col lg:flex-row lg:items-center justify-between hover:border-indigo-100 hover:shadow-lg transition-all ${draggedItemIndex === index ? 'opacity-40 border-indigo-400 border-dashed bg-indigo-50 shadow-inner scale-95 cursor-grabbing' : 'cursor-default'}`}
+                        >
                             <div className="flex items-center space-x-5 mb-4 lg:mb-0">
-                                <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-[#FBFBFB] border border-gray-100 rounded-xl text-[12px] font-black text-gray-300 group-hover:bg-indigo-50 group-hover:text-indigo-400 transition-colors">
-                                    {index + 1}
+                                <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-[#FBFBFB] border border-gray-100 rounded-xl text-gray-300 group-hover:bg-indigo-50 group-hover:text-indigo-400 transition-colors cursor-grab active:cursor-grabbing">
+                                    <GripVertical size={18} />
                                 </div>
                                 <div>
                                     <div className="flex items-center space-x-3 flex-wrap gap-y-1">

@@ -50,19 +50,36 @@ interface AddProjectModalProps {
   userProfile: any;
   clientId?: string;
   clientName?: string;
+  projectToEdit?: any;
+  initialData?: {
+    categorie: string;
+    origine: string;
+    sousOrigine: string;
+  };
+  onProjectCreated?: (projectId: string) => void;
 }
 
-const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, userProfile, clientId, clientName }) => {
+const AddProjectModal: React.FC<AddProjectModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  userProfile, 
+  clientId, 
+  clientName, 
+  projectToEdit,
+  initialData,
+  onProjectCreated 
+}) => {
+  const isEdit = !!projectToEdit;
   const [isLoading, setIsLoading] = useState(false);
   const [clients, setClients] = useState<any[]>([]);
   const [agenceurs, setAgenceurs] = useState<any[]>([]);
   const [clientAddresses, setClientAddresses] = useState<string[]>([]);
   
   const [formData, setFormData] = useState({
-    categorie: '',
-    origine: '',
-    sousOrigine: '',
-    projectName: "Pose d'une cuisine",
+    categorie: initialData?.categorie || '',
+    origine: initialData?.origine || '',
+    sousOrigine: initialData?.sousOrigine || '',
+    projectName: "",
     agenceurReferent: userProfile?.name || '',
     agenceurAvatar: userProfile?.avatar || '',
     agenceurUid: userProfile?.uid || '',
@@ -70,6 +87,35 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, user
     metier: 'Cuisiniste',
     selectedClientId: clientId || ''
   });
+
+  // Mise à jour si les initialData ou projectToEdit changent
+  useEffect(() => {
+    if (isOpen) {
+      if (projectToEdit) {
+        setFormData({
+          categorie: projectToEdit.categorie || '',
+          origine: projectToEdit.origine || '',
+          sousOrigine: projectToEdit.sousOrigine || '',
+          projectName: projectToEdit.projectName || '',
+          agenceurReferent: projectToEdit.agenceur?.name || '',
+          agenceurAvatar: projectToEdit.agenceur?.avatar || '',
+          agenceurUid: projectToEdit.agenceur?.uid || '',
+          adresseChantier: projectToEdit.details?.adresseChantier || '',
+          metier: projectToEdit.metier || 'Cuisiniste',
+          selectedClientId: projectToEdit.clientId || ''
+        });
+      } else if (initialData) {
+        setFormData(prev => ({
+          ...prev,
+          categorie: initialData.categorie,
+          origine: initialData.origine,
+          sousOrigine: initialData.sousOrigine,
+          projectName: "", 
+          selectedClientId: clientId || prev.selectedClientId
+        }));
+      }
+    }
+  }, [isOpen, initialData, clientId, projectToEdit]);
 
   // Chargement des Agenceurs
   useEffect(() => {
@@ -89,7 +135,8 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, user
       
       setAgenceurs(fetched);
       
-      if (!formData.agenceurUid && userProfile) {
+      // Si on n'est pas en édition et qu'on n'a pas encore d'agenceur, on met l'utilisateur actuel
+      if (!isEdit && !formData.agenceurUid && userProfile) {
         setFormData(prev => ({
           ...prev,
           agenceurReferent: userProfile.name,
@@ -100,7 +147,7 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, user
     });
 
     return () => unsubscribeUsers();
-  }, [isOpen, userProfile?.companyId]);
+  }, [isOpen, userProfile?.companyId, isEdit]);
 
   // Chargement des Adresses
   useEffect(() => {
@@ -117,13 +164,14 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, user
           });
         }
         setClientAddresses(addresses);
-        if (addresses.length > 0 && !formData.adresseChantier) {
+        // Si on n'est pas en édition et qu'on n'a pas d'adresse, on prend la première
+        if (!isEdit && addresses.length > 0 && !formData.adresseChantier) {
           setFormData(prev => ({ ...prev, adresseChantier: addresses[0] }));
         }
       }
     });
     return () => unsubClient();
-  }, [isOpen, clientId]);
+  }, [isOpen, clientId, isEdit]);
 
   useEffect(() => {
     if (!isOpen || !userProfile?.companyId) return;
@@ -140,14 +188,13 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, user
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userProfile?.companyId || !formData.categorie || !formData.origine) return;
+    if (!userProfile?.companyId || !formData.categorie || !formData.origine || !formData.projectName) return;
     setIsLoading(true);
     try {
       const finalClientId = clientId || formData.selectedClientId;
       const finalClientName = clientName || clients.find(c => c.id === formData.selectedClientId)?.name || 'Client Inconnu';
       
-      // 1. Créer le projet
-      await addDoc(collection(db, 'projects'), {
+      const payload: any = {
         projectName: formData.projectName,
         clientName: finalClientName,
         clientId: finalClientId,
@@ -156,26 +203,42 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, user
         categorie: formData.categorie,
         origine: formData.origine,
         sousOrigine: formData.sousOrigine,
-        addedDate: new Date().toLocaleDateString('fr-FR'),
-        progress: 2,
-        status: 'Études à réaliser',
-        statusColor: 'bg-[#FAE8FF] text-[#D946EF]',
         agenceur: {
           uid: formData.agenceurUid,
           name: formData.agenceurReferent,
           avatar: formData.agenceurAvatar
         },
-        details: { adresseChantier: formData.adresseChantier },
-        createdAt: new Date().toISOString()
-      });
+        "details.adresseChantier": formData.adresseChantier
+      };
 
-      // 2. Incrémenter le compteur de projets sur la fiche client
-      const clientRef = doc(db, 'clients', finalClientId);
-      await updateDoc(clientRef, {
-        projectCount: increment(1)
-      });
+      if (isEdit && projectToEdit) {
+        // Mode Mise à jour
+        await updateDoc(doc(db, 'projects', projectToEdit.id), payload);
+        onClose();
+      } else {
+        // Mode Création
+        const projectRef = await addDoc(collection(db, 'projects'), {
+          ...payload,
+          details: { adresseChantier: formData.adresseChantier },
+          addedDate: new Date().toLocaleDateString('fr-FR'),
+          progress: 2,
+          status: 'Lead à qualifier',
+          statusColor: 'bg-purple-100 text-purple-600',
+          createdAt: new Date().toISOString()
+        });
 
-      onClose();
+        // Incrémenter le compteur de projets sur la fiche client
+        const clientRef = doc(db, 'clients', finalClientId);
+        await updateDoc(clientRef, {
+          projectCount: increment(1)
+        });
+
+        if (onProjectCreated) {
+          onProjectCreated(projectRef.id);
+        } else {
+          onClose();
+        }
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -193,7 +256,9 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, user
             <div className="flex items-center gap-3">
               <div className="p-2.5 border border-gray-200 rounded-xl text-gray-800 bg-white shadow-sm"><Briefcase size={20} /></div>
               <div>
-                <h2 className="text-[17px] font-bold text-gray-900 tracking-tight">Créer une fiche projet</h2>
+                <h2 className="text-[17px] font-bold text-gray-900 tracking-tight">
+                  {isEdit ? "Modifier la fiche projet" : "Créer une fiche projet"}
+                </h2>
                 <p className="text-[11px] text-gray-400 font-medium">Pour le client : <span className="text-gray-900 font-bold uppercase">{clientName}</span></p>
               </div>
             </div>
@@ -235,7 +300,7 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, user
             <div className="bg-[#FBFBFB] border border-gray-100 rounded-2xl p-6 grid grid-cols-12 gap-6">
               <div className="col-span-4 space-y-1.5">
                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Titre du projet*</label>
-                <input required type="text" value={formData.projectName} onChange={(e) => setFormData({...formData, projectName: e.target.value})} className="w-full bg-white border border-gray-100 rounded-xl px-4 py-3 text-[14px] text-gray-900 outline-none focus:border-gray-900 transition-all font-bold shadow-sm" />
+                <input required type="text" value={formData.projectName} onChange={(e) => setFormData({...formData, projectName: e.target.value})} placeholder="Ex: Pose d'une cuisine" className="w-full bg-white border border-gray-100 rounded-xl px-4 py-3 text-[14px] text-gray-900 outline-none focus:border-gray-900 transition-all font-bold shadow-sm" />
               </div>
               <div className="col-span-4 space-y-1.5">
                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Agenceur référent</label>
@@ -277,8 +342,9 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({ isOpen, onClose, user
           </div>
           <div className="px-8 py-8 flex gap-4 bg-[#FBFBFB] border-t border-gray-100">
             <button type="button" onClick={onClose} className="flex-1 px-6 py-4 bg-white border border-gray-200 rounded-2xl text-[14px] font-bold text-gray-700 hover:bg-gray-50 transition-all shadow-sm">Abandonner</button>
-            <button type="submit" disabled={isLoading || !formData.categorie || !formData.origine || clientAddresses.length === 0} className="flex-1 flex items-center justify-center gap-3 px-6 py-4 bg-[#1A1C23] text-white rounded-2xl text-[14px] font-bold shadow-xl hover:bg-black transition-all disabled:opacity-50">
-              {isLoading ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />} Créer la fiche projet
+            <button type="submit" disabled={isLoading || !formData.categorie || !formData.origine || clientAddresses.length === 0 || !formData.projectName} className="flex-1 flex items-center justify-center gap-3 px-6 py-4 bg-[#1A1C23] text-white rounded-2xl text-[14px] font-bold shadow-xl hover:bg-black transition-all disabled:opacity-50">
+              {isLoading ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />} 
+              {isEdit ? "Mettre à jour le projet" : "Créer la fiche projet"}
             </button>
           </div>
         </form>

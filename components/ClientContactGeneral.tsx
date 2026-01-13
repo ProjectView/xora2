@@ -45,6 +45,13 @@ const HIERARCHY_DATA: Record<string, Record<string, string[]>> = {
   }
 };
 
+// Formateur de téléphone : ajoute un espace tous les 2 chiffres
+const formatPhone = (val: string) => {
+  const numbers = val.replace(/\D/g, ''); 
+  const limited = numbers.substring(0, 10);
+  return limited.replace(/(\d{2})(?=\d)/g, '$1 ').trim();
+};
+
 interface AdditionalContact {
   id: string;
   civility: string;
@@ -172,9 +179,9 @@ const ContactCard: React.FC<ContactCardProps> = ({
                 <input 
                   type="text" 
                   value={data.phone} 
-                  onChange={(e) => onFieldChange('phone', e.target.value)}
+                  onChange={(e) => onFieldChange('phone', formatPhone(e.target.value))}
                   onBlur={onBlur}
-                  placeholder="06..." 
+                  placeholder="06 12 34 56 78" 
                   className="flex-1 bg-white border border-gray-200 rounded-r-xl px-4 py-2.5 text-sm font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm" 
                 />
               </div>
@@ -188,9 +195,9 @@ const ContactCard: React.FC<ContactCardProps> = ({
                 <input 
                   type="text" 
                   value={data.fixed} 
-                  onChange={(e) => onFieldChange('fixed', e.target.value)}
+                  onChange={(e) => onFieldChange('fixed', formatPhone(e.target.value))}
                   onBlur={onBlur}
-                  placeholder="04..." 
+                  placeholder="04 67 00 00 00" 
                   className="flex-1 bg-white border border-gray-200 rounded-r-xl px-4 py-2.5 text-sm font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm" 
                 />
               </div>
