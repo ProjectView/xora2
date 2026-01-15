@@ -15,6 +15,7 @@ import UserProfile from './components/UserProfile';
 import CompanyManagement from './components/CompanyManagement';
 import KPIManagement from './components/KPIManagement';
 import LoginPage from './components/LoginPage';
+import AddTaskModal from './components/AddTaskModal';
 import { Page, Client } from './types';
 import { Construction, AlertCircle } from 'lucide-react';
 import { auth, db } from './firebase';
@@ -30,6 +31,8 @@ function App() {
   const [currentPage, setCurrentPage] = useState<Page>('dashboard');
   const [directoryActiveTab, setDirectoryActiveTab] = useState('Tous');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [taskModalForClient, setTaskModalForClient] = useState<{id: string, name: string} | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -115,6 +118,18 @@ function App() {
   const handleProjectSelect = (project: any) => {
     setSelectedProject(project);
     setCurrentPage('projects');
+  };
+
+  const handleClientCreated = (clientId: string, clientName: string) => {
+    // Fermer la modale lead
+    setIsModalOpen(false);
+    
+    // Attendre un petit instant pour la transition fluide
+    setTimeout(() => {
+      // Stocker les infos client pour la modale tâche
+      setTaskModalForClient({ id: clientId, name: clientName });
+      setIsTaskModalOpen(true);
+    }, 400);
   };
 
   const handleLogout = async () => {
@@ -260,6 +275,17 @@ function App() {
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
         userProfile={userProfile}
+        onClientCreated={handleClientCreated}
+      />
+
+      <AddTaskModal 
+        isOpen={isTaskModalOpen}
+        onClose={() => {
+          setIsTaskModalOpen(false);
+          setTaskModalForClient(null);
+        }}
+        userProfile={userProfile}
+        initialClientId={taskModalForClient?.id}
       />
     </div>
   );

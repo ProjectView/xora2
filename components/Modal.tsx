@@ -49,9 +49,10 @@ interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   userProfile: any;
+  onClientCreated?: (clientId: string, clientName: string) => void;
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCreated }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [addressSearch, setAddressSearch] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
@@ -217,8 +218,9 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile }) => {
     
     setIsLoading(true);
     try {
+      const clientName = `${formData.firstName} ${formData.lastName}`.toUpperCase().trim();
       const newClient = {
-        name: `${formData.firstName} ${formData.lastName}`.toUpperCase().trim(),
+        name: clientName,
         addedBy: {
           uid: userProfile.uid,
           name: userProfile.name,
@@ -238,8 +240,13 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile }) => {
         projectCount: 0
       };
 
-      await addDoc(collection(db, 'clients'), newClient);
-      onClose();
+      const docRef = await addDoc(collection(db, 'clients'), newClient);
+      
+      if (onClientCreated) {
+        onClientCreated(docRef.id, clientName);
+      } else {
+        onClose();
+      }
     } catch (error) {
       console.error("Erreur creation client:", error);
       alert("Erreur lors de l'enregistrement.");

@@ -42,6 +42,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
   const [clientData, setClientData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [taskCount, setTaskCount] = useState(0);
+  const [appointmentCount, setAppointmentCount] = useState(0);
 
   // États pour les fonctionnalités de header
   const [isEditTitleMode, setIsEditTitleMode] = useState(false);
@@ -62,12 +63,22 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
     return () => unsub();
   }, [initialProject.id]);
 
+  // Compteur de tâches en temps réel
   useEffect(() => {
     const q = query(collection(db, 'tasks'), where('projectId', '==', initialProject.id));
     const unsubTasks = onSnapshot(q, (snapshot) => {
       setTaskCount(snapshot.size);
     });
     return () => unsubTasks();
+  }, [initialProject.id]);
+
+  // Compteur de rendez-vous en temps réel
+  useEffect(() => {
+    const q = query(collection(db, 'appointments'), where('projectId', '==', initialProject.id));
+    const unsubAppts = onSnapshot(q, (snapshot) => {
+      setAppointmentCount(snapshot.size);
+    });
+    return () => unsubAppts();
   }, [initialProject.id]);
 
   useEffect(() => {
@@ -117,7 +128,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
   const mainTabs = [
     { label: 'Etude client', key: 'Etude client' },
     { label: `Tâches (${taskCount})`, key: 'Tâches' },
-    { label: 'Calendrier', key: 'Calendrier' },
+    { label: `Calendrier (${appointmentCount})`, key: 'Calendrier' },
     { label: 'Documents', key: 'Documents' }
   ];
 

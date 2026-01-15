@@ -44,6 +44,20 @@ const HIERARCHY_DATA: Record<string, Record<string, string[]>> = {
   }
 };
 
+const METIERS_OPTIONS = [
+  "Cuisine",
+  "Cuisine extérieure",
+  "Salle de bain",
+  "Mobilier",
+  "Dressing",
+  "Bureau",
+  "Cave à vin",
+  "Home",
+  "Carrelage",
+  "Menuiserie",
+  "Autre"
+];
+
 interface AddProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -84,7 +98,7 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({
     agenceurAvatar: userProfile?.avatar || '',
     agenceurUid: userProfile?.uid || '',
     adresseChantier: '',
-    metier: 'Cuisiniste',
+    metier: 'Cuisine',
     selectedClientId: clientId || ''
   });
 
@@ -101,7 +115,7 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({
           agenceurAvatar: projectToEdit.agenceur?.avatar || '',
           agenceurUid: projectToEdit.agenceur?.uid || '',
           adresseChantier: projectToEdit.details?.adresseChantier || '',
-          metier: projectToEdit.metier || 'Cuisiniste',
+          metier: projectToEdit.metier || 'Cuisine',
           selectedClientId: projectToEdit.clientId || ''
         });
       } else if (initialData) {
@@ -330,13 +344,18 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({
               </div>
             </div>
             <div className="bg-[#FBFBFB] border border-gray-100 rounded-2xl p-6 space-y-3">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Métier concerné par l'étude*</label>
-              <div className="grid grid-cols-3 gap-4">
-                 {['Cuisiniste', 'Bainiste', 'Rénovateur'].map(m => (
-                   <button key={m} type="button" onClick={() => setFormData({...formData, metier: m})} className={`px-4 py-3 rounded-xl text-sm font-bold border transition-all flex items-center justify-center gap-3 ${formData.metier === m ? 'bg-gray-900 border-gray-900 text-white shadow-lg' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-400'}`}>
-                     {m}
-                   </button>
-                 ))}
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Métier concerné par l'étude*</label>
+              <div className="relative">
+                <select 
+                  value={formData.metier} 
+                  onChange={(e) => setFormData({...formData, metier: e.target.value})} 
+                  className="w-full appearance-none bg-white border border-gray-100 rounded-xl px-5 py-4 text-[14px] text-gray-900 outline-none focus:border-gray-900 transition-all font-bold shadow-sm"
+                >
+                  {METIERS_OPTIONS.map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+                <ChevronDown size={20} className="absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               </div>
             </div>
           </div>

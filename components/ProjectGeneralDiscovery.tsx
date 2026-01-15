@@ -1,9 +1,7 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ChevronDown, Plus, Minus, FileText, Search, MapPin, Loader2, Upload, File } from 'lucide-react';
+import { ChevronDown, Plus, Minus, FileText, Search, MapPin, Loader2, Upload, File, X, Star, Calendar } from 'lucide-react';
 import { db } from '../firebase';
-// Use @firebase/firestore to fix named export resolution issues
-import { doc, updateDoc } from '@firebase/firestore';
+import { doc, updateDoc, getDoc } from '@firebase/firestore';
 
 // Structure de données hiérarchique identique aux autres composants
 const HIERARCHY_DATA: Record<string, Record<string, string[]>> = {
@@ -45,7 +43,14 @@ const HIERARCHY_DATA: Record<string, Record<string, string[]>> = {
   }
 };
 
-// --- Composants UI Déplacés hors du rendu pour éviter la perte de focus ---
+const LISTE_CONFRERES = [
+  "Arthur Bonnet", "Autres", "Aviva", "But", "Caseo", "Coméra", "Cuisine +", 
+  "Cuisine Référence", "Cuisinella", "Cuisines Omega", "Cuisines Vendom", 
+  "Darty", "Eco cuisine", "Elton", "Envia Cuisines", "Hygéna", "Ikea", 
+  "Inova", "Intérieurs Privés", "Ixina", "Kitchen Family", "Leicht", 
+  "Maxima", "MH Cuisine", "Mobalpa", "Morel", "Noblessa", "Perène", 
+  "Schmidt", "Socooc", "Stosa", "Aran"
+];
 
 const Section = ({ title, children, action }: { title: string; children?: React.ReactNode; action?: React.ReactNode }) => (
   <div className="bg-white border border-gray-100 rounded-[24px] p-8 space-y-6 shadow-sm">
@@ -95,21 +100,31 @@ const Toggle = ({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
   </div>
 );
 
-const CurrencyInput = ({ value, onChange, placeholder = "0" }: any) => (
-  <div className="relative group">
-    <input 
-      type="text" 
-      placeholder={placeholder} 
-      value={value || ''} 
-      onChange={(e) => {
-        const val = e.target.value.replace(/[^0-9.,]/g, '');
-        onChange(val);
-      }}
-      className="w-full bg-white border border-gray-100 rounded-xl px-4 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-gray-300 transition-all shadow-sm"
-    />
-    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold group-focus-within:text-gray-900">€</span>
-  </div>
-);
+const CurrencyInput = ({ value, onChange, placeholder = "0" }: any) => {
+  const formatValue = (val: string | number) => {
+    if (val === undefined || val === null || val === '') return '';
+    const numericValue = val.toString().replace(/[^0-9]/g, '');
+    return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value.replace(/[^0-9]/g, '');
+    onChange(rawValue);
+  };
+
+  return (
+    <div className="relative group">
+      <input 
+        type="text" 
+        placeholder={placeholder} 
+        value={formatValue(value)} 
+        onChange={handleInputChange}
+        className="w-full bg-white border border-gray-100 rounded-xl px-4 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-gray-300 transition-all shadow-sm pr-10"
+      />
+      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold group-focus-within:text-gray-900 pointer-events-none">€</span>
+    </div>
+  );
+};
 
 interface ProjectGeneralDiscoveryProps {
   project: any;
@@ -118,6 +133,13 @@ interface ProjectGeneralDiscoveryProps {
 
 const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ project, userProfile }) => {
   const companyName = userProfile?.companyName || 'Ma Société';
+  
+  // Date Input Refs
+  const signatureDateRef = useRef<HTMLInputElement>(null);
+  const chantierDateRef = useRef<HTMLInputElement>(null);
+  const installationDateRef = useRef<HTMLInputElement>(null);
+  const remisePlansDateRef = useRef<HTMLInputElement>(null);
+  const permisDateRef = useRef<HTMLInputElement>(null);
 
   // Address Search states
   const [chantierSearch, setChantierSearch] = useState(project.details?.adresseChantier || '');
@@ -126,9 +148,36 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
   const [suggestionsFactu, setSuggestionsFactu] = useState<any[]>([]);
   const [isSearchingChantier, setIsSearchingChantier] = useState(false);
   const [isSearchingFactu, setIsSearchingFactu] = useState(false);
+  const [showChantierSuggestions, setShowChantierSuggestions] = useState(false);
+  const [showFactuSuggestions, setShowFactuSuggestions] = useState(false);
+  
+  const [clientAddresses, setClientAddresses] = useState<any[]>([]);
   
   const chantierRef = useRef<HTMLDivElement>(null);
   const factuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!project?.clientId) return;
+    const fetchClient = async () => {
+      const snap = await getDoc(doc(db, 'clients', project.clientId));
+      if (snap.exists()) {
+        const data = snap.data();
+        const addresses: any[] = [];
+        if (data.details?.address) {
+          addresses.push({ label: data.details.address, type: 'Principale', isMain: true });
+        }
+        if (data.details?.properties && Array.isArray(data.details.properties)) {
+          data.details.properties.forEach((p: any) => {
+            if (p.address && p.address !== data.details.address) {
+              addresses.push({ label: p.address, type: p.usage || 'Secondaire', isMain: false });
+            }
+          });
+        }
+        setClientAddresses(addresses);
+      }
+    };
+    fetchClient();
+  }, [project?.clientId]);
 
   const handleUpdate = async (field: string, value: any) => {
     try {
@@ -139,10 +188,22 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
     }
   };
 
-  // BAN API Search for Chantier
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (chantierRef.current && !chantierRef.current.contains(event.target as Node)) {
+        setShowChantierSuggestions(false);
+      }
+      if (factuRef.current && !factuRef.current.contains(event.target as Node)) {
+        setShowFactuSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   useEffect(() => {
     const fetchAddr = async () => {
-      if (chantierSearch.length < 4 || chantierSearch === project.details?.adresseChantier) {
+      if (chantierSearch.length < 4 || clientAddresses.some(a => a.label === chantierSearch)) {
         setSuggestionsChantier([]);
         return;
       }
@@ -155,12 +216,11 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
     };
     const timer = setTimeout(fetchAddr, 300);
     return () => clearTimeout(timer);
-  }, [chantierSearch, project.details?.adresseChantier]);
+  }, [chantierSearch, clientAddresses]);
 
-  // BAN API Search for Facturation
   useEffect(() => {
     const fetchAddr = async () => {
-      if (factuSearch.length < 4 || factuSearch === project.details?.adresseFacturation) {
+      if (factuSearch.length < 4 || clientAddresses.some(a => a.label === factuSearch)) {
         setSuggestionsFactu([]);
         return;
       }
@@ -173,18 +233,16 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
     };
     const timer = setTimeout(fetchAddr, 300);
     return () => clearTimeout(timer);
-  }, [factuSearch, project.details?.adresseFacturation]);
+  }, [factuSearch, clientAddresses]);
 
-  // Hierarchy calculations
+  const categories = useMemo(() => Object.keys(HIERARCHY_DATA), []);
   const currentCategory = project.details?.category || '';
   const currentOrigin = project.origine || '';
-  const categories = useMemo(() => Object.keys(HIERARCHY_DATA), []);
   const origins = useMemo(() => currentCategory ? Object.keys(HIERARCHY_DATA[currentCategory] || {}) : [], [currentCategory]);
   const subOrigins = useMemo(() => (currentCategory && currentOrigin) ? (HIERARCHY_DATA[currentCategory]?.[currentOrigin] || []) : [], [currentCategory, currentOrigin]);
 
   const formatDateForInput = (dateStr: string) => {
     if (!dateStr) return '';
-    // Expected date format in project is DD/MM/YYYY, input type date needs YYYY-MM-DD
     const parts = dateStr.split('/');
     if (parts.length === 3) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
     return dateStr;
@@ -198,6 +256,29 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
     const [y, m, d] = val.split('-');
     handleUpdate(field, `${d}/${m}/${y}`);
   };
+
+  const openDatePicker = (ref: React.RefObject<HTMLInputElement>) => {
+    if (ref.current) {
+      try {
+        if ('showPicker' in HTMLInputElement.prototype) {
+          ref.current.showPicker();
+        } else {
+          ref.current.click();
+        }
+      } catch (e) {
+        ref.current.click();
+      }
+    }
+  };
+
+  const updateConfrereField = (index: number, field: string, value: any) => {
+    const currentList = [...(project.details?.confreresList || [])];
+    if (!currentList[index]) currentList[index] = {};
+    currentList[index] = { ...currentList[index], [field]: value };
+    handleUpdate('details.confreresList', currentList);
+  };
+
+  const nbConfreres = project.details?.nbConfreres || 0;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
@@ -251,38 +332,42 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
 
       {/* 3. Projet */}
       <Section title="Projet">
-        {/* Adresse Chantier avec recherche */}
         <Field label="Adresse chantier" colSpan="col-span-12 md:col-span-6">
           <div className="relative" ref={chantierRef}>
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <div className="relative group">
+              <MapPin className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${isSearchingChantier ? 'text-indigo-500' : 'text-gray-400 group-focus-within:text-indigo-600'}`} size={18} />
               <input 
                 type="text" 
                 value={chantierSearch}
-                onChange={(e) => setChantierSearch(e.target.value)}
-                placeholder="Rechercher une adresse..."
-                className="w-full bg-white border border-gray-100 rounded-xl pl-12 pr-10 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-gray-300 shadow-sm transition-all"
+                onChange={(e) => {
+                  setChantierSearch(e.target.value);
+                  setShowChantierSuggestions(true);
+                }}
+                onFocus={() => setShowChantierSuggestions(true)}
+                placeholder="Choisir ou saisir l'adresse du chantier..."
+                className="w-full bg-white border border-gray-100 rounded-xl pl-12 pr-12 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 shadow-sm transition-all"
               />
-              {isSearchingChantier && <div className="absolute right-4 top-1/2 -translate-y-1/2"><Loader2 size={16} className="animate-spin text-gray-300" /></div>}
+              {chantierSearch && (
+                <button 
+                  onClick={() => { setChantierSearch(''); handleUpdate('details.adresseChantier', ''); }}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 hover:text-red-500 transition-colors"
+                >
+                  <X size={16} />
+                </button>
+              )}
             </div>
-            {suggestionsChantier.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-100 rounded-xl shadow-2xl overflow-hidden z-50 animate-in zoom-in-95 duration-200">
+            {showChantierSuggestions && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-100 rounded-2xl shadow-2xl overflow-hidden z-50 animate-in zoom-in-95 duration-200 flex flex-col">
+                {clientAddresses.map((addr, idx) => (
+                  <button key={idx} type="button" onClick={() => { setChantierSearch(addr.label); handleUpdate('details.adresseChantier', addr.label); setShowChantierSuggestions(false); }} className="w-full px-5 py-4 text-left hover:bg-indigo-50 flex items-start gap-4 border-b border-gray-50 last:border-0 group transition-all">
+                    <div className={`mt-1 p-1.5 rounded-lg ${addr.isMain ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-400'}`}><MapPin size={16} /></div>
+                    <div className="flex flex-col"><span className="text-[13px] font-bold text-gray-900">{addr.label}</span><span className="text-[10px] text-indigo-400 font-black uppercase tracking-tighter">{addr.type}</span></div>
+                  </button>
+                ))}
                 {suggestionsChantier.map((f: any) => (
-                  <button 
-                    key={f.properties.id} 
-                    type="button" 
-                    onClick={() => {
-                      setChantierSearch(f.properties.label);
-                      handleUpdate('details.adresseChantier', f.properties.label);
-                      setSuggestionsChantier([]);
-                    }}
-                    className="w-full px-5 py-4 text-left hover:bg-gray-50 flex items-start gap-4 border-b border-gray-50 last:border-0 group"
-                  >
-                    <div className="mt-1 p-1.5 bg-gray-50 rounded-lg text-gray-300 group-hover:text-gray-900 transition-all"><MapPin size={16} /></div>
-                    <div className="flex flex-col">
-                      <span className="text-[13px] font-bold text-gray-900">{f.properties.name}</span>
-                      <span className="text-[11px] text-gray-400">{f.properties.postcode} {f.properties.city}</span>
-                    </div>
+                  <button key={f.properties.id} type="button" onClick={() => { setChantierSearch(f.properties.label); handleUpdate('details.adresseChantier', f.properties.label); setShowChantierSuggestions(false); }} className="w-full px-5 py-4 text-left hover:bg-indigo-50 flex items-start gap-4 border-b border-gray-50 last:border-0 group transition-all">
+                    <div className="mt-1 p-1.5 bg-gray-50 rounded-lg text-gray-300 group-hover:text-indigo-600 transition-all"><Search size={16} /></div>
+                    <div className="flex flex-col"><span className="text-[13px] font-bold text-gray-900">{f.properties.name}</span><span className="text-[11px] text-gray-400 font-medium">{f.properties.postcode} {f.properties.city}</span></div>
                   </button>
                 ))}
               </div>
@@ -290,38 +375,34 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
           </div>
         </Field>
 
-        {/* Adresse Facturation avec recherche */}
         <Field label="Adresse facturation" colSpan="col-span-12 md:col-span-6">
           <div className="relative" ref={factuRef}>
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <div className="relative group">
+              <MapPin className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors ${isSearchingFactu ? 'text-indigo-500' : 'text-gray-400 group-focus-within:text-indigo-600'}`} size={18} />
               <input 
                 type="text" 
                 value={factuSearch}
-                onChange={(e) => setFactuSearch(e.target.value)}
-                placeholder="Rechercher une adresse..."
-                className="w-full bg-white border border-gray-100 rounded-xl pl-12 pr-10 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-gray-300 shadow-sm transition-all"
+                onChange={(e) => {
+                  setFactuSearch(e.target.value);
+                  setShowFactuSuggestions(true);
+                }}
+                onFocus={() => setShowFactuSuggestions(true)}
+                placeholder="Choisir ou saisir l'adresse de facturation..."
+                className="w-full bg-white border border-gray-100 rounded-xl pl-12 pr-12 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 shadow-sm transition-all"
               />
-              {isSearchingFactu && <div className="absolute right-4 top-1/2 -translate-y-1/2"><Loader2 size={16} className="animate-spin text-gray-300" /></div>}
             </div>
-            {suggestionsFactu.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-100 rounded-xl shadow-2xl overflow-hidden z-50 animate-in zoom-in-95 duration-200">
+            {showFactuSuggestions && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-100 rounded-2xl shadow-2xl overflow-hidden z-50 animate-in zoom-in-95 duration-200 flex flex-col">
+                {clientAddresses.map((addr, idx) => (
+                  <button key={idx} type="button" onClick={() => { setFactuSearch(addr.label); handleUpdate('details.adresseFacturation', addr.label); setShowFactuSuggestions(false); }} className="w-full px-5 py-4 text-left hover:bg-indigo-50 flex items-start gap-4 border-b border-gray-50 last:border-0 group transition-all">
+                    <div className={`mt-1 p-1.5 rounded-lg ${addr.isMain ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-400'}`}><MapPin size={16} /></div>
+                    <div className="flex flex-col"><span className="text-[13px] font-bold text-gray-900">{addr.label}</span><span className="text-[10px] text-indigo-400 font-black uppercase tracking-tighter">{addr.type}</span></div>
+                  </button>
+                ))}
                 {suggestionsFactu.map((f: any) => (
-                  <button 
-                    key={f.properties.id} 
-                    type="button" 
-                    onClick={() => {
-                      setFactuSearch(f.properties.label);
-                      handleUpdate('details.adresseFacturation', f.properties.label);
-                      setSuggestionsFactu([]);
-                    }}
-                    className="w-full px-5 py-4 text-left hover:bg-gray-50 flex items-start gap-4 border-b border-gray-50 last:border-0 group"
-                  >
-                    <div className="mt-1 p-1.5 bg-gray-50 rounded-lg text-gray-300 group-hover:text-gray-900 transition-all"><MapPin size={16} /></div>
-                    <div className="flex flex-col">
-                      <span className="text-[13px] font-bold text-gray-900">{f.properties.name}</span>
-                      <span className="text-[11px] text-gray-400">{f.properties.postcode} {f.properties.city}</span>
-                    </div>
+                  <button key={f.properties.id} type="button" onClick={() => { setFactuSearch(f.properties.label); handleUpdate('details.adresseFacturation', f.properties.label); setShowFactuSuggestions(false); }} className="w-full px-5 py-4 text-left hover:bg-indigo-50 flex items-start gap-4 border-b border-gray-50 last:border-0 group transition-all">
+                    <div className="mt-1 p-1.5 bg-gray-50 rounded-lg text-gray-300 group-hover:text-indigo-600 transition-all"><Search size={16} /></div>
+                    <div className="flex flex-col"><span className="text-[13px] font-bold text-gray-900">{f.properties.name}</span><span className="text-[11px] text-gray-400 font-medium">{f.properties.postcode} {f.properties.city}</span></div>
                   </button>
                 ))}
               </div>
@@ -330,41 +411,62 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
         </Field>
 
         <Field label="Métier de l'étude" colSpan="col-span-12 md:col-span-3">
-          <Select value={project.metier} options={['Cuisiniste', 'Bainiste', 'Rénovateur']} onChange={(v: string) => handleUpdate('metier', v)} />
+          <Select value={project.metier} options={['Cuisine', 'Cuisine extérieure', 'Salle de bain', 'Mobilier', 'Dressing', 'Bureau']} onChange={(v: string) => handleUpdate('metier', v)} />
         </Field>
         <Field label="Exécution des travaux" colSpan="col-span-12 md:col-span-3">
-          <Select value={project.details?.executionTravaux} options={['Immédiat', 'Dans 3 mois', 'Dans 6 mois']} onChange={(v: string) => handleUpdate('details.executionTravaux', v)} />
+          <Select value={project.details?.executionTravaux} options={['Immédiat', 'Dans 3 mois', 'Dans 6 mois', 'Dans 1 an']} onChange={(v: string) => handleUpdate('details.executionTravaux', v)} />
         </Field>
         <Field label="Artisan.s nécessaire.s" colSpan="col-span-6 md:col-span-2">
           <div className="pt-2"><Toggle value={project.details?.artisansNecessaires || false} onChange={(v) => handleUpdate('details.artisansNecessaires', v)} /></div>
         </Field>
         <Field label="Artisan.s" colSpan="col-span-12 md:col-span-4">
-          <Select value={project.details?.artisanSelection} options={['Choisir']} onChange={(v: string) => handleUpdate('details.artisanSelection', v)} />
+          <Select value={project.details?.artisanSelection} options={['Choisir un artisan...']} onChange={(v: string) => handleUpdate('details.artisanSelection', v)} />
         </Field>
 
         <Field label="Date Prévisionnelle Signature" colSpan="col-span-12 md:col-span-4">
-          <input 
-            type="date" 
-            value={formatDateForInput(project.details?.dateSignature)} 
-            onChange={(e) => handleDateChange('details.dateSignature', e.target.value)}
-            className="w-full bg-white border border-gray-100 rounded-xl px-4 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-gray-300 shadow-sm transition-all" 
-          />
+          <div className="relative group" onClick={() => openDatePicker(signatureDateRef)}>
+            <Calendar 
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-indigo-600 transition-colors cursor-pointer z-10" 
+              size={18} 
+            />
+            <input 
+              ref={signatureDateRef}
+              type="date" 
+              value={formatDateForInput(project.details?.dateSignature)} 
+              onChange={(e) => handleDateChange('details.dateSignature', e.target.value)} 
+              className="w-full bg-white border border-gray-100 rounded-xl pl-12 pr-4 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm transition-all cursor-pointer" 
+            />
+          </div>
         </Field>
         <Field label="Dates prévisionnel chantier" colSpan="col-span-12 md:col-span-4">
-          <input 
-            type="date" 
-            value={formatDateForInput(project.details?.dateChantier)} 
-            onChange={(e) => handleDateChange('details.dateChantier', e.target.value)}
-            className="w-full bg-white border border-gray-100 rounded-xl px-4 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-gray-300 shadow-sm transition-all" 
-          />
+          <div className="relative group" onClick={() => openDatePicker(chantierDateRef)}>
+            <Calendar 
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-indigo-600 transition-colors cursor-pointer z-10" 
+              size={18} 
+            />
+            <input 
+              ref={chantierDateRef}
+              type="date" 
+              value={formatDateForInput(project.details?.dateChantier)} 
+              onChange={(e) => handleDateChange('details.dateChantier', e.target.value)} 
+              className="w-full bg-white border border-gray-100 rounded-xl pl-12 pr-4 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm transition-all cursor-pointer" 
+            />
+          </div>
         </Field>
         <Field label="Date installation cuisine" colSpan="col-span-12 md:col-span-4">
-          <input 
-            type="date" 
-            value={formatDateForInput(project.details?.dateInstallation)} 
-            onChange={(e) => handleDateChange('details.dateInstallation', e.target.value)}
-            className="w-full bg-white border border-gray-100 rounded-xl px-4 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-gray-300 shadow-sm transition-all" 
-          />
+          <div className="relative group" onClick={() => openDatePicker(installationDateRef)}>
+            <Calendar 
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-indigo-600 transition-colors cursor-pointer z-10" 
+              size={18} 
+            />
+            <input 
+              ref={installationDateRef}
+              type="date" 
+              value={formatDateForInput(project.details?.dateInstallation)} 
+              onChange={(e) => handleDateChange('details.dateInstallation', e.target.value)} 
+              className="w-full bg-white border border-gray-100 rounded-xl pl-12 pr-4 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm transition-all cursor-pointer" 
+            />
+          </div>
         </Field>
       </Section>
 
@@ -379,32 +481,6 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
         <Field label="Budget global du chantier" colSpan="col-span-12 md:col-span-4">
           <CurrencyInput value={project.details?.budgetGlobal} onChange={(v: string) => handleUpdate('details.budgetGlobal', v)} />
         </Field>
-        
-        <Field label="Financement du projet" colSpan="col-span-12 md:col-span-6">
-          <Select 
-            value={project.details?.financement} 
-            options={['Comptant', 'Organisme de financement', 'Autre']} 
-            onChange={(v: string) => handleUpdate('details.financement', v)} 
-          />
-        </Field>
-
-        {project.details?.financement === 'Organisme de financement' && (
-          <Field label="Organisme financement" colSpan="col-span-12 md:col-span-6">
-            <Select value={project.details?.organismeFinancement} options={['Cetelem', 'Sofinco', 'Franfinance', 'Banque Populaire', 'Autre']} onChange={(v: string) => handleUpdate('details.organismeFinancement', v)} />
-          </Field>
-        )}
-
-        {project.details?.financement === 'Autre' && (
-          <Field label="Précisez le financement" colSpan="col-span-12 md:col-span-6">
-            <input 
-              type="text" 
-              placeholder="Ex: Prêt familial..." 
-              value={project.details?.financementAutre || ''} 
-              onChange={(e) => handleUpdate('details.financementAutre', e.target.value)}
-              className="w-full bg-white border border-gray-100 rounded-xl px-4 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-gray-300 shadow-sm"
-            />
-          </Field>
-        )}
       </Section>
 
       {/* 5. Installation */}
@@ -419,61 +495,72 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
           <Select value={project.details?.livraisonCharge} options={[companyName, 'Client', 'Autre']} onChange={(v: string) => handleUpdate('details.livraisonCharge', v)} />
         </Field>
         
-        {/* Plans techniques sur une nouvelle ligne */}
         <div className="col-span-12 pt-4">
-           <Field label="Plans techniques" colSpan="col-span-12">
+           <Field label="Plans techniques nécessaires" colSpan="col-span-12">
              <div className="pt-1"><Toggle value={project.details?.plansTechniques || false} onChange={(v) => handleUpdate('details.plansTechniques', v)} /></div>
            </Field>
         </div>
 
-        {/* Encart de dépôt si activé */}
         {project.details?.plansTechniques && (
           <div className="col-span-12 animate-in slide-in-from-top-4 duration-300">
-             <div className="border-2 border-dashed border-gray-100 rounded-3xl p-10 bg-gray-50/50 flex flex-col items-center justify-center text-center group hover:border-indigo-400 transition-all cursor-pointer">
-                <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-gray-300 mb-4 shadow-sm group-hover:scale-110 group-hover:text-indigo-500 transition-all">
-                   <Upload size={32} />
+             <Field label="Date de remise des plans" colSpan="col-span-12 md:col-span-12">
+                <div className="relative group" onClick={() => openDatePicker(remisePlansDateRef)}>
+                  <Calendar 
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-indigo-600 transition-colors cursor-pointer z-10" 
+                    size={18} 
+                  />
+                  <input 
+                    ref={remisePlansDateRef}
+                    type="date" 
+                    value={formatDateForInput(project.details?.dateRemisePlans)} 
+                    onChange={(e) => handleDateChange('details.dateRemisePlans', e.target.value)}
+                    className="w-full bg-white border border-gray-100 rounded-xl pl-12 pr-4 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 shadow-sm transition-all cursor-pointer" 
+                  />
                 </div>
-                <h4 className="text-sm font-bold text-gray-800">Déposer les plans techniques</h4>
-                <p className="text-[11px] text-gray-400 mt-1 max-w-xs">Formats acceptés : PDF, JPG, PNG, DWG. (Max 10Mo)</p>
-                
-                {/* Visualisation simulée de fichiers */}
-                <div className="flex flex-wrap gap-4 mt-8 justify-center">
-                   {[1, 2].map(i => (
-                     <div key={i} className="bg-white border border-gray-100 rounded-xl p-3 flex items-center gap-3 shadow-sm min-w-[180px]">
-                        <div className="p-2 bg-indigo-50 text-indigo-500 rounded-lg"><File size={16} /></div>
-                        <div className="text-left">
-                           <p className="text-[10px] font-bold text-gray-900">plan_technique_0{i}.pdf</p>
-                           <p className="text-[9px] text-gray-400 uppercase font-bold">PDF • 2.4 MB</p>
-                        </div>
-                     </div>
-                   ))}
-                </div>
-             </div>
+             </Field>
           </div>
         )}
       </Section>
 
       {/* 6. Concurrence */}
       <Section title="Concurrence">
-        <Field label="Nombre de confrères consultés" colSpan="col-span-12 md:col-span-3">
+        <Field label="Nombre de confrères consultés" colSpan="col-span-12 md:col-span-4">
           <div className="flex items-center justify-between bg-white border border-gray-100 rounded-xl px-4 py-2 shadow-sm">
              <span className="text-[13px] font-bold text-gray-200 italic">Confrères</span>
              <div className="flex items-center gap-3">
                 <button type="button" onClick={() => handleUpdate('details.nbConfreres', Math.max(0, (project.details?.nbConfreres || 0) - 1))} className="w-7 h-7 bg-gray-100 text-gray-600 rounded flex items-center justify-center hover:bg-gray-200"><Minus size={14} /></button>
-                <span className="text-sm font-bold text-gray-900">{project.details?.nbConfreres || 0}</span>
+                <span className="text-sm font-bold text-gray-900">{nbConfreres}</span>
                 <button type="button" onClick={() => handleUpdate('details.nbConfreres', (project.details?.nbConfreres || 0) + 1)} className="w-7 h-7 bg-gray-800 text-white rounded flex items-center justify-center hover:bg-black shadow-md"><Plus size={14} /></button>
              </div>
           </div>
         </Field>
-        <Field label="Confrères" colSpan="col-span-12 md:col-span-3">
-          <Select value={project.details?.confrereNom} options={['Sélectionner']} onChange={(v: string) => handleUpdate('details.confrereNom', v)} />
-        </Field>
-        <Field label="Budget" colSpan="col-span-12 md:col-span-3">
-          <CurrencyInput value={project.details?.budgetConcurrence} onChange={(v: string) => handleUpdate('details.budgetConcurrence', v)} />
-        </Field>
-        <Field label="Statut des projets" colSpan="col-span-12 md:col-span-3">
-          <Select value={project.details?.statutProjetsConcurrence} options={['Sélectionner']} onChange={(v: string) => handleUpdate('details.statutProjetsConcurrence', v)} />
-        </Field>
+        
+        {/* Dynamic fields for each consultant */}
+        {nbConfreres > 0 && Array.from({ length: nbConfreres }).map((_, idx) => (
+          <div key={idx} className="col-span-12 grid grid-cols-1 md:grid-cols-12 gap-6 pt-4 border-t border-gray-50 mt-2 animate-in slide-in-from-top-2 duration-300">
+            <Field label={`Confrère #${idx + 1}`} colSpan="col-span-12 md:col-span-4">
+              <Select 
+                value={project.details?.confreresList?.[idx]?.nom || ''} 
+                options={LISTE_CONFRERES} 
+                onChange={(v: string) => updateConfrereField(idx, 'nom', v)} 
+                placeholder="Choisir un confrère..."
+              />
+            </Field>
+            <Field label="Budget annoncé" colSpan="col-span-12 md:col-span-4">
+              <CurrencyInput 
+                value={project.details?.confreresList?.[idx]?.budget || ''} 
+                onChange={(v: string) => updateConfrereField(idx, 'budget', v)} 
+              />
+            </Field>
+            <Field label="Statut du projet" colSpan="col-span-12 md:col-span-4">
+              <Select 
+                value={project.details?.confreresList?.[idx]?.statut || ''} 
+                options={['En attente de devis', 'Devenu trop cher', 'Signature imminente', 'Projet arrêté']} 
+                onChange={(v: string) => updateConfrereField(idx, 'statut', v)} 
+              />
+            </Field>
+          </div>
+        ))}
       </Section>
 
       {/* 7. Permis de construire */}
@@ -481,14 +568,27 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
         <Field label="Permis de construire accordé" colSpan="col-span-6 md:col-span-3">
           <div className="pt-2"><Toggle value={project.details?.permisAccorde || false} onChange={(v) => handleUpdate('details.permisAccorde', v)} /></div>
         </Field>
-        <Field label="Date d'obtention Permis" colSpan="col-span-12 md:col-span-3">
-          <input 
-            type="date" 
-            value={formatDateForInput(project.details?.datePermis)} 
-            onChange={(e) => handleDateChange('details.datePermis', e.target.value)}
-            className="w-full bg-white border border-gray-100 rounded-xl px-4 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-gray-300 shadow-sm transition-all" 
-          />
-        </Field>
+        
+        {project.details?.permisAccorde && (
+          <Field label="Date d'obtention Permis" colSpan="col-span-12 md:col-span-3">
+            <div 
+              className="relative group animate-in slide-in-from-left-2 duration-300 cursor-pointer"
+              onClick={() => openDatePicker(permisDateRef)}
+            >
+              <Calendar 
+                className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-indigo-600 transition-colors cursor-pointer z-10" 
+                size={18} 
+              />
+              <input 
+                ref={permisDateRef}
+                type="date" 
+                value={formatDateForInput(project.details?.datePermis)} 
+                onChange={(e) => handleDateChange('details.datePermis', e.target.value)} 
+                className="w-full bg-white border border-gray-100 rounded-xl pl-12 pr-4 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm transition-all cursor-pointer" 
+              />
+            </div>
+          </Field>
+        )}
       </Section>
     </div>
   );

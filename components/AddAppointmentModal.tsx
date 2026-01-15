@@ -1,8 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
-import { X, Calendar, Clock, MapPin, Loader2, Check, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { X, Calendar, Clock, MapPin, Loader2, Check, ChevronDown, ChevronLeft, ChevronRight, Save } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, addDoc, query, where, getDocs, serverTimestamp } from '@firebase/firestore';
+import { collection, addDoc, query, where, getDocs, doc, updateDoc } from '@firebase/firestore';
+import { Appointment } from '../types';
 
 interface AddAppointmentModalProps {
   isOpen: boolean;
@@ -11,6 +12,7 @@ interface AddAppointmentModalProps {
   clientId: string;
   clientName: string;
   initialProjectId?: string;
+  appointmentToEdit?: Appointment | null;
 }
 
 const AddAppointmentModal: React.FC<AddAppointmentModalProps> = ({ 
@@ -19,10 +21,14 @@ const AddAppointmentModal: React.FC<AddAppointmentModalProps> = ({
   userProfile, 
   clientId, 
   clientName,
-  initialProjectId = ''
+  initialProjectId = '',
+  appointmentToEdit = null
 }) => {
+  const isEdit = !!appointmentToEdit;
   const [isLoading, setIsLoading] = useState(false);
   const [projects, setProjects] = useState<any[]>([]);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [currentCalendarMonth, setCurrentCalendarMonth] = useState(new Date());
 
   const [formData, setFormData] = useState({
     title: '',
@@ -38,22 +44,47 @@ const AddAppointmentModal: React.FC<AddAppointmentModalProps> = ({
   const typeOptions = ['R1', 'R2', 'Métré', 'Pose', 'SAV', 'Autre'];
   const locationOptions = ['Showroom', 'Domicile', 'Visio', 'Autre'];
   
-  const collaborators = [
+  const collaborators = useMemo(() => [
     { name: userProfile?.name || 'Moi', avatar: userProfile?.avatar || 'https://i.pravatar.cc/150?u=loic' },
     { name: 'Thomas', avatar: 'https://i.pravatar.cc/150?u=admin' },
     { name: 'Céline', avatar: 'https://i.pravatar.cc/150?u=2' },
-  ];
+  ], [userProfile]);
 
   useEffect(() => {
     if (isOpen) {
-      setFormData(prev => ({
-        ...prev,
-        projectId: initialProjectId,
-        title: '',
-        date: ''
-      }));
+      if (appointmentToEdit) {
+        // Mode Edition
+        const [d, m, y] = appointmentToEdit.date.split('/');
+        const isoDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+        
+        setFormData({
+          title: appointmentToEdit.title,
+          type: appointmentToEdit.type,
+          date: isoDate,
+          startTime: appointmentToEdit.startTime,
+          endTime: appointmentToEdit.endTime,
+          location: appointmentToEdit.location,
+          projectId: appointmentToEdit.projectId || initialProjectId,
+          collaboratorIdx: collaborators.findIndex(c => c.name === appointmentToEdit.collaborator.name) || 0
+        });
+        setCurrentCalendarMonth(new Date(isoDate));
+      } else {
+        // Mode Création
+        setFormData({
+          title: '',
+          type: 'R1',
+          date: '',
+          startTime: '10:00',
+          endTime: '12:00',
+          location: 'Showroom',
+          projectId: initialProjectId,
+          collaboratorIdx: 0
+        });
+        setCurrentCalendarMonth(new Date());
+      }
+      setShowDatePicker(false);
     }
-  }, [isOpen, initialProjectId]);
+  }, [isOpen, appointmentToEdit, initialProjectId, collaborators]);
 
   useEffect(() => {
     if (!isOpen || !clientId) return;
@@ -65,7 +96,50 @@ const AddAppointmentModal: React.FC<AddAppointmentModalProps> = ({
     fetchProjects();
   }, [isOpen, clientId]);
 
-  if (!isOpen) return null;
+  const calendarDays = useMemo(() => {
+    const year = currentCalendarMonth.getFullYear();
+    const month = currentCalendarMonth.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    
+    let startOffset = firstDay.getDay();
+    startOffset = startOffset === 0 ? 6 : startOffset - 1;
+
+    const days = [];
+    const prevMonthLastDay = new Date(year, month, 0).getDate();
+
+    for (let i = startOffset - 1; i >= 0; i--) {
+      days.push({ day: prevMonthLastDay - i, month: month - 1, year, currentMonth: false });
+    }
+    for (let i = 1; i <= lastDay.getDate(); i++) {
+      days.push({ day: i, month, year, currentMonth: true });
+    }
+    const remaining = 42 - days.length;
+    for (let i = 1; i <= remaining; i++) {
+      days.push({ day: i, month: month + 1, year, currentMonth: false });
+    }
+    return days;
+  }, [currentCalendarMonth]);
+
+  const handleSelectDate = (day: number, month: number, year: number) => {
+    const selected = new Date(year, month, day);
+    const yyyy = selected.getFullYear();
+    const mm = String(selected.getMonth() + 1).padStart(2, '0');
+    const dd = String(selected.getDate()).padStart(2, '0');
+    setFormData({ ...formData, date: `${yyyy}-${mm}-${dd}` });
+    setShowDatePicker(false);
+  };
+
+  const changeMonth = (offset: number) => {
+    const next = new Date(currentCalendarMonth.getFullYear(), currentCalendarMonth.getMonth() + offset, 1);
+    setCurrentCalendarMonth(next);
+  };
+
+  const formatDisplayDate = (dateStr: string) => {
+    if (!dateStr) return 'Sélectionner une date';
+    const [y, m, d] = dateStr.split('-');
+    return `${d}/${m}/${y}`;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,10 +149,10 @@ const AddAppointmentModal: React.FC<AddAppointmentModalProps> = ({
     try {
       const selectedCollab = collaborators[formData.collaboratorIdx];
       const selectedProject = projects.find(p => p.id === formData.projectId);
+      const [y, m, d] = formData.date.split('-');
+      const rdvDate = `${d}/${m}/${y}`;
 
-      const rdvDate = new Date(formData.date).toLocaleDateString('fr-FR');
-
-      await addDoc(collection(db, 'appointments'), {
+      const appointmentData = {
         clientId,
         clientName,
         projectId: formData.projectId || null,
@@ -89,14 +163,22 @@ const AddAppointmentModal: React.FC<AddAppointmentModalProps> = ({
         startTime: formData.startTime,
         endTime: formData.endTime,
         location: formData.location,
-        status: 'confirmé',
+        status: isEdit ? (appointmentToEdit?.status || 'confirmé') : 'confirmé',
         collaborator: {
           name: selectedCollab.name,
           avatar: selectedCollab.avatar
         },
         companyId: userProfile.companyId,
-        createdAt: new Date().toISOString()
-      });
+      };
+
+      if (isEdit && appointmentToEdit) {
+        await updateDoc(doc(db, 'appointments', appointmentToEdit.id), appointmentData);
+      } else {
+        await addDoc(collection(db, 'appointments'), {
+          ...appointmentData,
+          createdAt: new Date().toISOString()
+        });
+      }
 
       onClose();
     } catch (error) {
@@ -106,9 +188,11 @@ const AddAppointmentModal: React.FC<AddAppointmentModalProps> = ({
     }
   };
 
+  if (!isOpen) return null;
+
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
+      <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-2xl overflow-visible flex flex-col animate-in zoom-in-95 duration-300">
         <form onSubmit={handleSubmit}>
           <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between bg-[#FBFBFB]">
             <div className="flex items-center gap-4">
@@ -116,7 +200,7 @@ const AddAppointmentModal: React.FC<AddAppointmentModalProps> = ({
                 <Calendar size={20} />
               </div>
               <div>
-                <h2 className="text-[18px] font-bold text-gray-900">Prendre un rendez-vous</h2>
+                <h2 className="text-[18px] font-bold text-gray-900">{isEdit ? 'Modifier le rendez-vous' : 'Prendre un rendez-vous'}</h2>
                 <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest">Client : {clientName}</p>
               </div>
             </div>
@@ -168,33 +252,84 @@ const AddAppointmentModal: React.FC<AddAppointmentModalProps> = ({
             </div>
 
             <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
+              <div className="space-y-2 relative">
                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Date*</label>
-                <input 
-                  required
-                  type="date" 
-                  className="w-full bg-[#F8F9FA] border border-gray-100 rounded-xl px-4 py-3.5 text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-indigo-400 transition-all shadow-sm"
-                  value={formData.date}
-                  onChange={e => setFormData({...formData, date: e.target.value})}
-                />
+                <button 
+                  type="button"
+                  onClick={() => setShowDatePicker(!showDatePicker)}
+                  className="w-full bg-[#F8F9FA] border border-gray-100 rounded-xl px-4 py-3.5 text-sm font-bold text-gray-900 outline-none text-left flex items-center justify-between shadow-sm hover:border-indigo-400 transition-all"
+                >
+                  <span className={formData.date ? 'text-gray-900' : 'text-gray-400'}>
+                    {formatDisplayDate(formData.date)}
+                  </span>
+                  <Calendar size={16} className="text-gray-400" />
+                </button>
+
+                {showDatePicker && (
+                  <div className="absolute top-full left-0 mt-2 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[100] w-[280px] p-4 animate-in fade-in zoom-in-95 duration-200">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-[13px] font-black uppercase text-gray-900">
+                        {currentCalendarMonth.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+                      </span>
+                      <div className="flex gap-1">
+                        <button type="button" onClick={() => changeMonth(-1)} className="p-1 hover:bg-gray-100 rounded-lg text-gray-400"><ChevronLeft size={16} /></button>
+                        <button type="button" onClick={() => changeMonth(1)} className="p-1 hover:bg-gray-100 rounded-lg text-gray-400"><ChevronRight size={16} /></button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-7 gap-1 mb-2">
+                      {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map(d => (
+                        <div key={d} className="text-[10px] font-black text-gray-300 text-center uppercase">{d}</div>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-7 gap-1">
+                      {calendarDays.map((d, i) => {
+                        const dateStr = `${d.year}-${String(d.month + 1).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`;
+                        const isSelected = formData.date === dateStr;
+                        const isToday = new Date().toLocaleDateString('fr-FR') === new Date(d.year, d.month, d.day).toLocaleDateString('fr-FR');
+                        
+                        return (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => handleSelectDate(d.day, d.month, d.year)}
+                            className={`h-8 w-8 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center ${
+                              isSelected ? 'bg-indigo-600 text-white shadow-lg' : 
+                              isToday ? 'bg-indigo-50 text-indigo-600' :
+                              d.currentMonth ? 'text-gray-700 hover:bg-gray-50' : 'text-gray-200'
+                            }`}
+                          >
+                            {d.day}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
+
               <div className="space-y-2">
                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Début</label>
-                <input 
-                  type="time" 
-                  className="w-full bg-[#F8F9FA] border border-gray-100 rounded-xl px-4 py-3.5 text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-indigo-400 transition-all shadow-sm"
-                  value={formData.startTime}
-                  onChange={e => setFormData({...formData, startTime: e.target.value})}
-                />
+                <div className="relative">
+                  <input 
+                    type="time" 
+                    className="w-full appearance-none bg-[#F8F9FA] border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-indigo-400 transition-all shadow-sm"
+                    value={formData.startTime}
+                    onChange={e => setFormData({...formData, startTime: e.target.value})}
+                  />
+                  <Clock size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                </div>
               </div>
               <div className="space-y-2">
                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Fin</label>
-                <input 
-                  type="time" 
-                  className="w-full bg-[#F8F9FA] border border-gray-100 rounded-xl px-4 py-3.5 text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-indigo-400 transition-all shadow-sm"
-                  value={formData.endTime}
-                  onChange={e => setFormData({...formData, endTime: e.target.value})}
-                />
+                <div className="relative">
+                  <input 
+                    type="time" 
+                    className="w-full appearance-none bg-[#F8F9FA] border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-indigo-400 transition-all shadow-sm"
+                    value={formData.endTime}
+                    onChange={e => setFormData({...formData, endTime: e.target.value})}
+                  />
+                  <Clock size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                </div>
               </div>
             </div>
 
@@ -217,7 +352,7 @@ const AddAppointmentModal: React.FC<AddAppointmentModalProps> = ({
                 <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider ml-1">Projet lié (Optionnel)</label>
                 <div className="relative">
                   <select 
-                    className="w-full appearance-none bg-[#F8F9FA] border border-gray-100 rounded-xl px-4 py-3.5 text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-indigo-400 transition-all shadow-sm"
+                    className="w-full appearance-none bg-[#F8F9FA] border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-indigo-400 transition-all shadow-sm"
                     value={formData.projectId}
                     onChange={e => setFormData({...formData, projectId: e.target.value})}
                   >
@@ -232,9 +367,9 @@ const AddAppointmentModal: React.FC<AddAppointmentModalProps> = ({
 
           <div className="p-8 border-t border-gray-100 bg-[#FBFBFB] flex justify-end gap-3">
             <button type="button" onClick={onClose} className="px-6 py-3.5 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all">Annuler</button>
-            <button type="submit" disabled={isLoading} className="flex items-center gap-2 px-8 py-3.5 bg-gray-900 text-white rounded-xl text-sm font-bold shadow-lg hover:bg-black transition-all disabled:opacity-50">
-              {isLoading ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
-              Confirmer le rendez-vous
+            <button type="submit" disabled={isLoading || !formData.date} className="flex items-center gap-2 px-8 py-3.5 bg-gray-900 text-white rounded-xl text-sm font-bold shadow-lg hover:bg-black transition-all disabled:opacity-50">
+              {isLoading ? <Loader2 size={18} className="animate-spin" /> : (isEdit ? <Save size={18} /> : <Check size={18} />)}
+              {isEdit ? 'Enregistrer les modifications' : 'Confirmer le rendez-vous'}
             </button>
           </div>
         </form>

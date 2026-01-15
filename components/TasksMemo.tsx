@@ -14,7 +14,9 @@ import {
   ChevronRight,
   ChevronsLeft,
   CheckSquare,
-  FileText
+  FileText,
+  AlertTriangle,
+  X
 } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, doc, deleteDoc, updateDoc, writeBatch } from '@firebase/firestore';
@@ -33,6 +35,8 @@ const TasksMemo: React.FC<TasksMemoProps> = ({ userProfile }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   // Drag and Drop state
   const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
@@ -101,13 +105,18 @@ const TasksMemo: React.FC<TasksMemoProps> = ({ userProfile }) => {
     }
   };
 
-  const handleDeleteTask = async (id: string) => {
-    if (!window.confirm("Supprimer cette tâche ?")) return;
+  const confirmDeleteTask = async () => {
+    if (!taskToDelete) return;
+    setIsDeleting(true);
     try {
-      await deleteDoc(doc(db, 'tasks', id));
+      await deleteDoc(doc(db, 'tasks', taskToDelete.id));
+      setTaskToDelete(null);
       setActiveMenuId(null);
     } catch (e) {
-      console.error(e);
+      console.error("Erreur lors de la suppression:", e);
+      alert("Une erreur est survenue lors de la suppression.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -338,9 +347,9 @@ const TasksMemo: React.FC<TasksMemoProps> = ({ userProfile }) => {
                                     </button>
                                     {activeMenuId === task.id && (
                                         <>
-                                            <div className="fixed inset-0 z-10" onClick={() => setActiveMenuId(null)} />
-                                            <div className="absolute right-0 top-10 bg-white border border-gray-200 rounded-xl shadow-2xl z-20 w-40 py-2 animate-in fade-in zoom-in-95 duration-150">
-                                                <button onClick={() => handleDeleteTask(task.id)} className="w-full text-left px-4 py-2 text-[12px] font-bold text-red-600 hover:bg-red-50 flex items-center">
+                                            <div className="fixed inset-0 z-40" onClick={() => setActiveMenuId(null)} />
+                                            <div className="absolute right-0 top-10 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 w-40 py-2 animate-in fade-in zoom-in-95 duration-150">
+                                                <button onClick={() => setTaskToDelete(task)} className="w-full text-left px-4 py-2.5 text-[12px] font-bold text-red-600 hover:bg-red-50 flex items-center">
                                                   <Trash2 size={14} className="mr-2" /> Supprimer
                                                 </button>
                                             </div>
@@ -366,6 +375,42 @@ const TasksMemo: React.FC<TasksMemoProps> = ({ userProfile }) => {
             </div>
         </div>
       </div>
+
+      {/* Modale de Confirmation de Suppression */}
+      {taskToDelete && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300 border border-gray-100">
+            <div className="p-10 flex flex-col items-center text-center">
+              <div className="w-20 h-20 bg-red-50 rounded-[28px] flex items-center justify-center text-red-500 mb-8 shadow-inner">
+                <AlertTriangle size={40} />
+              </div>
+              <h3 className="text-xl font-black text-gray-900 mb-2 uppercase tracking-tighter">Supprimer définitivement ?</h3>
+              <p className="text-[14px] text-gray-500 leading-relaxed mb-10">
+                Vous allez supprimer la tâche : <br/>
+                <span className="font-bold text-gray-900">"{taskToDelete.title}"</span>. <br/>
+                Cette action est irréversible.
+              </p>
+              <div className="flex gap-4 w-full">
+                <button 
+                  onClick={() => setTaskToDelete(null)} 
+                  disabled={isDeleting}
+                  className="flex-1 px-6 py-4 bg-gray-50 text-gray-600 rounded-2xl font-bold text-[13px] hover:bg-gray-100 transition-all border border-gray-100"
+                >
+                  Annuler
+                </button>
+                <button 
+                  onClick={confirmDeleteTask} 
+                  disabled={isDeleting}
+                  className="flex-1 px-6 py-4 bg-red-600 text-white rounded-2xl font-bold text-[13px] hover:bg-red-700 shadow-xl shadow-red-100 transition-all active:scale-95 flex items-center justify-center gap-2"
+                >
+                  {isDeleting ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
+                  Supprimer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <AddTaskModal isOpen={isAddTaskModalOpen} onClose={() => { setIsAddTaskModalOpen(false); setEditingTask(null); }} userProfile={userProfile} taskToEdit={editingTask} />
     </div>

@@ -33,8 +33,9 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, on
   const [client, setClient] = useState<Client>(initialClient);
   const [loading, setLoading] = useState(false);
   const [appointmentCount, setAppointmentCount] = useState(0);
+  const [taskPendingCount, setTaskPendingCount] = useState(0);
 
-  // Synchronisation en temps réel avec Firebase
+  // Synchronisation en temps réel avec Firebase pour la fiche client
   useEffect(() => {
     setLoading(true);
     const unsub = onSnapshot(doc(db, 'clients', initialClient.id), (docSnap) => {
@@ -55,10 +56,29 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, on
     return () => unsubCount();
   }, [initialClient.id]);
 
+  // Compteur de tâches EN COURS en temps réel (Fix : Filtre status côté client pour éviter l'erreur d'index)
+  useEffect(() => {
+    // On récupère toutes les tâches du client (égalité simple, pas d'index composite requis)
+    const q = query(
+      collection(db, 'tasks'), 
+      where('clientId', '==', initialClient.id)
+    );
+    
+    const unsubTasks = onSnapshot(q, (snapshot) => {
+      // On filtre manuellement le statut ici pour éviter l'index Firestore complexe
+      const pendingTasks = snapshot.docs.filter(doc => doc.data().status !== 'completed');
+      setTaskPendingCount(pendingTasks.length);
+    }, (error) => {
+      console.error("Erreur compteur tâches client:", error);
+    });
+    
+    return () => unsubTasks();
+  }, [initialClient.id]);
+
   const mainTabs = [
     { label: 'Information contact', key: 'Information contact' },
     { label: `Projet (${client.projectCount || 0})`, key: 'Projet' },
-    { label: 'Tâches', key: 'Tâches' },
+    { label: `Tâches (${taskPendingCount})`, key: 'Tâches' },
     { label: `Rendez-vous (${appointmentCount})`, key: 'Rendez-vous' },
     { label: 'Documents', key: 'Documents' }
   ];
@@ -123,8 +143,8 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, on
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <button className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white border border-gray-100 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:bg-gray-50 transition-all"><MessageSquare size={16} /> Contacter</button>
-            <button className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white border border-gray-100 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:bg-gray-50 transition-all"><Calendar size={16} /> Planifier un RDV</button>
+            <button className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white border border-gray-200 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:bg-gray-50 transition-all"><MessageSquare size={16} /> Contacter</button>
+            <button className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white border border-gray-200 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:bg-gray-50 transition-all"><Calendar size={16} /> Planifier un RDV</button>
             <button className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white border border-gray-100 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:bg-gray-50 transition-all"><Phone size={16} /> Appeler</button>
             <button className="flex items-center justify-center gap-2 px-6 py-2.5 bg-white border border-gray-100 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:bg-gray-50 transition-all"><CheckSquare size={16} /> Ajouter une tâche</button>
           </div>

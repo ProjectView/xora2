@@ -9,10 +9,13 @@ import {
   Video, 
   Loader2, 
   Trash2, 
-  PenSquare
+  PenSquare,
+  AlertTriangle,
+  X,
+  Check
 } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot, doc, deleteDoc } from '@firebase/firestore';
+import { collection, query, where, onSnapshot, doc, deleteDoc, updateDoc } from '@firebase/firestore';
 import { Appointment } from '../types';
 import AddAppointmentModal from './AddAppointmentModal';
 
@@ -35,6 +38,9 @@ const ProjectAppointments: React.FC<ProjectAppointmentsProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [appointmentToDelete, setAppointmentToDelete] = useState<Appointment | null>(null);
+  const [appointmentToEdit, setAppointmentToEdit] = useState<Appointment | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (!projectId) return;
@@ -57,11 +63,30 @@ const ProjectAppointments: React.FC<ProjectAppointmentsProps> = ({
     return () => unsub();
   }, [projectId]);
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm("Supprimer ce rendez-vous ?")) return;
+  const confirmDelete = async () => {
+    if (!appointmentToDelete) return;
+    setIsDeleting(true);
     try {
-      await deleteDoc(doc(db, 'appointments', id));
-    } catch (e) { console.error(e); }
+      await deleteDoc(doc(db, 'appointments', appointmentToDelete.id));
+      setAppointmentToDelete(null);
+      setActiveMenuId(null);
+    } catch (e) {
+      console.error(e);
+      alert("Erreur lors de la suppression.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleEdit = (rdv: Appointment) => {
+    setAppointmentToEdit(rdv);
+    setIsModalOpen(true);
+    setActiveMenuId(null);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setAppointmentToEdit(null);
   };
 
   const getStatusStyle = (status: string) => {
@@ -94,7 +119,7 @@ const ProjectAppointments: React.FC<ProjectAppointmentsProps> = ({
           <p className="text-[11px] text-gray-400 font-medium italic">Rendez-vous programmés pour {projectName}</p>
         </div>
         <button 
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => { setAppointmentToEdit(null); setIsModalOpen(true); }}
           className="flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-200 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:border-[#A886D7] transition-all active:scale-95"
         >
           <Plus size={16} className="text-[#A886D7]" />
@@ -119,7 +144,7 @@ const ProjectAppointments: React.FC<ProjectAppointmentsProps> = ({
                 <th className="px-6 pb-2">Lieu</th>
                 <th className="px-6 pb-2">Collaborateur</th>
                 <th className="px-6 pb-2 text-center">Statut</th>
-                <th className="px-6 pb-2"></th>
+                <th className="px-6 pb-2 text-right">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -180,10 +205,17 @@ const ProjectAppointments: React.FC<ProjectAppointmentsProps> = ({
                     </td>
 
                     <td className="px-6 py-5 last:rounded-r-2xl border-y border-r border-gray-50 text-right">
-                       <div className="relative inline-block">
+                       <div className="flex justify-end gap-2 relative">
+                          <button 
+                            onClick={() => handleEdit(rdv)}
+                            className="p-1.5 border border-gray-200 rounded-lg hover:bg-indigo-50 text-gray-400 hover:text-indigo-600 transition-all shadow-sm"
+                            title="Modifier"
+                          >
+                            <PenSquare size={16} />
+                          </button>
                           <button 
                             onClick={() => setActiveMenuId(activeMenuId === rdv.id ? null : rdv.id)}
-                            className={`p-2 rounded-lg transition-all ${activeMenuId === rdv.id ? 'bg-gray-100 text-gray-900' : 'text-gray-300 hover:bg-gray-50 hover:text-gray-600'}`}
+                            className={`p-1.5 border border-gray-200 rounded-lg hover:bg-gray-100 text-gray-400 shadow-sm transition-all ${activeMenuId === rdv.id ? 'bg-gray-100 text-gray-900' : ''}`}
                           >
                             <MoreVertical size={18} />
                           </button>
@@ -191,13 +223,16 @@ const ProjectAppointments: React.FC<ProjectAppointmentsProps> = ({
                           {activeMenuId === rdv.id && (
                             <>
                               <div className="fixed inset-0 z-40" onClick={() => setActiveMenuId(null)}></div>
-                              <div className="absolute right-0 mt-2 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 py-2 w-48 animate-in fade-in zoom-in-95 duration-150">
-                                <button className="w-full text-left px-4 py-2.5 text-[12px] font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                              <div className="absolute right-0 mt-2 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 py-2 w-48 animate-in fade-in zoom-in-95 duration-150 text-left">
+                                <button 
+                                  onClick={() => handleEdit(rdv)}
+                                  className="w-full text-left px-4 py-2.5 text-[12px] font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                >
                                   <PenSquare size={14} className="text-gray-400" /> Modifier
                                 </button>
                                 <div className="h-px bg-gray-50 my-1 mx-2" />
                                 <button 
-                                  onClick={() => handleDelete(rdv.id)}
+                                  onClick={() => setAppointmentToDelete(rdv)}
                                   className="w-full text-left px-4 py-2.5 text-[12px] font-bold text-red-500 hover:bg-red-50 flex items-center gap-2"
                                 >
                                   <Trash2 size={14} /> Supprimer
@@ -215,13 +250,50 @@ const ProjectAppointments: React.FC<ProjectAppointmentsProps> = ({
         </div>
       </div>
 
+      {/* Modale de Confirmation de Suppression */}
+      {appointmentToDelete && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300 border border-gray-100">
+            <div className="p-10 flex flex-col items-center text-center">
+              <div className="w-20 h-20 bg-red-50 rounded-[28px] flex items-center justify-center text-red-500 mb-8 shadow-inner">
+                <AlertTriangle size={40} />
+              </div>
+              <h3 className="text-xl font-black text-gray-900 mb-2 uppercase tracking-tighter">Supprimer le RDV ?</h3>
+              <p className="text-[14px] text-gray-500 leading-relaxed mb-10">
+                Vous allez supprimer le rendez-vous : <br/>
+                <span className="font-bold text-gray-900">"{appointmentToDelete.title}"</span>. <br/>
+                Cette action libérera le créneau dans votre agenda.
+              </p>
+              <div className="flex gap-4 w-full">
+                <button 
+                  onClick={() => setAppointmentToDelete(null)} 
+                  disabled={isDeleting}
+                  className="flex-1 px-6 py-4 bg-gray-50 text-gray-600 rounded-2xl font-bold text-[13px] hover:bg-gray-100 transition-all border border-gray-100"
+                >
+                  Annuler
+                </button>
+                <button 
+                  onClick={confirmDelete} 
+                  disabled={isDeleting}
+                  className="flex-1 px-6 py-4 bg-red-600 text-white rounded-2xl font-bold text-[13px] hover:bg-red-700 shadow-xl shadow-red-100 transition-all active:scale-95 flex items-center justify-center gap-2"
+                >
+                  {isDeleting ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
+                  Supprimer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <AddAppointmentModal 
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={handleCloseModal}
         userProfile={userProfile}
         clientId={clientId}
         clientName={clientName}
         initialProjectId={projectId}
+        appointmentToEdit={appointmentToEdit}
       />
     </div>
   );
