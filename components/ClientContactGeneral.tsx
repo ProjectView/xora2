@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ChevronDown, ChevronUp, Plus, Search, MapPin, Loader2, Trash2, Check, User, Phone, Mail, AlertTriangle, X } from 'lucide-react';
 import { Client } from '../types';
@@ -84,6 +83,8 @@ const ContactCard: React.FC<ContactCardProps> = ({
   isExpanded, 
   onToggle 
 }) => {
+  const civilityOptions = ['Mr', 'Mme', 'Sci', 'Association', 'Sas', 'Société'];
+
   return (
     <div className={`border rounded-xl overflow-hidden mb-4 shadow-sm transition-all group ${isMain ? 'border-indigo-100 bg-white' : 'border-gray-200 bg-[#FBFBFB] hover:border-gray-300'}`}>
       <div 
@@ -129,7 +130,7 @@ const ContactCard: React.FC<ContactCardProps> = ({
                   onChange={(e) => onFieldChange('civility', e.target.value)}
                   onBlur={onBlur}
                 >
-                  <option>Mme</option><option>M.</option>
+                  {civilityOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                 </select>
                 <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
               </div>
