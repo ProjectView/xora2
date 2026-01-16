@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X, ChevronDown, Plus, CheckSquare, Calendar as CalendarIcon, Loader2, Save, CalendarClock, Clock, Search, User as UserIcon, AlertTriangle, Trash2 } from 'lucide-react';
 import { db } from '../firebase';
@@ -672,7 +671,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-xs font-bold text-gray-500 ml-1">Marqueur Statut</label>
+                  <label className="block text-xs font-bold text-gray-500 ml-1">Etat</label>
                   <div className="relative">
                     <select 
                       className="w-full appearance-none px-4 py-3 bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-800 hover:border-[#A886D7] outline-none transition-all cursor-pointer"

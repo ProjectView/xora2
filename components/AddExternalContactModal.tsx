@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { X, ChevronDown, Check, SquarePen, Loader2 } from 'lucide-react';
 import { db } from '../firebase';
@@ -27,8 +26,24 @@ const AddExternalContactModal: React.FC<AddExternalContactModalProps> = ({ isOpe
     email: '',
     phone: '',
     fixed: '',
-    type: 'Conjoint / Conjointe'
+    type: 'Epouse'
   });
+
+  const contactTypeOptions = [
+    "Epouse",
+    "Epoux",
+    "Compagne",
+    "Compagnon",
+    "Enfant",
+    "Parent",
+    "Architecte",
+    "Agence Immobilière",
+    "Concierge",
+    "Amis",
+    "Maitre d'œuvre",
+    "Voisin",
+    "Personne à contacter"
+  ];
 
   if (!isOpen) return null;
 
@@ -53,7 +68,7 @@ const AddExternalContactModal: React.FC<AddExternalContactModalProps> = ({ isOpe
         email: '',
         phone: '',
         fixed: '',
-        type: 'Conjoint / Conjointe'
+        type: 'Epouse'
       });
     } catch (e) {
       console.error(e);
@@ -135,10 +150,9 @@ const AddExternalContactModal: React.FC<AddExternalContactModalProps> = ({ isOpe
                     onChange={(e) => setFormData({...formData, type: e.target.value})}
                     className="w-full appearance-none bg-[#F8F9FA] border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-indigo-400 transition-all shadow-sm"
                   >
-                    <option>Conjoint / Conjointe</option>
-                    <option>Famille</option>
-                    <option>Ami / Voisin</option>
-                    <option>Autre</option>
+                    {contactTypeOptions.map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
                   </select>
                   <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
                 </div>

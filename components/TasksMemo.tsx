@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   Search, 
@@ -245,7 +244,7 @@ const TasksMemo: React.FC<TasksMemoProps> = ({ userProfile }) => {
                     <tr className="bg-gray-50 border-b border-gray-200 text-[11px] text-gray-400 uppercase font-bold tracking-wider">
                         <th className="px-6 py-4 w-12 text-center">#</th>
                         <th className="px-6 py-4">Titre & Projet</th>
-                        <th className="px-6 py-4 text-center">Priorité</th>
+                        <th className="px-6 py-4 text-center">ETAT</th>
                         <th className="px-6 py-4 text-center min-w-[200px]">Statut</th>
                         <th className="px-6 py-4">Notes</th>
                         <th className="px-6 py-4 text-center">Type</th>

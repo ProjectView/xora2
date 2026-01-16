@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Users, 
@@ -342,7 +341,7 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
                                             client.status === 'Client' ? 'bg-cyan-100 text-cyan-700' :
                                             'bg-purple-100 text-purple-800'
                                         }`}>
-                                            {client.status === 'Leads' ? 'Études' : client.status}
+                                            {client.status}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-sm font-bold text-gray-700">{client.dateAdded}</td>

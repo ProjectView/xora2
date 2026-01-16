@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, ChevronDown, ChevronUp, Loader2, Save, MapPin, Search, Star, Check } from 'lucide-react';
 import { Client } from '../types';
@@ -51,6 +50,7 @@ const ClientPropertyInfo: React.FC<ClientPropertyInfoProps> = ({ client: initial
             number: 1,
             address: data.details?.address || '',
             usage: 'Résidence principale',
+            workNature: 'Rénovation',
             isMain: true,
             isExpanded: false
           };
@@ -381,7 +381,7 @@ const ClientPropertyInfo: React.FC<ClientPropertyInfoProps> = ({ client: initial
                              saveProperties(updated);
                           }
                         }}
-                        className="w-full appearance-none bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-gray-900 transition-all"
+                        className="w-full appearance-none bg-white border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-gray-900 transition-all"
                       >
                         <option>Résidence principale</option>
                         <option>Résidence secondaire</option>
@@ -398,11 +398,12 @@ const ClientPropertyInfo: React.FC<ClientPropertyInfoProps> = ({ client: initial
                       <select 
                         value={prop.workNature || 'Rénovation'}
                         onChange={(e) => { updatePropertyField(prop.id, 'workNature', e.target.value); saveProperties(properties.map(p => p.id === prop.id ? {...p, workNature: e.target.value} : p)); }}
-                        className="w-full appearance-none bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-gray-900 transition-all"
+                        className="w-full appearance-none bg-white border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold text-gray-900 outline-none focus:border-gray-900 transition-all"
                       >
-                        <option>Rénovation</option>
-                        <option>Neuf</option>
-                        <option>Extension</option>
+                        <option value="Rénovation">Rénovation</option>
+                        <option value="Extension">Extension</option>
+                        <option value="Construction">Construction</option>
+                        <option value="Professionnel">Professionnel</option>
                       </select>
                       <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                     </div>
