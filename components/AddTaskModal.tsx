@@ -1,17 +1,60 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { X, ChevronDown, Plus, CheckSquare, Calendar as CalendarIcon, Loader2, Save, CalendarClock, Clock, Search, User as UserIcon, AlertTriangle, Trash2 } from 'lucide-react';
+import { X, ChevronDown, Plus, CheckSquare, Calendar as CalendarIcon, Loader2, Save, CalendarClock, Clock, Search, User as UserIcon, AlertTriangle, Trash2, Info, Layers } from 'lucide-react';
 import { db } from '../firebase';
 // Use @firebase/firestore to fix named export resolution issues
-import { collection, addDoc, query, where, onSnapshot, getDocs, doc, updateDoc, getCountFromServer, deleteDoc } from '@firebase/firestore';
+import { collection, addDoc, query, where, onSnapshot, getDocs, doc, updateDoc, getCountFromServer, deleteDoc, getDoc } from '@firebase/firestore';
 import { Task } from '../types';
+
+// Structure de données hiérarchique identique aux autres composants
+const HIERARCHY_DATA: Record<string, Record<string, string[]>> = {
+  "Actif commercial": {
+    "Prospection terrain": ["Porte-à-porte", "Tour de chantier"],
+    "Relance fichier": ["Anciens devis", "Clients perdus", "SAV"],
+    "Parrainage": ["Bon de parrainage", "Spontanée"],
+    "Prescripteur": ["Artisan partenaire", "Architecte", "Courtier", "Décorateur"],
+    "Démarchage téléphonique": ["Appel froid", "Suivi salon", "Relance mailing"]
+  },
+  "Notoriété": {
+    "Bouche-à-oreille": ["Famille/ami", "Voisin"],
+    "Recommandation spontanée": ["Sans lien identifié"],
+    "Ancien client": ["Autre projet", "Retour suite SAV"],
+    "Avis en ligne": ["Google", "PagesJaunes", "Site d’avis"]
+  },
+  "Marketing": {
+    "Publicité digitale": ["Google Ads", "Facebook Ads", "Instagram Ads", "Retargeting"],
+    "Site web": ["Formulaire contact", "Prise de RDV en ligne", "Chatbot"],
+    "Emailing": ["Newsletter", "Email promo", "Relance devis automatique"],
+    "SMS marketing": ["Campagne promo", "Relance devis"],
+    "Réseaux sociaux": ["Facebook perso", "Instagram", "TikTok", "Live", "Story promo"],
+    "Affichage": ["Panneau pub", "Abribus", "Panneau chantier", "Véhicule floqué"],
+    "Média traditionnel": ["Magazine", "Journal gratuit", "Publication pro", "Radio"],
+    "Événementiel": ["Salon", "Foire"],
+    "Réseaux pro": ["BNI", "Club entrepreneurs", "Groupement métiers"],
+    "Événement magasin": ["Portes ouvertes", "Inauguration", "Anniversaire showroom"]
+  },
+  "Magasin": {
+    "Passage magasin": ["Sans RDV"],
+    "Vitrine": ["Promo vitrine", "PLV"],
+    "Référencement marque local": ["Google Maps", "PagesJaunes", "GPS", "Plan local"],
+    "Bouche-à-oreille local": ["Habitant quartier", "Voisinage proche"]
+  },
+  "Autres": {
+    "Carte de visite": ["Récupérée événement", "Posée en magasin"],
+    "Opportunité": ["Spontanée"],
+    "Autre": ["À préciser"]
+  }
+};
 
 interface AddTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
   userProfile?: any;
   initialClientId?: string;
+  initialClientName?: string;
   initialProjectId?: string;
   taskToEdit?: Task | null;
+  isLeadAutoTask?: boolean; 
 }
 
 const AddTaskModal: React.FC<AddTaskModalProps> = ({ 
@@ -19,10 +62,15 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
   onClose, 
   userProfile, 
   initialClientId = '', 
+  initialClientName = '',
   initialProjectId = '' ,
-  taskToEdit = null
+  taskToEdit = null,
+  isLeadAutoTask = false
 }) => {
   const isEdit = !!taskToEdit;
+  // Déterminer si on travaille sur une tâche auto (création ou édition)
+  const isCurrentlyAuto = isLeadAutoTask || (isEdit && taskToEdit?.type === 'Tâche auto');
+  
   const [isMemo, setIsMemo] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isDeletingAppointment, setIsDeletingAppointment] = useState(false);
@@ -35,6 +83,13 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
   const [selectedStatusLabel, setSelectedStatusLabel] = useState('A faire');
   const [endDate, setEndDate] = useState('');
   const [note, setNote] = useState('');
+
+  // Qualification States for Auto Tasks
+  const [qualifData, setQualifData] = useState({
+    categorie: '',
+    origine: '',
+    sousOrigine: ''
+  });
 
   // Refs for Date Pickers
   const endDateRef = useRef<HTMLInputElement>(null);
@@ -62,14 +117,38 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
   const [clients, setClients] = useState<any[]>([]);
   const [allProjects, setAllProjects] = useState<any[]>([]);
 
-  const statusOptions = [
+  const defaultStatusOptions = [
     'A faire',
     'En attente',
     'Urgent',
     'Prioritaire',
     'Dossier technique',
-    'Appel à passer'
+    'Appel à passer',
+    'Terminé'
   ];
+
+  const leadAutoStatusOptions = [
+    'À qualifier',
+    'À recontacter',
+    'Projet long terme',
+    'Non qualifié',
+    'Terminé'
+  ];
+
+  const statusOptions = isCurrentlyAuto ? leadAutoStatusOptions : defaultStatusOptions;
+
+  // MAPPING DES TITRES AUTOMATIQUES
+  const getAutoTitle = (status: string, clientName: string) => {
+    const name = clientName || 'Nouveau lead';
+    switch (status) {
+      case 'À qualifier': return `Qualifier : ${name}`;
+      case 'À recontacter': return `Recontacter : ${name}`;
+      case 'Projet long terme': return `Suivi long terme : ${name}`;
+      case 'Non qualifié': return `Dossier non qualifié : ${name}`;
+      case 'Terminé': return `Clôturé : ${name}`;
+      default: return `Qualifier : ${name}`;
+    }
+  };
 
   // Helper to trigger native date picker
   const handleDatePickerClick = (ref: React.RefObject<HTMLInputElement>) => {
@@ -92,7 +171,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
 
     const q = query(collection(db, 'users'), where('companyId', '==', userProfile.companyId));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const users = snapshot.docs.map(doc => ({
+      let users = snapshot.docs.map(doc => ({
         uid: doc.id,
         ...doc.data()
       }));
@@ -106,6 +185,29 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
 
     return () => unsubscribe();
   }, [isOpen, userProfile?.companyId]);
+
+  // Qualification Logic
+  const categories = useMemo(() => Object.keys(HIERARCHY_DATA), []);
+  const origins = useMemo(() => qualifData.categorie ? Object.keys(HIERARCHY_DATA[qualifData.categorie] || {}) : [], [qualifData.categorie]);
+  const sources = useMemo(() => (qualifData.categorie && qualifData.origine) ? (HIERARCHY_DATA[qualifData.categorie]?.[qualifData.origine] || []) : [], [qualifData.categorie, qualifData.origine]);
+
+  // Load Client Origin Info when a client is selected for an Auto Task
+  useEffect(() => {
+    if (isOpen && isCurrentlyAuto && selectedClientId) {
+      const fetchClientQualif = async () => {
+        const clientSnap = await getDoc(doc(db, 'clients', selectedClientId));
+        if (clientSnap.exists()) {
+          const data = clientSnap.data();
+          setQualifData({
+            categorie: data.details?.category || '',
+            origine: data.origin || '',
+            sousOrigine: data.details?.subOrigin || ''
+          });
+        }
+      };
+      fetchClientQualif();
+    }
+  }, [isOpen, isCurrentlyAuto, selectedClientId]);
 
   // Load Linked Appointment for the task
   useEffect(() => {
@@ -207,9 +309,17 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
           setEndDate('');
         }
       } else {
-        setTitle('');
+        // PRE-FILL TITLE FOR LEAD AUTO TASK
+        if (isLeadAutoTask) {
+          const defaultStatus = 'À qualifier';
+          setSelectedStatusLabel(defaultStatus);
+          setTitle(getAutoTitle(defaultStatus, initialClientName));
+        } else {
+          setTitle('');
+          setSelectedStatusLabel('A faire');
+        }
+        
         setIsMemo(false);
-        setSelectedStatusLabel('A faire');
         setNote('');
         setSelectedClientId(initialClientId);
         setSelectedProjectId(initialProjectId);
@@ -219,7 +329,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
         setLinkedAppointmentId(null);
       }
     }
-  }, [isOpen, taskToEdit, initialClientId, initialProjectId, collaborators]);
+  }, [isOpen, taskToEdit, initialClientId, initialProjectId, initialClientName, collaborators, isLeadAutoTask]);
 
   // Clients & Projects Loading
   useEffect(() => {
@@ -250,12 +360,10 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
       }));
       setAllProjects(loadedProjects);
 
-      // Si on vient de créer un projet, on pré-remplit le titre
       if (initialProjectId && !isEdit) {
         const currentProject = loadedProjects.find(p => p.id === initialProjectId);
         if (currentProject) {
           setTitle(`Suivi : ${currentProject.name}`);
-          // On essaie aussi de matcher le collaborateur avec l'agenceur du projet
           if (collaborators.length > 0 && currentProject.agenceurUid) {
             const collabIdx = collaborators.findIndex(c => c.uid === currentProject.agenceurUid);
             if (collabIdx !== -1) setSelectedCollaboratorIdx(collabIdx);
@@ -277,7 +385,15 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
     return allProjects.filter(p => p.clientId === selectedClientId);
   }, [selectedClientId, allProjects]);
 
-  // Action: Supprimer de l'agenda
+  const handleStatusChange = (newStatus: string) => {
+    setSelectedStatusLabel(newStatus);
+    if (isCurrentlyAuto) {
+      // Retrouver le nom du client actuel pour le titre
+      const currentClientName = clients.find(c => c.id === selectedClientId)?.name || initialClientName;
+      setTitle(getAutoTitle(newStatus, currentClientName));
+    }
+  };
+
   const handleRemoveFromAgenda = async () => {
     if (!linkedAppointmentId) return;
     if (!window.confirm("Voulez-vous retirer cet événement de votre agenda ?")) return;
@@ -306,13 +422,29 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
       const selectedProjectName = !isMemo ? (allProjects.find(p => p.id === selectedProjectId)?.name || '') : '';
       const selectedClientName = !isMemo ? (clients.find(c => c.id === selectedClientId)?.name || '') : '';
 
+      // LOGIQUE DE PERSISTANCE DU TYPE 'AUTO'
+      const finalType = isCurrentlyAuto ? 'Tâche auto' : (isMemo ? 'Mémo' : 'Tâche manuelle');
+
+      // DETERMINER LE STATUT OPERATIONNEL (completed ou pending/in-progress)
+      let operationalStatus = 'pending';
+      if (selectedStatusLabel === 'Terminé' && !isMemo) {
+        operationalStatus = 'completed';
+      } else if (isEdit && taskToEdit) {
+        // En édition, si le label n'est plus "Terminé" mais que la tâche l'était, on la réouvre
+        if (taskToEdit.status === 'completed' && selectedStatusLabel !== 'Terminé') {
+          operationalStatus = 'pending';
+        } else {
+          operationalStatus = taskToEdit.status;
+        }
+      }
+
       const taskData: any = {
         title: title,
         subtitle: selectedProjectName,
-        type: isMemo ? 'Mémo' : 'Tâche manuelle',
+        type: finalType,
         statusLabel: isMemo ? '' : selectedStatusLabel,
-        tagColor: isMemo ? 'gray' : (selectedStatusLabel === 'Prioritaire' ? 'purple' : 
-                  selectedStatusLabel === 'Urgent' ? 'pink' : 'gray'),
+        status: operationalStatus,
+        tagColor: isMemo ? 'gray' : (selectedStatusLabel === 'Prioritaire' || selectedStatusLabel === 'Urgent' ? 'pink' : 'gray'),
         date: endDate ? new Date(endDate).toLocaleDateString('fr-FR') : '',
         collaborator: {
           name: selectedCollab.name,
@@ -336,13 +468,22 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
 
         const docRef = await addDoc(collection(db, 'tasks'), {
           ...taskData,
-          status: 'pending',
           statusType: 'toggle',
           companyId: userProfile.companyId,
           orderIndex: nextIndex,
           createdAt: new Date().toISOString()
         });
         taskId = docRef.id;
+      }
+
+      // SYNC QUALIFICATION DATA TO CLIENT
+      if (isCurrentlyAuto && selectedClientId) {
+        const clientRef = doc(db, 'clients', selectedClientId);
+        await updateDoc(clientRef, {
+          "details.category": qualifData.categorie,
+          "origin": qualifData.origine,
+          "details.subOrigin": qualifData.sousOrigine
+        });
       }
 
       if (isScheduled && agendaDate) {
@@ -352,7 +493,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
           clientName: selectedClientName || 'Client divers',
           projectId: selectedProjectId || null,
           projectName: selectedProjectName || null,
-          title: `[${isMemo ? 'Mémo' : 'Tâche'}] ${title}`,
+          title: `[${finalType === 'Tâche auto' ? 'Auto' : (isMemo ? 'Mémo' : 'Tâche')}] ${title}`,
           type: 'Autre',
           date: rdvDate,
           startTime: startTime,
@@ -374,7 +515,6 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
           await addDoc(collection(db, 'appointments'), appointmentData);
         }
       } else if (!isScheduled && linkedAppointmentId) {
-        // Si l'utilisateur a décoché "Placer dans l'agenda" sans cliquer sur le bouton supprimer spécifique
         await deleteDoc(doc(db, 'appointments', linkedAppointmentId));
       }
       
@@ -402,7 +542,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
               </div>
               <div>
                 <h2 className="text-xl font-bold text-gray-900 tracking-tight">
-                  {isEdit ? `Modifier : ${taskToEdit?.title}` : `Créer une ${isMemo ? 'note mémo' : 'tâche manuelle'}`}
+                  {isCurrentlyAuto ? 'Qualification de la fiche lead' : (isEdit ? `Modifier : ${taskToEdit?.title}` : `Créer une ${isMemo ? 'note mémo' : 'tâche manuelle'}`)}
                 </h2>
                 {isEdit && <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mt-0.5">Mode édition actif</p>}
               </div>
@@ -413,6 +553,62 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
           </div>
 
           <div className="p-8 space-y-8">
+            {/* Qualification Section for Auto Tasks */}
+            {isCurrentlyAuto && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Layers size={16} className="text-indigo-500" />
+                  <h3 className="text-[11px] font-black text-indigo-500 uppercase tracking-[0.2em]">Origine du contact (Qualification)</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-indigo-50/20 p-6 rounded-2xl border border-indigo-100/50 shadow-inner">
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Origine*</label>
+                    <div className="relative">
+                      <select 
+                        value={qualifData.categorie}
+                        onChange={(e) => setQualifData({ ...qualifData, categorie: e.target.value, origine: '', sousOrigine: '' })}
+                        className="w-full appearance-none bg-white border border-gray-100 rounded-xl py-2.5 px-4 text-sm font-bold text-gray-800 focus:outline-none focus:border-indigo-500 transition-all shadow-sm"
+                      >
+                        <option value="">Sélectionner</option>
+                        {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" size={14} />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Sous-origine*</label>
+                    <div className="relative">
+                      <select 
+                        disabled={!qualifData.categorie}
+                        value={qualifData.origine}
+                        onChange={(e) => setQualifData({ ...qualifData, origine: e.target.value, sousOrigine: '' })}
+                        className="w-full appearance-none bg-white border border-gray-100 rounded-xl py-2.5 px-4 text-sm font-bold text-gray-800 focus:outline-none focus:border-indigo-500 transition-all shadow-sm disabled:opacity-50 disabled:bg-gray-50"
+                      >
+                        <option value="">Sélectionner</option>
+                        {origins.map(orig => <option key={orig} value={orig}>{orig}</option>)}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" size={14} />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Sources</label>
+                    <div className="relative">
+                      <select 
+                        disabled={!qualifData.origine}
+                        value={qualifData.sousOrigine}
+                        onChange={(e) => setQualifData({ ...qualifData, sousOrigine: e.target.value })}
+                        className="w-full appearance-none bg-white border border-gray-100 rounded-xl py-2.5 px-4 text-sm font-bold text-gray-800 focus:outline-none focus:border-indigo-500 transition-all shadow-sm disabled:opacity-50 disabled:bg-gray-50"
+                      >
+                        <option value="">Sélectionner</option>
+                        {sources.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" size={14} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2">
               <label className="block text-xs font-bold text-gray-500 ml-1">{isMemo ? 'Titre du mémo*' : 'Titre de la tâche*'}</label>
               <input 
@@ -425,20 +621,22 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
               />
             </div>
 
-            <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100 shadow-inner">
-              <label className="block text-[10px] font-bold text-gray-400 mb-4 uppercase tracking-[0.1em]">Nature de l'entrée</label>
-              <div className="flex items-center gap-6">
-                <span className={`text-sm font-bold transition-all ${!isMemo ? 'text-gray-900 scale-105' : 'text-gray-400 opacity-60'}`}>Tâche manuelle</span>
-                <button 
-                  type="button"
-                  onClick={() => setIsMemo(!isMemo)}
-                  className={`relative w-14 h-7 rounded-full transition-all duration-300 focus:outline-none shadow-sm ${isMemo ? 'bg-[#A886D7]' : 'bg-gray-800'}`}
-                >
-                  <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform duration-300 shadow-md ${isMemo ? 'translate-x-7' : 'translate-x-0'}`} />
-                </button>
-                <span className={`text-sm font-bold transition-all ${isMemo ? 'text-gray-900 scale-105' : 'text-gray-400 opacity-60'}`}>Mémo</span>
+            {!isCurrentlyAuto && (
+              <div className="p-6 bg-gray-50 rounded-2xl border border-gray-100 shadow-inner">
+                <label className="block text-[10px] font-bold text-gray-400 mb-4 uppercase tracking-[0.1em]">Nature de l'entrée</label>
+                <div className="flex items-center gap-6">
+                  <span className={`text-sm font-bold transition-all ${!isMemo ? 'text-gray-900 scale-105' : 'text-gray-400 opacity-60'}`}>Tâche manuelle</span>
+                  <button 
+                    type="button"
+                    onClick={() => setIsMemo(!isMemo)}
+                    className={`relative w-14 h-7 rounded-full transition-all duration-300 focus:outline-none shadow-sm ${isMemo ? 'bg-[#A886D7]' : 'bg-gray-800'}`}
+                  >
+                    <div className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform duration-300 shadow-md ${isMemo ? 'translate-x-7' : 'translate-x-0'}`} />
+                  </button>
+                  <span className={`text-sm font-bold transition-all ${isMemo ? 'text-gray-900 scale-105' : 'text-gray-400 opacity-60'}`}>Mémo</span>
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
               <div className="md:col-span-6 space-y-2">
@@ -477,7 +675,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-800 focus:ring-4 focus:ring-indigo-50 focus:border-gray-900 outline-none transition-all cursor-pointer"
+                    className="w-full pl-12 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:ring-4 focus:ring-indigo-50 focus:border-gray-900 outline-none transition-all cursor-pointer"
                     style={{ colorScheme: 'light' }}
                   />
                   <CalendarIcon 
@@ -674,9 +872,9 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
                   <label className="block text-xs font-bold text-gray-500 ml-1">Etat</label>
                   <div className="relative">
                     <select 
-                      className="w-full appearance-none px-4 py-3 bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-800 hover:border-[#A886D7] outline-none transition-all cursor-pointer"
+                      className="w-full appearance-none bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-800 hover:border-[#A886D7] outline-none transition-all cursor-pointer"
                       value={selectedStatusLabel}
-                      onChange={(e) => setSelectedStatusLabel(e.target.value)}
+                      onChange={(e) => handleStatusChange(e.target.value)}
                     >
                       {statusOptions.map(s => (
                         <option key={s} value={s}>{s}</option>
@@ -711,7 +909,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
               ) : (
                 isEdit ? <Save size={20} /> : <Plus size={20} className="group-hover:rotate-90 transition-transform duration-300" />
               )}
-              <span>{isLoading ? 'Traitement...' : (isEdit ? 'Mettre à jour' : `Créer la ${isMemo ? 'note mémo' : 'tâche'}`)}</span>
+              <span>{isLoading ? 'Traitement...' : (isEdit ? 'Mettre à jour' : `Créer la tâche`)}</span>
             </button>
           </div>
         </form>

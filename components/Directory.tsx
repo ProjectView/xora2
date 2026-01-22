@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Users, 
@@ -7,17 +8,22 @@ import {
   Search, 
   ChevronDown, 
   Eye, 
-  MoreHorizontal,
-  ChevronLeft,
-  ChevronRight,
+  MoreHorizontal, 
+  ChevronLeft, 
+  ChevronRight, 
   ChevronsLeft,
   X,
-  Filter
+  Filter,
+  PenSquare,
+  Trash2,
+  AlertTriangle,
+  Loader2
 } from 'lucide-react';
 import { db } from '../firebase';
-import { collection, query, where, onSnapshot } from '@firebase/firestore';
+import { collection, query, where, onSnapshot, doc, deleteDoc } from '@firebase/firestore';
 import { Client } from '../types';
 import DirectoryMap from './DirectoryMap';
+import Modal from './Modal';
 
 interface DirectoryProps {
   userProfile: any;
@@ -39,6 +45,13 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
   const [filterLocation, setFilterLocation] = useState('');
   const [filterProject, setFilterProject] = useState('');
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  
+  // États des actions (modification/suppression)
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [clientToEdit, setClientToEdit] = useState<Client | null>(null);
+  const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -109,6 +122,26 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
     setFilterOrigine('');
     setFilterLocation('');
     setFilterProject('');
+  };
+
+  const handleEditRequest = (client: Client) => {
+    setClientToEdit(client);
+    setIsEditModalOpen(true);
+    setActiveMenuId(null);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!clientToDelete) return;
+    setIsDeleting(true);
+    try {
+      await deleteDoc(doc(db, 'clients', clientToDelete.id));
+      setClientToDelete(null);
+    } catch (e) {
+      console.error("Erreur lors de la suppression client:", e);
+      alert("Une erreur est survenue lors de la suppression.");
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const hasActiveFilters = searchQuery || filterAgenceur || filterOrigine || filterLocation || filterProject;
@@ -341,18 +374,48 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
                                             client.status === 'Client' ? 'bg-cyan-100 text-cyan-700' :
                                             'bg-purple-100 text-purple-800'
                                         }`}>
-                                            {client.status}
+                                            {client.status === 'Leads' ? 'Études' : client.status}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-sm font-bold text-gray-700">{client.dateAdded}</td>
                                     <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
-                                        <div className="flex justify-end space-x-2">
-                                            <button className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-100 text-gray-400 shadow-sm transition-all">
+                                        <div className="flex justify-end space-x-2 relative">
+                                            <button 
+                                                onClick={() => onClientClick(client)}
+                                                className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-100 text-gray-400 shadow-sm transition-all"
+                                                title="Voir détails"
+                                            >
                                                 <Eye size={16} />
                                             </button>
-                                            <button className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-100 text-gray-400 shadow-sm transition-all">
-                                                <MoreHorizontal size={16} />
-                                            </button>
+                                            <div className="relative">
+                                                <button 
+                                                    onClick={() => setActiveMenuId(activeMenuId === client.id ? null : client.id)}
+                                                    className={`p-1.5 border border-gray-200 rounded-lg transition-all ${activeMenuId === client.id ? 'bg-gray-100 text-gray-900 shadow-sm' : 'text-gray-400 hover:bg-gray-50'}`}
+                                                >
+                                                    <MoreHorizontal size={16} />
+                                                </button>
+
+                                                {activeMenuId === client.id && (
+                                                    <>
+                                                        <div className="fixed inset-0 z-40" onClick={() => setActiveMenuId(null)}></div>
+                                                        <div className="absolute right-0 top-full mt-2 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 py-2 w-48 animate-in fade-in zoom-in-95 duration-150 text-left">
+                                                            <button 
+                                                                onClick={() => handleEditRequest(client)}
+                                                                className="w-full text-left px-4 py-2.5 text-[12px] font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                                            >
+                                                                <PenSquare size={14} className="text-gray-400" /> Modifier la fiche
+                                                            </button>
+                                                            <div className="h-px bg-gray-50 my-1 mx-2" />
+                                                            <button 
+                                                                onClick={() => { setClientToDelete(client); setActiveMenuId(null); }}
+                                                                className="w-full text-left px-4 py-2.5 text-[12px] font-bold text-red-500 hover:bg-red-50 flex items-center gap-2"
+                                                            >
+                                                                <Trash2 size={14} /> Supprimer la fiche
+                                                            </button>
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
                                         </div>
                                     </td>
                                 </tr>
@@ -374,6 +437,50 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
             </div>
         )}
       </div>
+
+      {/* Popup de confirmation de suppression */}
+      {clientToDelete && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300 border border-gray-100">
+            <div className="p-10 flex flex-col items-center text-center">
+              <div className="w-20 h-20 bg-red-50 rounded-[28px] flex items-center justify-center text-red-500 mb-8 shadow-inner">
+                <AlertTriangle size={40} />
+              </div>
+              <h3 className="text-xl font-black text-gray-900 mb-2 uppercase tracking-tighter">Supprimer la fiche client ?</h3>
+              <p className="text-[14px] text-gray-500 leading-relaxed mb-10">
+                Vous êtes sur le point de supprimer définitivement la fiche de <br/>
+                <span className="font-bold text-gray-900">"{clientToDelete.name}"</span>.<br/>
+                Cette action supprimera également tous les documents liés.
+              </p>
+              <div className="flex gap-4 w-full">
+                <button 
+                  onClick={() => setClientToDelete(null)} 
+                  disabled={isDeleting}
+                  className="flex-1 px-6 py-4 bg-gray-50 text-gray-600 rounded-2xl font-bold text-[13px] hover:bg-gray-100 transition-all border border-gray-100"
+                >
+                  Annuler
+                </button>
+                <button 
+                  onClick={handleDeleteConfirm} 
+                  disabled={isDeleting}
+                  className="flex-1 px-6 py-4 bg-red-600 text-white rounded-2xl font-bold text-[13px] hover:bg-red-700 shadow-xl shadow-red-100 transition-all active:scale-95 flex items-center justify-center gap-2"
+                >
+                  {isDeleting ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />}
+                  Supprimer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modale d'édition réutilisant la modale de création */}
+      <Modal 
+        isOpen={isEditModalOpen} 
+        onClose={() => { setIsEditModalOpen(false); setClientToEdit(null); }} 
+        userProfile={userProfile}
+        clientToEdit={clientToEdit}
+      />
     </div>
   );
 };

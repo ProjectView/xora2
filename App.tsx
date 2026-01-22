@@ -32,6 +32,7 @@ function App() {
   const [directoryActiveTab, setDirectoryActiveTab] = useState('Tous');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [isLeadAutoTaskActive, setIsLeadAutoTaskActive] = useState(false); 
   const [taskModalForClient, setTaskModalForClient] = useState<{id: string, name: string} | null>(null);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
@@ -69,7 +70,6 @@ function App() {
           },
           (error) => {
             console.error("Erreur Permission Firestore:", error);
-            // Si on est en train de se déconnecter, on ignore l'erreur de permission
             if (error.code === 'permission-denied' && auth.currentUser) {
               setAuthError("Accès refusé : Veuillez configurer les règles de sécurité Firestore dans la console Firebase.");
             }
@@ -78,10 +78,9 @@ function App() {
         );
         return () => unsubDoc();
       } else {
-        // Reset complet lors de la déconnexion
         setIsAuthenticated(false);
         setUserProfile(null);
-        setAuthError(null); // Crucial : on efface l'erreur pour ne pas bloquer l'écran au prochain login
+        setAuthError(null); 
         setIsLoadingAuth(false);
       }
     });
@@ -121,20 +120,17 @@ function App() {
   };
 
   const handleClientCreated = (clientId: string, clientName: string) => {
-    // Fermer la modale lead
     setIsModalOpen(false);
     
-    // Attendre un petit instant pour la transition fluide
     setTimeout(() => {
-      // Stocker les infos client pour la modale tâche
       setTaskModalForClient({ id: clientId, name: clientName });
+      setIsLeadAutoTaskActive(true); 
       setIsTaskModalOpen(true);
     }, 400);
   };
 
   const handleLogout = async () => {
     try {
-      // Nettoyage local préventif
       setAuthError(null);
       setIsAuthenticated(false);
       setUserProfile(null);
@@ -157,7 +153,6 @@ function App() {
     );
   }
 
-  // Si on a une erreur ET qu'on est censé être connecté, on affiche l'erreur
   if (authError && isAuthenticated) {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-[#F8F9FA] p-6">
@@ -180,7 +175,6 @@ function App() {
     );
   }
 
-  // Si pas authentifié, on affiche toujours la page de login
   if (!isAuthenticated) {
     return <LoginPage onLogin={() => {}} />;
   }
@@ -282,10 +276,13 @@ function App() {
         isOpen={isTaskModalOpen}
         onClose={() => {
           setIsTaskModalOpen(false);
+          setIsLeadAutoTaskActive(false); 
           setTaskModalForClient(null);
         }}
         userProfile={userProfile}
         initialClientId={taskModalForClient?.id}
+        initialClientName={taskModalForClient?.name}
+        isLeadAutoTask={isLeadAutoTaskActive}
       />
     </div>
   );

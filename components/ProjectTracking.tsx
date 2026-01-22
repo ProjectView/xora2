@@ -97,24 +97,25 @@ const ProjectTracking: React.FC<ProjectTrackingProps> = ({ userProfile, onProjec
   };
 
   const ProgressCircle = ({ progress, color }: { progress: number; color: string }) => {
-    const strokeColor = color?.includes('D946EF') ? '#D946EF' : color?.includes('F97316') ? '#F97316' : color?.includes('0EA5E9') ? '#0EA5E9' : '#3B82F6';
+    // On utilise l'indigo par défaut si la couleur n'est pas spécifiée, pour correspondre à la charte graphique
+    const strokeColor = color?.includes('D946EF') ? '#D946EF' : color?.includes('F97316') ? '#F97316' : color?.includes('0EA5E9') ? '#0EA5E9' : '#6366f1';
     return (
-      <svg className="w-4 h-4 mr-1.5" viewBox="0 0 36 36">
-        <path
+      <svg className="w-5 h-5 mr-1.5" viewBox="0 0 36 36">
+        <circle
           className="text-gray-100"
-          strokeDasharray="100, 100"
-          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+          cx="18" cy="18" r="16"
           fill="none"
           stroke="currentColor"
           strokeWidth="3.5"
         />
-        <path
+        <circle
           style={{ stroke: strokeColor }}
-          strokeDasharray={`${progress}, 100`}
-          d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+          cx="18" cy="18" r="16"
           fill="none"
           strokeWidth="3.5"
+          strokeDasharray={`${progress}, 100`}
           strokeLinecap="round"
+          transform="rotate(-90 18 18)"
         />
       </svg>
     );
@@ -180,7 +181,7 @@ const ProjectTracking: React.FC<ProjectTrackingProps> = ({ userProfile, onProjec
                 <th className="px-6 py-4">Nom & prénom</th>
                 <th className="px-6 py-4">Agenceur.s</th>
                 <th className="px-6 py-4">Nom du projet</th>
-                <th className="px-6 py-4 text-center">Statut du projet</th>
+                <th className="px-6 py-4">Statut du projet</th>
                 <th className="px-6 py-4 text-center">Ajouté le</th>
                 <th className="px-6 py-4 text-right">Action rapide</th>
               </tr>
@@ -204,17 +205,17 @@ const ProjectTracking: React.FC<ProjectTrackingProps> = ({ userProfile, onProjec
                       <span className="text-sm font-medium text-gray-800">{project.agenceur?.name}</span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-sm font-semibold text-gray-700">
+                  <td className="px-6 py-4 text-sm font-semibold text-gray-700 uppercase">
                     {project.projectName}
                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex items-center justify-center gap-3">
-                      <span className={`px-3 py-1 rounded-md text-[11px] font-extrabold uppercase tracking-tight ${project.statusColor || 'bg-gray-100 text-gray-600'}`}>
+                    <div className="flex items-center justify-start gap-4">
+                      <span className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-tight ${project.statusColor || 'bg-gray-100 text-gray-600'}`}>
                         {project.status}
                       </span>
-                      <div className="flex items-center opacity-60">
+                      <div className="flex items-center gap-1">
                         <ProgressCircle progress={project.progress || 0} color={project.statusColor || ''} />
-                        <span className="text-[11px] font-bold">{project.progress || 0}%</span>
+                        <span className="text-[12px] font-black text-gray-900">{project.progress || 0}%</span>
                       </div>
                     </div>
                   </td>

@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { X, Briefcase, ArrowLeft, Check, Loader2, Search, User, Phone, Mail, ChevronDown, MapPin } from 'lucide-react';
+import { X, Briefcase, Check, Loader2, ChevronDown, MapPin, CheckCircle2, ArrowRight } from 'lucide-react';
 import { db } from '../firebase';
 // Use @firebase/firestore to fix named export resolution issues
-import { collection, addDoc, query, where, onSnapshot, doc, updateDoc, increment } from '@firebase/firestore';
+import { collection, addDoc, query, where, onSnapshot, doc, updateDoc, increment, getDocs, getDoc } from '@firebase/firestore';
 
 const HIERARCHY_DATA: Record<string, Record<string, string[]>> = {
   "Actif commercial": {
@@ -85,6 +85,9 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({
 }) => {
   const isEdit = !!projectToEdit;
   const [isLoading, setIsLoading] = useState(false);
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+  const [createdProjectId, setCreatedProjectId] = useState<string | null>(null);
+  
   const [clients, setClients] = useState<any[]>([]);
   const [agenceurs, setAgenceurs] = useState<any[]>([]);
   const [clientAddresses, setClientAddresses] = useState<string[]>([]);
@@ -102,9 +105,30 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({
     selectedClientId: clientId || ''
   });
 
+  // Fetch client origin data when selectedClientId changes
+  useEffect(() => {
+    const cid = clientId || formData.selectedClientId;
+    if (isOpen && cid && !isEdit) {
+      const fetchOriginInfo = async () => {
+        const clientSnap = await getDoc(doc(db, 'clients', cid));
+        if (clientSnap.exists()) {
+          const data = clientSnap.data();
+          setFormData(prev => ({
+            ...prev,
+            categorie: data.details?.category || '',
+            origine: data.origin || '',
+            sousOrigine: data.details?.subOrigin || ''
+          }));
+        }
+      };
+      fetchOriginInfo();
+    }
+  }, [isOpen, clientId, formData.selectedClientId, isEdit]);
+
   // Mise à jour si les initialData ou projectToEdit changent
   useEffect(() => {
     if (isOpen) {
+      setShowSuccessPopup(false);
       if (projectToEdit) {
         setFormData({
           categorie: projectToEdit.categorie || '',
@@ -149,7 +173,6 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({
       
       setAgenceurs(fetched);
       
-      // Si on n'est pas en édition et qu'on n'a pas encore d'agenceur, on met l'utilisateur actuel
       if (!isEdit && !formData.agenceurUid && userProfile) {
         setFormData(prev => ({
           ...prev,
@@ -165,9 +188,10 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({
 
   // Chargement des Adresses
   useEffect(() => {
-    if (!isOpen || !clientId) return;
+    const cid = clientId || formData.selectedClientId;
+    if (!isOpen || !cid) return;
 
-    const unsubClient = onSnapshot(doc(db, 'clients', clientId), (docSnap) => {
+    const unsubClient = onSnapshot(doc(db, 'clients', cid), (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
         const addresses: string[] = [];
@@ -178,14 +202,13 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({
           });
         }
         setClientAddresses(addresses);
-        // Si on n'est pas en édition et qu'on n'a pas d'adresse, on prend la première
         if (!isEdit && addresses.length > 0 && !formData.adresseChantier) {
           setFormData(prev => ({ ...prev, adresseChantier: addresses[0] }));
         }
       }
     });
     return () => unsubClient();
-  }, [isOpen, clientId, isEdit]);
+  }, [isOpen, clientId, formData.selectedClientId, isEdit]);
 
   useEffect(() => {
     if (!isOpen || !userProfile?.companyId) return;
@@ -226,11 +249,9 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({
       };
 
       if (isEdit && projectToEdit) {
-        // Mode Mise à jour
         await updateDoc(doc(db, 'projects', projectToEdit.id), payload);
         onClose();
       } else {
-        // Mode Création
         const projectRef = await addDoc(collection(db, 'projects'), {
           ...payload,
           details: { adresseChantier: formData.adresseChantier },
@@ -241,22 +262,42 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({
           createdAt: new Date().toISOString()
         });
 
-        // Incrémenter le compteur de projets sur la fiche client
+        // 1. Incrémenter le compteur de projets sur la fiche client
         const clientRef = doc(db, 'clients', finalClientId);
-        await updateDoc(clientRef, {
-          projectCount: increment(1)
-        });
+        await updateDoc(clientRef, { projectCount: increment(1) });
 
-        if (onProjectCreated) {
-          onProjectCreated(projectRef.id);
-        } else {
-          onClose();
-        }
+        // 2. CLÔTURE AUTOMATIQUE DE LA TÂCHE LEAD
+        const tasksQ = query(
+          collection(db, 'tasks'), 
+          where('clientId', '==', finalClientId)
+        );
+        const tasksSnap = await getDocs(tasksQ);
+        const updatePromises = tasksSnap.docs
+          .filter(tDoc => {
+            const data = tDoc.data();
+            return data.type === 'Tâche auto' && data.status !== 'completed';
+          })
+          .map(tDoc => 
+            updateDoc(doc(db, 'tasks', tDoc.id), { status: 'completed' })
+          );
+        await Promise.all(updatePromises);
+
+        setCreatedProjectId(projectRef.id);
+        setShowSuccessPopup(true);
       }
     } catch (e) {
       console.error(e);
+      alert("Une erreur est survenue.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleFinish = () => {
+    if (onProjectCreated && createdProjectId) {
+      onProjectCreated(createdProjectId);
+    } else {
+      onClose();
     }
   };
 
@@ -264,7 +305,34 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-[2px] p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-[20px] shadow-2xl w-full max-w-[950px] overflow-hidden flex flex-col animate-in zoom-in-95 duration-300">
+      <div className="bg-white rounded-[20px] shadow-2xl w-full max-w-[950px] overflow-hidden flex flex-col animate-in zoom-in-95 duration-300 relative">
+        
+        {/* POPUP DE SUCCÈS OVERLAY */}
+        {showSuccessPopup && (
+          <div className="absolute inset-0 z-[110] bg-white/95 backdrop-blur-md flex items-center justify-center animate-in fade-in duration-300">
+            <div className="max-w-md w-full p-10 text-center space-y-8 animate-in zoom-in-95 duration-500">
+              <div className="w-24 h-24 bg-green-50 rounded-[32px] flex items-center justify-center text-green-500 mx-auto shadow-inner ring-8 ring-green-50/50">
+                <CheckCircle2 size={52} className="animate-in slide-in-from-bottom-2" />
+              </div>
+              <div className="space-y-3">
+                <h3 className="text-2xl font-black text-gray-900 uppercase tracking-tighter">Projet créé avec succès !</h3>
+                <div className="p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl">
+                  <p className="text-[13px] text-indigo-700 font-bold leading-relaxed">
+                    La <span className="text-indigo-900">tâche automatique lead</span> a été marquée comme <span className="text-indigo-900">terminée</span> et archivée.
+                  </p>
+                </div>
+              </div>
+              <button 
+                onClick={handleFinish}
+                className="w-full flex items-center justify-center gap-3 py-4 bg-gray-900 text-white rounded-2xl text-[14px] font-black shadow-xl hover:bg-black transition-all hover:scale-[1.02] active:scale-95 group"
+              >
+                <span>Continuer vers le dossier</span>
+                <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+              </button>
+            </div>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit}>
           <div className="px-8 py-5 border-b border-gray-100 flex items-center justify-between bg-[#FBFBFB]">
             <div className="flex items-center gap-3">
@@ -273,7 +341,25 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({
                 <h2 className="text-[17px] font-bold text-gray-900 tracking-tight">
                   {isEdit ? "Modifier la fiche projet" : "Créer une fiche projet"}
                 </h2>
-                <p className="text-[11px] text-gray-400 font-medium">Pour le client : <span className="text-gray-900 font-bold uppercase">{clientName}</span></p>
+                {!clientId && !isEdit && (
+                   <div className="mt-2 flex items-center gap-3">
+                    <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Choisir client</label>
+                    <div className="relative">
+                      <select 
+                        value={formData.selectedClientId}
+                        onChange={(e) => setFormData({...formData, selectedClientId: e.target.value})}
+                        className="appearance-none bg-white border border-gray-100 rounded-lg px-3 py-1 text-[11px] font-bold text-gray-900 pr-8 shadow-sm outline-none focus:border-indigo-400"
+                      >
+                        <option value="">Séléctionner...</option>
+                        {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                      <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
+                    </div>
+                   </div>
+                )}
+                {(clientId || isEdit) && (
+                  <p className="text-[11px] text-gray-400 font-medium">Pour le client : <span className="text-gray-900 font-bold uppercase">{clientName || formData.projectName}</span></p>
+                )}
               </div>
             </div>
             <button type="button" onClick={onClose} className="p-2 border border-gray-200 hover:bg-white rounded-lg transition-all text-gray-400 hover:text-gray-900 shadow-sm"><X size={20} /></button>
@@ -340,7 +426,6 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({
                   <MapPin size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                   <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
                 </div>
-                {clientAddresses.length === 0 && <p className="text-[10px] text-red-500 font-bold ml-1">Veuillez renseigner une adresse sur la fiche client.</p>}
               </div>
             </div>
             <div className="bg-[#FBFBFB] border border-gray-100 rounded-2xl p-6 space-y-3">
@@ -361,7 +446,7 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({
           </div>
           <div className="px-8 py-8 flex gap-4 bg-[#FBFBFB] border-t border-gray-100">
             <button type="button" onClick={onClose} className="flex-1 px-6 py-4 bg-white border border-gray-200 rounded-2xl text-[14px] font-bold text-gray-700 hover:bg-gray-50 transition-all shadow-sm">Abandonner</button>
-            <button type="submit" disabled={isLoading || !formData.categorie || !formData.origine || clientAddresses.length === 0 || !formData.projectName} className="flex-1 flex items-center justify-center gap-3 px-6 py-4 bg-[#1A1C23] text-white rounded-2xl text-[14px] font-bold shadow-xl hover:bg-black transition-all disabled:opacity-50">
+            <button type="submit" disabled={isLoading || !formData.categorie || !formData.origine || (clientAddresses.length === 0 && !isEdit) || !formData.projectName} className="flex-1 flex items-center justify-center gap-3 px-6 py-4 bg-[#1A1C23] text-white rounded-2xl text-[14px] font-bold shadow-xl hover:bg-black transition-all disabled:opacity-50">
               {isLoading ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />} 
               {isEdit ? "Mettre à jour le projet" : "Créer la fiche projet"}
             </button>

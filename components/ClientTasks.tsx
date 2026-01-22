@@ -137,31 +137,52 @@ const ClientTasks: React.FC<ClientTasksProps> = ({ clientId, clientName, userPro
     filter === 'en-cours' ? t.status !== 'completed' : t.status === 'completed'
   );
 
+  const getTypeBadge = (type: string) => {
+    switch (type) {
+      case 'Tâche auto':
+        return (
+          <span className="px-2.5 py-1 bg-indigo-50 border border-indigo-100 text-indigo-600 text-[9px] font-black rounded-lg uppercase tracking-tight">
+            Auto
+          </span>
+        );
+      case 'Mémo':
+        return (
+          <span className="px-2.5 py-1 bg-purple-50 border border-purple-100 text-purple-600 text-[9px] font-black rounded-lg uppercase tracking-tight">
+            Mémo
+          </span>
+        );
+      default:
+        return (
+          <span className="px-2.5 py-1 bg-gray-50 border border-gray-100 text-gray-400 text-[9px] font-black rounded-lg uppercase tracking-tight">
+            Manuelle
+          </span>
+        );
+    }
+  };
+
   return (
     <div className="flex flex-col h-full animate-in fade-in duration-300 pt-6">
       <div className="flex justify-between items-center mb-6 px-2">
-        <div className="flex items-center gap-6">
-          <div className="space-y-1">
-            <h2 className="text-[16px] font-bold text-gray-800">
-              Récapitulatif des tâches <span className="text-gray-300 font-normal ml-1">({filteredTasks.length})</span>
-            </h2>
-            <p className="text-[11px] text-gray-400 font-medium italic">Inclut les mémos et les tâches de tous ses projets.</p>
-          </div>
-          
-          <div className="flex bg-[#F1F3F5] rounded-full p-1 border border-gray-100 shadow-inner ml-4">
-            <button 
-              onClick={() => setFilter('en-cours')} 
-              className={`px-8 py-2 text-[11px] font-bold rounded-full transition-all ${filter === 'en-cours' ? 'bg-[#1A1C23] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
-            >
-              En cours
-            </button>
-            <button 
-              onClick={() => setFilter('termine')} 
-              className={`px-8 py-2 text-[11px] font-bold rounded-full transition-all ${filter === 'termine' ? 'bg-[#1A1C23] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
-            >
-              Terminé
-            </button>
-          </div>
+        <div className="space-y-1">
+          <h2 className="text-[16px] font-bold text-gray-800">
+            Récapitulatif des tâches <span className="text-gray-300 font-normal ml-1">({filteredTasks.length})</span>
+          </h2>
+          <p className="text-[11px] text-gray-400 font-medium italic">Inclut les mémos et les tâches de tous ses projets.</p>
+        </div>
+        
+        <div className="flex bg-[#F1F3F5] rounded-full p-1 border border-gray-100 shadow-inner ml-4">
+          <button 
+            onClick={() => setFilter('en-cours')} 
+            className={`px-8 py-2 text-[11px] font-bold rounded-full transition-all ${filter === 'en-cours' ? 'bg-[#1A1C23] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            En cours
+          </button>
+          <button 
+            onClick={() => setFilter('termine')} 
+            className={`px-8 py-2 text-[11px] font-bold rounded-full transition-all ${filter === 'termine' ? 'bg-[#1A1C23] text-white shadow-md' : 'text-gray-400 hover:text-gray-600'}`}
+          >
+            Terminé
+          </button>
         </div>
 
         <button 
@@ -230,15 +251,12 @@ const ClientTasks: React.FC<ClientTasksProps> = ({ clientId, clientName, userPro
                         <span className="text-[13.5px] font-bold text-gray-900 group-hover:text-purple-700 transition-colors truncate max-w-[250px]">{task.title}</span>
                         <div className="flex items-center gap-2 mt-0.5">
                            {task.subtitle && <span className="text-[10px] font-black text-indigo-400 uppercase tracking-tight">{task.subtitle}</span>}
-                           {!task.subtitle && <span className="text-[10px] font-bold text-gray-300 uppercase tracking-tight italic">Tâche directe client</span>}
                         </div>
                       </div>
                     </td>
 
                     <td className="px-6 py-5 border-y border-gray-50 text-center">
-                      <span className="px-2.5 py-1 text-[9px] font-black bg-gray-50 border border-gray-100 text-gray-400 rounded-lg uppercase tracking-tight">
-                        {task.type}
-                      </span>
+                      {getTypeBadge(task.type)}
                     </td>
 
                     <td className="px-6 py-5 border-y border-gray-50 text-center">
@@ -288,7 +306,7 @@ const ClientTasks: React.FC<ClientTasksProps> = ({ clientId, clientName, userPro
                             </div>
                           )}
                         </div>
-                      ) : (
+                      ) : task.type !== 'Tâche auto' ? (
                         <div className="flex bg-[#F8F9FA] rounded-full border border-gray-200 p-0.5 w-full">
                             <button 
                               onClick={() => updateTaskStatus(task.id, 'pending')}
@@ -308,6 +326,15 @@ const ClientTasks: React.FC<ClientTasksProps> = ({ clientId, clientName, userPro
                             >
                               Terminé
                             </button>
+                        </div>
+                      ) : (
+                        <div className="flex justify-center">
+                            <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                                task.status === 'completed' ? 'bg-green-50 text-green-600 border border-green-100' : 
+                                task.status === 'in-progress' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'bg-gray-50 text-gray-400 border border-gray-100'
+                            }`}>
+                                {task.status === 'completed' ? 'Terminée' : task.status === 'in-progress' ? 'En cours' : 'À faire'}
+                            </span>
                         </div>
                       )}
                     </td>

@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { X, ChevronDown, Plus, Loader2, MapPin, Search, Check, User, Info, ShieldCheck, Link } from 'lucide-react';
+import { X, ChevronDown, Plus, Loader2, MapPin, Search, Check, User, Info, ShieldCheck, Link, Save } from 'lucide-react';
 import { db } from '../firebase';
 // Use @firebase/firestore to fix named export resolution issues
-import { collection, addDoc, getDocs, query, where } from '@firebase/firestore';
+import { collection, addDoc, getDocs, query, where, doc, updateDoc } from '@firebase/firestore';
+import { Client } from '../types';
 
 // Structure de données hiérarchique identique aux autres composants
 const HIERARCHY_DATA: Record<string, Record<string, string[]>> = {
@@ -50,9 +51,11 @@ interface ModalProps {
   onClose: () => void;
   userProfile: any;
   onClientCreated?: (clientId: string, clientName: string) => void;
+  clientToEdit?: Client | null; // Nouveau prop pour l'édition
 }
 
-const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCreated }) => {
+const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCreated, clientToEdit }) => {
+  const isEdit = !!clientToEdit;
   const [isLoading, setIsLoading] = useState(false);
   const [addressSearch, setAddressSearch] = useState('');
   const [suggestions, setSuggestions] = useState<any[]>([]);
@@ -93,33 +96,62 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
     rgpd: false
   });
 
-  // Reset form when opening
+  // Reset form when opening or changing clientToEdit
   useEffect(() => {
     if (isOpen) {
-      setFormData(prev => ({
-        ...prev,
-        referent: userProfile?.name || '',
-        lastName: '',
-        firstName: '',
-        email: '',
-        phone: '',
-        address: '',
-        city: '',
-        postcode: '',
-        lat: null,
-        lng: null,
-        complement: '',
-        category: '',
-        origin: '',
-        subOrigin: '',
-        sponsorLink: '',
-        rgpd: false
-      }));
-      setAddressSearch('');
-      setSponsorSearch('');
-      setSelectedSponsor(null);
+      if (clientToEdit) {
+        const details = clientToEdit.details || {};
+        setFormData({
+          civility: details.civility || 'Mme',
+          lastName: details.lastName || '',
+          firstName: details.firstName || '',
+          email: details.email || '',
+          phone: details.phone || '',
+          address: details.address || '',
+          city: details.city || '',
+          postcode: details.postcode || '',
+          lat: details.lat || null,
+          lng: details.lng || null,
+          complement: details.complement || '',
+          category: details.category || '',
+          origin: clientToEdit.origin || '',
+          subOrigin: details.subOrigin || '',
+          referent: details.referent || clientToEdit.addedBy?.name || '',
+          sponsorLink: details.sponsorLink || '',
+          rgpd: details.rgpd || false
+        });
+        setAddressSearch(details.address || '');
+        if (details.sponsorId && details.sponsorName) {
+            setSelectedSponsor({ id: details.sponsorId, name: details.sponsorName });
+        } else {
+            setSelectedSponsor(null);
+        }
+      } else {
+        setFormData({
+          civility: 'Mme',
+          lastName: '',
+          firstName: '',
+          email: '',
+          phone: '',
+          address: '',
+          city: '',
+          postcode: '',
+          lat: null,
+          lng: null,
+          complement: '',
+          category: '',
+          origin: '',
+          subOrigin: '',
+          referent: userProfile?.name || '',
+          sponsorLink: '',
+          rgpd: false
+        });
+        setAddressSearch('');
+        setSponsorSearch('');
+        setSelectedSponsor(null);
+      }
     }
-  }, [isOpen, userProfile]);
+  }, [isOpen, userProfile, clientToEdit]);
 
   // Fetch team members when modal opens
   useEffect(() => {
@@ -144,7 +176,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
   // BAN API logic
   useEffect(() => {
     const fetchAddresses = async () => {
-      if (addressSearch.length < 4) {
+      if (addressSearch.length < 4 || (isEdit && addressSearch === clientToEdit?.details?.address)) {
         setSuggestions([]);
         return;
       }
@@ -164,7 +196,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
 
     const timer = setTimeout(fetchAddresses, 300);
     return () => clearTimeout(timer);
-  }, [addressSearch]);
+  }, [addressSearch, isEdit, clientToEdit]);
 
   // Recherche parrain dans l'annuaire
   useEffect(() => {
@@ -244,36 +276,49 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
     setIsLoading(true);
     try {
       const clientName = `${formData.firstName} ${formData.lastName}`.toUpperCase().trim();
-      const newClient = {
+      
+      const clientData: any = {
         name: clientName,
-        addedBy: {
-          uid: userProfile.uid,
-          name: userProfile.name,
-          avatar: userProfile.avatar
-        },
         origin: formData.origin,
         location: formData.city || 'Non renseignée',
-        status: 'Leads', 
-        dateAdded: new Date().toLocaleDateString('fr-FR'),
-        companyId: companyId,
         details: {
           ...formData,
           sponsorId: selectedSponsor?.id || null,
           sponsorName: selectedSponsor?.name || null,
-          createdAt: new Date().toISOString()
-        },
-        projectCount: 0
+        }
       };
 
-      const docRef = await addDoc(collection(db, 'clients'), newClient);
-      
-      if (onClientCreated) {
-        onClientCreated(docRef.id, clientName);
-      } else {
+      if (isEdit && clientToEdit) {
+        // Mode Mise à jour
+        const clientRef = doc(db, 'clients', clientToEdit.id);
+        await updateDoc(clientRef, clientData);
         onClose();
+      } else {
+        // Mode Création
+        const newClient = {
+          ...clientData,
+          addedBy: {
+            uid: userProfile.uid,
+            name: userProfile.name,
+            avatar: userProfile.avatar
+          },
+          status: 'Leads', 
+          dateAdded: new Date().toLocaleDateString('fr-FR'),
+          companyId: companyId,
+          projectCount: 0
+        };
+        newClient.details.createdAt = new Date().toISOString();
+
+        const docRef = await addDoc(collection(db, 'clients'), newClient);
+        
+        if (onClientCreated) {
+          onClientCreated(docRef.id, clientName);
+        } else {
+          onClose();
+        }
       }
     } catch (error) {
-      console.error("Erreur creation client:", error);
+      console.error("Erreur creation/edition client:", error);
       alert("Erreur lors de l'enregistrement.");
     } finally {
       setIsLoading(false);
@@ -303,11 +348,13 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
           {/* Header */}
           <div className="p-6 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-30">
               <div className="flex items-center space-x-3">
-                  <div className="p-2.5 bg-gray-50 rounded-lg border border-gray-200 shadow-sm text-gray-800">
-                       <Plus size={20} />
+                  <div className={`p-2.5 rounded-lg border shadow-sm transition-colors ${isEdit ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-gray-50 border-gray-200 text-gray-800'}`}>
+                       {isEdit ? <Save size={20} /> : <Plus size={20} />}
                   </div>
                   <div>
-                    <h2 className="text-xl font-bold text-gray-900 tracking-tight">Créer une fiche lead</h2>
+                    <h2 className="text-xl font-bold text-gray-900 tracking-tight">
+                        {isEdit ? "Modifier la fiche client" : "Créer une fiche lead"}
+                    </h2>
                     <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest mt-0.5">Société : {userProfile?.companyName || 'Chargement...'}</p>
                   </div>
               </div>
@@ -493,7 +540,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
                                 disabled={!formData.origin}
                                 value={formData.subOrigin}
                                 onChange={(e) => setFormData({...formData, subOrigin: e.target.value})}
-                                className="w-full appearance-none bg-white border border-gray-100 rounded-xl py-2.5 px-4 text-sm font-bold text-gray-800 focus:outline-none focus:border-indigo-500 transition-all shadow-sm disabled:opacity-50 disabled:bg-gray-100"
+                                className="w-full appearance-none bg-white border border-gray-200 rounded-xl py-2.5 px-4 text-sm font-bold text-gray-800 focus:outline-none focus:border-indigo-500 transition-all shadow-sm disabled:opacity-50 disabled:bg-gray-100"
                               >
                                   <option value="">Sélectionner</option>
                                   {subOrigins.map(so => <option key={so} value={so}>{so}</option>)}
@@ -652,7 +699,6 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
                           onClick={() => setShowRgpdInfo(true)}
                           className="text-indigo-500 hover:text-indigo-700 transition-colors flex items-center gap-1"
                         >
-                          <Info size={12} />
                           <span className="text-[10px] font-bold border-b border-indigo-200">En savoir plus</span>
                         </button>
                       </div>
@@ -681,14 +727,14 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
               <button 
                 type="submit"
                 disabled={isLoading || !formData.lastName || !formData.firstName || !addressSearch || !formData.category || !formData.origin || (formData.origin === 'Parrainage' && !selectedSponsor) || !userProfile?.companyId}
-                className="flex items-center space-x-3 px-12 py-4 bg-gray-900 text-white rounded-2xl text-[15px] font-bold shadow-2xl shadow-gray-200 hover:bg-black hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
+                className={`flex items-center space-x-3 px-12 py-4 text-white rounded-2xl text-[15px] font-bold shadow-2xl transition-all disabled:opacity-50 disabled:cursor-not-allowed group ${isEdit ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100' : 'bg-gray-900 hover:bg-black shadow-gray-200'}`}
               >
                   {isLoading ? (
                     <Loader2 size={20} className="animate-spin" />
                   ) : (
-                    <Plus size={20} className="group-hover:rotate-90 transition-transform duration-300" />
+                    isEdit ? <Save size={20} /> : <Plus size={20} className="group-hover:rotate-90 transition-transform duration-300" />
                   )}
-                  <span>{isLoading ? 'Enregistrement en cours...' : 'Créer la fiche lead'}</span>
+                  <span>{isLoading ? 'Enregistrement en cours...' : (isEdit ? 'Enregistrer les modifications' : 'Créer la fiche lead')}</span>
               </button>
           </div>
         </form>

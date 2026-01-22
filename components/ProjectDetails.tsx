@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   ArrowLeft, 
   ChevronDown, 
@@ -15,7 +15,10 @@ import {
   MessageSquare,
   File as FileIcon,
   Check,
-  X
+  X,
+  ChevronLeft,
+  LayoutList,
+  Circle
 } from 'lucide-react';
 import { db } from '../firebase';
 // Use @firebase/firestore to fix named export resolution issues
@@ -49,6 +52,9 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
   const [editedTitle, setEditedTitle] = useState(initialProject.projectName);
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+
+  // État pour la checklist latérale
+  const [isChecklistOpen, setIsChecklistOpen] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -115,8 +121,88 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
     }
   };
 
+  // Structure de base de la checklist
+  const checklist = useMemo(() => {
+    const base = project.details?.checklist || {};
+    return {
+      etudeClient: base.etudeClient || {
+        decouverte: false,
+        conception: false,
+        presentation: false,
+        devisValide: false
+      },
+      commandeClient: (typeof base.commandeClient === 'object' && base.commandeClient !== null) 
+        ? base.commandeClient 
+        : {
+            docsSigner: false,
+            devisSigner: false,
+            metreRealise: false,
+            commandeSignee: false
+          },
+      dossierTech: base.dossierTech || false
+    };
+  }, [project.details?.checklist]);
+
+  // Calcul du pourcentage local pour le premier bloc (Étude Client - 4 jalons)
+  const etudeProgress = useMemo(() => {
+    const steps = checklist.etudeClient;
+    const total = 4;
+    const completed = Object.values(steps).filter(v => v === true).length;
+    return Math.round((completed / total) * 100);
+  }, [checklist.etudeClient]);
+
+  // Calcul du pourcentage local pour le second bloc (Commande Client - 4 jalons)
+  const commandeProgress = useMemo(() => {
+    const steps = checklist.commandeClient;
+    const total = 4;
+    const completed = Object.values(steps).filter(v => v === true).length;
+    return Math.round((completed / total) * 100);
+  }, [checklist.commandeClient]);
+
+  // Calcul de la progression GLOBALE du projet (9 jalons au total: 4 Etude + 4 Commande + 1 Dossier Tech)
+  const globalProgress = useMemo(() => {
+    const steps = [
+      ...Object.values(checklist.etudeClient),
+      ...Object.values(checklist.commandeClient),
+      checklist.dossierTech
+    ];
+    const totalSteps = steps.length;
+    const completedSteps = steps.filter(v => v === true).length;
+    
+    if (completedSteps === 0) return 2; // On garde 2% par défaut pour le visuel
+    return Math.round((completedSteps / totalSteps) * 100);
+  }, [checklist]);
+
+  const handleChecklistUpdate = async (path: string, value: boolean) => {
+    try {
+      // Simulation locale pour le calcul immédiat avant sauvegarde
+      const updatedChecklist = JSON.parse(JSON.stringify(checklist));
+      if (path.includes('.')) {
+        const [obj, field] = path.split('.');
+        updatedChecklist[obj][field] = value;
+      } else {
+        updatedChecklist[path] = value;
+      }
+
+      // Recalcul des jalons pour Firestore (total 9 étapes)
+      const steps = [
+        ...Object.values(updatedChecklist.etudeClient),
+        ...Object.values(updatedChecklist.commandeClient),
+        updatedChecklist.dossierTech
+      ];
+      const newGlobalProgress = Math.round((steps.filter(v => v === true).length / steps.length) * 100) || 2;
+
+      await updateDoc(doc(db, 'projects', project.id), {
+        [`details.checklist.${path}`]: value,
+        progress: newGlobalProgress
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const ProgressCircle = ({ progress, color, size = "w-4 h-4" }: { progress: number; color: string; size?: string }) => {
-    const strokeColor = color?.includes('D946EF') ? '#D946EF' : color?.includes('F97316') ? '#F97316' : color?.includes('0EA5E9') ? '#0EA5E9' : color?.includes('red') ? '#ef4444' : '#3B82F6';
+    const strokeColor = color?.includes('D946EF') ? '#D946EF' : color?.includes('F97316') ? '#F97316' : color?.includes('0EA5E9') ? '#0EA5E9' : color?.includes('red') ? '#ef4444' : '#6366f1';
     return (
       <svg className={`${size} mr-1.5`} viewBox="0 0 36 36">
         <path className="text-gray-100" strokeDasharray="100, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="currentColor" strokeWidth="3.5" />
@@ -132,7 +218,6 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
     { label: 'Documents', key: 'Documents' }
   ];
 
-  // Filtrage des sous-onglets selon la demande utilisateur
   const subTabs = ['Découverte', 'Découverte cuisine'];
 
   if (loading && !project) {
@@ -172,10 +257,6 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
                   ) : (
                     <h1 className="text-[20px] font-bold text-gray-900">{project.projectName}</h1>
                   )}
-                  <div className="flex items-center gap-1.5">
-                    <ProgressCircle progress={project.progress || 0} color={project.statusColor?.includes('red') ? 'red' : '#D946EF'} />
-                    <span className={`text-[12px] font-bold ${project.statusColor?.includes('red') ? 'text-red-500' : 'text-[#D946EF]'}`}>{project.progress}%</span>
-                  </div>
                   <span className={`px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-tight ${project.statusColor || 'bg-gray-100 text-gray-400'}`}>
                     {project.status}
                   </span>
@@ -317,24 +398,166 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
         </div>
       </div>
 
-      {/* Sidebar Droite */}
-      <div className="w-24 bg-white border-l border-gray-100 flex flex-col items-center py-10 gap-8 shrink-0 relative shadow-lg">
-        <button className="p-4 text-gray-400 hover:text-gray-900 transition-all"><ChevronRight size={24} className="rotate-180" /></button>
-        <div className="w-12 h-px bg-gray-50"></div>
-        <div className="flex flex-col items-center gap-6">
-          <div className="flex flex-col items-center gap-1">
-            <ProgressCircle progress={project.progress || 2} color={project.statusColor?.includes('red') ? 'red' : "#D946EF"} size="w-8 h-8" />
-            <span className="text-[10px] font-bold text-gray-900">{project.progress || 2}%</span>
+      {/* Barre latérale droite EXTENSIBLE (Checklist) */}
+      <div 
+        className={`${isChecklistOpen ? 'w-[350px]' : 'w-20'} bg-white border-l border-gray-100 flex flex-col h-screen transition-all duration-500 ease-in-out z-40 relative shadow-2xl shrink-0`}
+      >
+        {/* Toggle Button */}
+        <button 
+          onClick={() => setIsChecklistOpen(!isChecklistOpen)}
+          className={`absolute -left-4 top-10 w-8 h-8 bg-white border border-gray-100 rounded-full shadow-lg flex items-center justify-center text-gray-400 hover:text-indigo-600 transition-all z-50 ${isChecklistOpen ? 'rotate-180' : ''}`}
+        >
+          <ChevronLeft size={18} />
+        </button>
+
+        {/* Vue compacte (Quand fermée) */}
+        {!isChecklistOpen && (
+          <div className="flex flex-col items-center py-10 gap-8 animate-in fade-in duration-500 h-full">
+            <LayoutList size={22} className="text-gray-300" />
+            <div className="w-8 h-px bg-gray-50"></div>
+            <div className="flex flex-col items-center gap-6">
+              <div className="flex flex-col items-center gap-1">
+                <ProgressCircle progress={globalProgress} color="#6366f1" size="w-8 h-8" />
+                <span className="text-[10px] font-black text-gray-900">{globalProgress}%</span>
+              </div>
+              <div className={`p-2 rounded-lg ${Object.values(checklist.commandeClient).every(v => v === true) ? 'bg-green-50 text-green-500' : 'bg-gray-50 text-gray-300'}`}>
+                <CheckSquare size={16} />
+              </div>
+              <div className={`p-2 rounded-lg ${checklist.dossierTech ? 'bg-green-50 text-green-500' : 'bg-gray-50 text-gray-300'}`}>
+                <FileText size={16} />
+              </div>
+            </div>
+            <div className="mt-auto flex flex-col items-center gap-4 mb-4">
+              <button className="p-3 bg-gray-50 text-gray-400 hover:text-indigo-600 rounded-xl transition-all shadow-sm"><Mail size={18} /></button>
+              <button className="p-3 bg-gray-50 text-gray-400 hover:text-indigo-600 rounded-xl transition-all shadow-sm"><MessageSquare size={18} /></button>
+            </div>
           </div>
-          <div className="flex flex-col items-center gap-1 opacity-40">
-            <ProgressCircle progress={0} color="#3B82F6" size="w-8 h-8" />
-            <span className="text-[10px] font-bold text-blue-500">0%</span>
+        )}
+
+        {/* Vue complète (Quand ouverte) */}
+        {isChecklistOpen && (
+          <div className="flex flex-col h-full animate-in slide-in-from-right-10 duration-500">
+            <div className="p-8 border-b border-gray-50">
+              <div className="flex justify-between items-end">
+                <div>
+                  <h3 className="text-[18px] font-black text-gray-900 uppercase tracking-tighter">Avancé projet</h3>
+                  <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest mt-1">Suivi des jalons clés</p>
+                </div>
+                <span className="text-[22px] font-black text-indigo-600">{globalProgress}%</span>
+              </div>
+              
+              {/* Progress Bar Globale (Sommet de la checklist) */}
+              <div className="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden mt-6">
+                <div 
+                  className="h-full bg-indigo-600 rounded-full transition-all duration-700 shadow-[0_0_15px_rgba(79,70,229,0.4)]"
+                  style={{ width: `${globalProgress}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-8 space-y-10 hide-scrollbar">
+              
+              {/* BLOC 1 : Étude Client */}
+              <div className="space-y-6">
+                <div className="flex justify-between items-end">
+                  <h4 className="text-[11px] font-black text-indigo-500 uppercase tracking-[0.2em]">Étude client</h4>
+                  <span className="text-[12px] font-black text-gray-400">{etudeProgress}%</span>
+                </div>
+                
+                <div className="space-y-4 pt-2">
+                  {[
+                    { id: 'decouverte', label: 'Découverte réalisée' },
+                    { id: 'conception', label: 'Conception réalisée' },
+                    { id: 'presentation', label: 'Présentation éffectuée' },
+                    { id: 'devisValide', label: 'Devis validé par le client' }
+                  ].map((item) => (
+                    <label key={item.id} className="flex items-center gap-4 group cursor-pointer">
+                      <div 
+                        onClick={() => handleChecklistUpdate(`etudeClient.${item.id}`, !checklist.etudeClient[item.id])}
+                        className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
+                          checklist.etudeClient[item.id] 
+                          ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' 
+                          : 'bg-white border-gray-100 group-hover:border-indigo-200'
+                        }`}
+                      >
+                        {checklist.etudeClient[item.id] ? <Check size={14} strokeWidth={4} /> : <div className="w-1.5 h-1.5 rounded-full bg-gray-50" />}
+                      </div>
+                      <span className={`text-[13px] font-bold transition-colors ${checklist.etudeClient[item.id] ? 'text-gray-900' : 'text-gray-400'}`}>
+                        {item.label}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* BLOC 2 : Commande Client */}
+              <div className={`p-6 border rounded-[24px] space-y-6 transition-all ${Object.values(checklist.commandeClient).every(v => v === true) ? 'bg-indigo-50/30 border-indigo-100' : 'bg-[#FBFBFB] border-gray-100'}`}>
+                <div className="flex justify-between items-end mb-2">
+                  <h4 className={`text-[11px] font-black uppercase tracking-[0.2em] transition-colors ${Object.values(checklist.commandeClient).some(v => v === true) ? 'text-indigo-600' : 'text-gray-500'}`}>
+                    Commande client
+                  </h4>
+                  <span className="text-[12px] font-black text-gray-400">{commandeProgress}%</span>
+                </div>
+                
+                <div className="space-y-4">
+                  {[
+                    { id: 'docsSigner', label: 'Doc à signer' },
+                    { id: 'devisSigner', label: 'Devis à signer' },
+                    { id: 'metreRealise', label: 'Métré réalisé' },
+                    { id: 'commandeSignee', label: 'Commande signée' }
+                  ].map((item) => (
+                    <label key={item.id} className="flex items-center gap-4 group cursor-pointer">
+                      <div 
+                        onClick={() => handleChecklistUpdate(`commandeClient.${item.id}`, !checklist.commandeClient[item.id])}
+                        className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
+                          checklist.commandeClient[item.id] 
+                          ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' 
+                          : 'bg-white border-gray-100 group-hover:border-indigo-300'
+                        }`}
+                      >
+                        {checklist.commandeClient[item.id] ? <Check size={14} strokeWidth={4} /> : <div className="w-1.5 h-1.5 rounded-full bg-gray-50" />}
+                      </div>
+                      <span className={`text-[13px] font-bold transition-colors ${checklist.commandeClient[item.id] ? 'text-gray-900' : 'text-gray-400'}`}>
+                        {item.label}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* BLOC 3 : Dossier Tech */}
+              <div className={`p-6 border rounded-[24px] space-y-4 transition-all ${checklist.dossierTech ? 'bg-indigo-50/30 border-indigo-100' : 'bg-[#FBFBFB] border-gray-100'}`}>
+                <label className="flex items-center gap-4 group cursor-pointer">
+                  <div 
+                    onClick={() => handleChecklistUpdate('dossierTech', !checklist.dossierTech)}
+                    className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
+                      checklist.dossierTech 
+                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' 
+                      : 'bg-white border-gray-100 group-hover:border-indigo-300'
+                    }`}
+                  >
+                    {checklist.dossierTech ? <Check size={14} strokeWidth={4} /> : null}
+                  </div>
+                  <h4 className={`text-[12px] font-black uppercase tracking-[0.1em] transition-colors ${checklist.dossierTech ? 'text-indigo-600' : 'text-gray-500'}`}>
+                    Dossier tech & install
+                  </h4>
+                </label>
+              </div>
+
+            </div>
+
+            {/* Footer Profil Panel */}
+            <div className="p-8 border-t border-gray-50 bg-[#FBFBFB]">
+               <div className="flex items-center gap-4">
+                  <img src={project.agenceur?.avatar} className="w-10 h-10 rounded-full border-2 border-white shadow-md" alt="" />
+                  <div>
+                    <p className="text-[12px] font-black text-gray-900 uppercase tracking-tighter">{project.agenceur?.name}</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase">Agenceur Référent</p>
+                  </div>
+               </div>
+            </div>
           </div>
-        </div>
-        <div className="mt-auto flex flex-col items-center gap-4">
-          <button className="p-4 bg-gray-50 text-gray-400 hover:text-indigo-600 rounded-2xl transition-all shadow-sm"><Mail size={22} /></button>
-          <button className="p-4 bg-gray-50 text-gray-400 hover:text-indigo-600 rounded-2xl transition-all shadow-sm"><MessageSquare size={22} /></button>
-        </div>
+        )}
       </div>
 
       {/* Modales pré-remplies */}

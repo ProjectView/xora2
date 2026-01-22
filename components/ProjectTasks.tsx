@@ -238,7 +238,7 @@ const ProjectTasks: React.FC<ProjectTasksProps> = ({ projectId, clientId, projec
                             </div>
                           )}
                         </div>
-                      ) : (
+                      ) : task.type !== 'Tâche auto' ? (
                         <div className="flex bg-[#F8F9FA] rounded-full border border-gray-200 p-0.5 w-full">
                             <button 
                               onClick={() => updateTaskStatus(task.id, 'pending')}
@@ -259,6 +259,15 @@ const ProjectTasks: React.FC<ProjectTasksProps> = ({ projectId, clientId, projec
                               Terminé
                             </button>
                         </div>
+                      ) : (
+                        <div className="flex justify-center">
+                            <span className={`px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                                task.status === 'completed' ? 'bg-green-50 text-green-600 border border-green-100' : 
+                                task.status === 'in-progress' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' : 'bg-gray-50 text-gray-400 border border-gray-100'
+                            }`}>
+                                {task.status === 'completed' ? 'Terminée' : task.status === 'in-progress' ? 'En cours' : 'À faire'}
+                            </span>
+                        </div>
                       )}
                     </td>
 
@@ -274,7 +283,7 @@ const ProjectTasks: React.FC<ProjectTasksProps> = ({ projectId, clientId, projec
                           {activeMenuId === task.id && (
                             <>
                               <div className="fixed inset-0 z-40" onClick={() => setActiveMenuId(null)}></div>
-                              <div className="absolute right-0 mt-2 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 py-2 w-48 animate-in fade-in zoom-in-95 duration-150">
+                              <div className="absolute right-0 mt-2 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 py-2 w-48 animate-in fade-in zoom-in-95 duration-150 text-left">
                                 <button 
                                   onClick={(e) => { e.stopPropagation(); handleEditTask(task); }}
                                   className="w-full text-left px-4 py-2.5 text-[12px] font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2">
