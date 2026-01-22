@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ChevronDown, Plus, Minus, FileText, Search, MapPin, Loader2, Upload, File, X, Star, Calendar } from 'lucide-react';
 import { db } from '../firebase';
@@ -302,30 +303,30 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
 
       {/* 2. Origine du projet */}
       <Section title="Origine du Projet">
-        <Field label="Catégorie" colSpan="col-span-12 md:col-span-4">
+        <Field label="Origine" colSpan="col-span-12 md:col-span-4">
           <Select 
             value={currentCategory} 
             options={categories} 
             onChange={(v: string) => handleUpdate('details.category', v)} 
-            placeholder="Sélectionner une catégorie"
-          />
-        </Field>
-        <Field label="Origine" colSpan="col-span-12 md:col-span-4">
-          <Select 
-            disabled={!currentCategory}
-            value={currentOrigin} 
-            options={origins} 
-            onChange={(v: string) => handleUpdate('origine', v)} 
             placeholder="Sélectionner une origine"
           />
         </Field>
         <Field label="Sous-origine" colSpan="col-span-12 md:col-span-4">
           <Select 
+            disabled={!currentCategory}
+            value={currentOrigin} 
+            options={origins} 
+            onChange={(v: string) => handleUpdate('origine', v)} 
+            placeholder="Sélectionner une sous-origine"
+          />
+        </Field>
+        <Field label="Sources" colSpan="col-span-12 md:col-span-4">
+          <Select 
             disabled={!currentOrigin}
             value={project.details?.subOrigin} 
             options={subOrigins} 
             onChange={(v: string) => handleUpdate('details.subOrigin', v)} 
-            placeholder="Sélectionner une sous-origine"
+            placeholder="Sélectionner une source"
           />
         </Field>
       </Section>

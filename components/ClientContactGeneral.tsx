@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { ChevronDown, ChevronUp, Plus, Search, MapPin, Loader2, Trash2, Check, User, Phone, Mail, AlertTriangle, X } from 'lucide-react';
 import { Client } from '../types';
@@ -476,7 +477,7 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
         
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="space-y-2">
-            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Catégorie</label>
+            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Origine</label>
             <div className="relative">
               <select 
                 className="w-full appearance-none bg-white border border-gray-100 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-indigo-400 transition-all font-bold shadow-sm" 
@@ -491,7 +492,7 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
           </div>
           
           <div className="space-y-2">
-            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Origine</label>
+            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Sous-origine</label>
             <div className="relative">
               <select 
                 disabled={!currentCategory}
@@ -507,7 +508,7 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
           </div>
 
           <div className="space-y-2">
-            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Sous origine</label>
+            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Sources</label>
             <div className="relative">
               <select 
                 disabled={!currentOrigin}

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { X, ChevronDown, Plus, Loader2, MapPin, Search, Check, User, Info, ShieldCheck } from 'lucide-react';
+import { X, ChevronDown, Plus, Loader2, MapPin, Search, Check, User, Info, ShieldCheck, Link } from 'lucide-react';
 import { db } from '../firebase';
 // Use @firebase/firestore to fix named export resolution issues
 import { collection, addDoc, getDocs, query, where } from '@firebase/firestore';
@@ -60,6 +60,9 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
+  // États pour les membres de l'équipe (agenceurs)
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
+
   // États pour le parrainage
   const [sponsorSearch, setSponsorSearch] = useState('');
   const [sponsorSuggestions, setSponsorSuggestions] = useState<any[]>([]);
@@ -86,6 +89,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
     origin: '',   
     subOrigin: '', 
     referent: userProfile?.name || '',
+    sponsorLink: '', 
     rgpd: false
   });
 
@@ -108,6 +112,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
         category: '',
         origin: '',
         subOrigin: '',
+        sponsorLink: '',
         rgpd: false
       }));
       setAddressSearch('');
@@ -115,6 +120,26 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
       setSelectedSponsor(null);
     }
   }, [isOpen, userProfile]);
+
+  // Fetch team members when modal opens
+  useEffect(() => {
+    if (isOpen && userProfile?.companyId) {
+      const fetchTeam = async () => {
+        try {
+          const q = query(
+            collection(db, 'users'),
+            where('companyId', '==', userProfile.companyId)
+          );
+          const snap = await getDocs(q);
+          const members = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setTeamMembers(members);
+        } catch (e) {
+          console.error("Erreur lors de la récupération des membres de l'équipe :", e);
+        }
+      };
+      fetchTeam();
+    }
+  }, [isOpen, userProfile?.companyId]);
 
   // BAN API logic
   useEffect(() => {
@@ -315,7 +340,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
                       <input 
                         required
                         value={formData.lastName}
-                        onChange={(e) => setFormData({...formData, lastName: e.target.value})}
+                        onChange={(e) => setFormData({...formData, lastName: e.target.value.toUpperCase()})}
                         type="text" 
                         placeholder="Ex: DUBOIS" 
                         className="w-full bg-white border border-gray-200 rounded-xl py-3 px-4 text-sm font-semibold text-gray-800 focus:outline-none focus:border-gray-900 transition-all" 
@@ -427,7 +452,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
                   <h3 className="text-[11px] font-black text-indigo-500 uppercase tracking-[0.2em] ml-1">Origine du contact</h3>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-gray-50 p-6 rounded-2xl border border-gray-100 shadow-inner">
                       <div className="space-y-2">
-                          <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Catégorie*</label>
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Origine*</label>
                           <div className="relative">
                               <select 
                                 value={formData.category}
@@ -441,14 +466,17 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
                           </div>
                       </div>
                       <div className="space-y-2">
-                          <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Origine*</label>
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Sous-origine*</label>
                           <div className="relative">
                               <select 
                                 disabled={!formData.category}
                                 value={formData.origin}
                                 onChange={(e) => {
                                     setFormData({...formData, origin: e.target.value, subOrigin: ''});
-                                    if(e.target.value !== 'Parrainage') setSelectedSponsor(null);
+                                    if(e.target.value !== 'Parrainage') {
+                                      setSelectedSponsor(null);
+                                      setFormData(prev => ({ ...prev, sponsorLink: '' }));
+                                    }
                                 }}
                                 className="w-full appearance-none bg-white border border-gray-200 rounded-xl py-2.5 px-4 text-sm font-bold text-gray-800 focus:outline-none focus:border-indigo-500 transition-all shadow-sm disabled:opacity-50 disabled:bg-gray-100"
                               >
@@ -459,13 +487,13 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
                           </div>
                       </div>
                       <div className="space-y-2">
-                          <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Sous-origine</label>
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Sources</label>
                           <div className="relative">
                               <select 
                                 disabled={!formData.origin}
                                 value={formData.subOrigin}
                                 onChange={(e) => setFormData({...formData, subOrigin: e.target.value})}
-                                className="w-full appearance-none bg-white border border-gray-200 rounded-xl py-2.5 px-4 text-sm font-bold text-gray-800 focus:outline-none focus:border-indigo-500 transition-all shadow-sm disabled:opacity-50 disabled:bg-gray-100"
+                                className="w-full appearance-none bg-white border border-gray-100 rounded-xl py-2.5 px-4 text-sm font-bold text-gray-800 focus:outline-none focus:border-indigo-500 transition-all shadow-sm disabled:opacity-50 disabled:bg-gray-100"
                               >
                                   <option value="">Sélectionner</option>
                                   {subOrigins.map(so => <option key={so} value={so}>{so}</option>)}
@@ -477,8 +505,8 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
 
                   {/* Bloc Parrainage (Conditionnel) */}
                   {formData.origin === 'Parrainage' && (
-                    <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100 animate-in slide-in-from-top-2 duration-300">
-                        <div className="flex items-center gap-2 mb-4">
+                    <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100 animate-in slide-in-from-top-2 duration-300 space-y-4">
+                        <div className="flex items-center gap-2 mb-2">
                             <Plus size={14} className="text-indigo-600" />
                             <h4 className="text-[11px] font-black text-indigo-600 uppercase tracking-widest">Identification du Parrain</h4>
                         </div>
@@ -531,6 +559,12 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
                                                     type="button"
                                                     onClick={() => {
                                                         setSelectedSponsor({ id: sponsor.id, name: sponsor.name });
+                                                        // AUTO-ASSIGN REFERENT FROM SPONSOR
+                                                        if (sponsor.details?.referent) {
+                                                          setFormData(prev => ({ ...prev, referent: sponsor.details.referent }));
+                                                        } else if (sponsor.addedBy?.name) {
+                                                          setFormData(prev => ({ ...prev, referent: sponsor.addedBy.name }));
+                                                        }
                                                         setShowSponsorResults(false);
                                                     }}
                                                     className="w-full px-5 py-4 text-left hover:bg-indigo-50 flex items-center gap-4 border-b border-gray-50 last:border-0 group transition-all"
@@ -554,6 +588,21 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
                                 </>
                             )}
                         </div>
+
+                        {/* Champ Lien Parrain */}
+                        <div className="space-y-2 animate-in slide-in-from-top-1 duration-300">
+                          <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Lien parrain</label>
+                          <div className="relative group">
+                            <Link className="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-300 group-focus-within:text-indigo-600 transition-colors" size={16} />
+                            <input 
+                              type="text" 
+                              value={formData.sponsorLink}
+                              onChange={(e) => setFormData({...formData, sponsorLink: e.target.value})}
+                              placeholder="Ex: Cousin, Ami, Voisin, Collègue..." 
+                              className="w-full pl-11 pr-4 py-2.5 bg-white border border-indigo-100 rounded-xl text-sm font-bold text-gray-800 focus:outline-none focus:border-indigo-500 transition-all shadow-sm placeholder:text-indigo-200" 
+                            />
+                          </div>
+                        </div>
                     </div>
                   )}
               </div>
@@ -562,14 +611,31 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                       <label className="block text-[11px] font-bold text-gray-400 mb-2 uppercase tracking-wider">Agenceur référant*</label>
-                      <div className="relative">
-                          <div className="w-full bg-white border border-gray-100 rounded-xl py-2.5 px-4 text-sm text-gray-800 flex items-center shadow-sm">
-                              <img src={userProfile?.avatar} alt="" className="w-7 h-7 rounded-full mr-3 border border-white shadow-sm" />
-                              <span className="font-bold">{userProfile?.name}</span>
-                              <div className="ml-auto flex items-center gap-1">
-                                <Check size={14} className="text-green-500" />
-                                <span className="text-[9px] font-black text-green-500 uppercase tracking-tighter">Attribué</span>
-                              </div>
+                      <div className="relative group">
+                          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center pointer-events-none z-10">
+                              <img 
+                                src={teamMembers.find(m => m.name === formData.referent)?.avatar || userProfile?.avatar} 
+                                alt="" 
+                                className="w-7 h-7 rounded-full border border-white shadow-sm" 
+                              />
+                          </div>
+                          <select 
+                            value={formData.referent}
+                            onChange={(e) => setFormData({...formData, referent: e.target.value})}
+                            className="w-full appearance-none bg-white border border-gray-200 rounded-xl py-3 pl-12 pr-10 text-sm font-bold text-gray-800 focus:outline-none focus:border-indigo-500 transition-all shadow-sm"
+                          >
+                              {teamMembers.map((member) => (
+                                <option key={member.id} value={member.name}>
+                                  {member.name} {member.uid === userProfile?.uid ? '(Moi)' : ''}
+                                </option>
+                              ))}
+                          </select>
+                          <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
+                            <div className="flex items-center gap-1">
+                              <Check size={14} className="text-green-500" />
+                              <span className="text-[9px] font-black text-green-500 uppercase tracking-tighter">Attribué</span>
+                            </div>
+                            <ChevronDown size={16} className="text-gray-300" />
                           </div>
                       </div>
                   </div>
