@@ -53,8 +53,21 @@ const LISTE_CONFRERES = [
   "Schmidt", "Socooc", "Stosa", "Aran"
 ];
 
+const ARTISANS_OPTIONS = [
+  "Tous corps d'état",
+  "Plombier",
+  "Electricien",
+  "Plaquiste",
+  "Peintre",
+  "Platrier/Peintre",
+  "Maçon",
+  "Chauffagiste",
+  "Menuisier/ébéniste",
+  "Carreleur"
+];
+
 const Section = ({ title, children, action }: { title: string; children?: React.ReactNode; action?: React.ReactNode }) => (
-  <div className="bg-white border border-gray-100 rounded-[24px] p-8 space-y-6 shadow-sm">
+  <div className="bg-white border border-gray-100 rounded-[24px] p-8 space-y-6 shadow-sm mb-6">
     <div className="flex justify-between items-center">
       <h3 className="text-[15px] font-bold text-gray-800">{title}</h3>
       {action}
@@ -135,13 +148,6 @@ interface ProjectGeneralDiscoveryProps {
 const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ project, userProfile }) => {
   const companyName = userProfile?.companyName || 'Ma Société';
   
-  // Date Input Refs
-  const signatureDateRef = useRef<HTMLInputElement>(null);
-  const chantierDateRef = useRef<HTMLInputElement>(null);
-  const installationDateRef = useRef<HTMLInputElement>(null);
-  const remisePlansDateRef = useRef<HTMLInputElement>(null);
-  const permisDateRef = useRef<HTMLInputElement>(null);
-
   // Address Search states
   const [chantierSearch, setChantierSearch] = useState(project.details?.adresseChantier || '');
   const [factuSearch, setFactuSearch] = useState(project.details?.adresseFacturation || '');
@@ -258,20 +264,6 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
     handleUpdate(field, `${d}/${m}/${y}`);
   };
 
-  const openDatePicker = (ref: React.RefObject<HTMLInputElement>) => {
-    if (ref.current) {
-      try {
-        if ('showPicker' in HTMLInputElement.prototype) {
-          ref.current.showPicker();
-        } else {
-          ref.current.click();
-        }
-      } catch (e) {
-        ref.current.click();
-      }
-    }
-  };
-
   const updateConfrereField = (index: number, field: string, value: any) => {
     const currentList = [...(project.details?.confreresList || [])];
     if (!currentList[index]) currentList[index] = {};
@@ -280,6 +272,30 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
   };
 
   const nbConfreres = project.details?.nbConfreres || 0;
+
+  // Composant local pour gérer une plage de dates
+  const DateRangeField = ({ startField, endField, startValue, endValue }: any) => (
+    <div className="flex items-center gap-2">
+      <div className="relative group flex-1">
+        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 group-hover:text-indigo-600 transition-colors pointer-events-none z-10" size={14} />
+        <input 
+          type="date" 
+          value={formatDateForInput(startValue)} 
+          onChange={(e) => handleDateChange(startField, e.target.value)} 
+          className="w-full bg-white border border-gray-100 rounded-xl pl-9 pr-2 py-3 text-[12px] font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm transition-all cursor-pointer" 
+        />
+      </div>
+      <span className="text-[10px] font-black text-gray-300 uppercase shrink-0">au</span>
+      <div className="relative group flex-1">
+        <input 
+          type="date" 
+          value={formatDateForInput(endValue)} 
+          onChange={(e) => handleDateChange(endField, e.target.value)} 
+          className="w-full bg-white border border-gray-100 rounded-xl px-3 py-3 text-[12px] font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm transition-all cursor-pointer" 
+        />
+      </div>
+    </div>
+  );
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
@@ -415,59 +431,45 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
           <Select value={project.metier} options={['Cuisine', 'Cuisine extérieure', 'Salle de bain', 'Mobilier', 'Dressing', 'Bureau']} onChange={(v: string) => handleUpdate('metier', v)} />
         </Field>
         <Field label="Exécution des travaux" colSpan="col-span-12 md:col-span-3">
-          <Select value={project.details?.executionTravaux} options={['Immédiat', 'Dans 3 mois', 'Dans 6 mois', 'Dans 1 an']} onChange={(v: string) => handleUpdate('details.executionTravaux', v)} />
+          <Select value={project.details?.executionTravaux} options={['Client', 'Artisan(s) client', companyName, 'Artisans sté', 'Ne sait pas']} onChange={(v: string) => handleUpdate('details.executionTravaux', v)} />
         </Field>
         <Field label="Artisan.s nécessaire.s" colSpan="col-span-6 md:col-span-2">
           <div className="pt-2"><Toggle value={project.details?.artisansNecessaires || false} onChange={(v) => handleUpdate('details.artisansNecessaires', v)} /></div>
         </Field>
-        <Field label="Artisan.s" colSpan="col-span-12 md:col-span-4">
-          <Select value={project.details?.artisanSelection} options={['Choisir un artisan...']} onChange={(v: string) => handleUpdate('details.artisanSelection', v)} />
-        </Field>
+        {project.details?.artisansNecessaires && (
+          <Field label="Artisan.s" colSpan="col-span-12 md:col-span-4">
+            <Select 
+              value={project.details?.artisanSelection} 
+              options={ARTISANS_OPTIONS} 
+              onChange={(v: string) => handleUpdate('details.artisanSelection', v)} 
+              placeholder="Choisir un artisan..."
+            />
+          </Field>
+        )}
 
         <Field label="Date Prévisionnelle Signature" colSpan="col-span-12 md:col-span-4">
-          <div className="relative group" onClick={() => openDatePicker(signatureDateRef)}>
-            <Calendar 
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-indigo-600 transition-colors cursor-pointer z-10" 
-              size={18} 
-            />
-            <input 
-              ref={signatureDateRef}
-              type="date" 
-              value={formatDateForInput(project.details?.dateSignature)} 
-              onChange={(e) => handleDateChange('details.dateSignature', e.target.value)} 
-              className="w-full bg-white border border-gray-100 rounded-xl pl-12 pr-4 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm transition-all cursor-pointer" 
-            />
-          </div>
+          <DateRangeField 
+            startField="details.dateSignatureStart"
+            endField="details.dateSignatureEnd"
+            startValue={project.details?.dateSignatureStart}
+            endValue={project.details?.dateSignatureEnd}
+          />
         </Field>
         <Field label="Dates prévisionnel chantier" colSpan="col-span-12 md:col-span-4">
-          <div className="relative group" onClick={() => openDatePicker(chantierDateRef)}>
-            <Calendar 
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-indigo-600 transition-colors cursor-pointer z-10" 
-              size={18} 
-            />
-            <input 
-              ref={chantierDateRef}
-              type="date" 
-              value={formatDateForInput(project.details?.dateChantier)} 
-              onChange={(e) => handleDateChange('details.dateChantier', e.target.value)} 
-              className="w-full bg-white border border-gray-100 rounded-xl pl-12 pr-4 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm transition-all cursor-pointer" 
-            />
-          </div>
+          <DateRangeField 
+            startField="details.dateChantierStart"
+            endField="details.dateChantierEnd"
+            startValue={project.details?.dateChantierStart}
+            endValue={project.details?.dateChantierEnd}
+          />
         </Field>
         <Field label="Date installation cuisine" colSpan="col-span-12 md:col-span-4">
-          <div className="relative group" onClick={() => openDatePicker(installationDateRef)}>
-            <Calendar 
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-indigo-600 transition-colors cursor-pointer z-10" 
-              size={18} 
-            />
-            <input 
-              ref={installationDateRef}
-              type="date" 
-              value={formatDateForInput(project.details?.dateInstallation)} 
-              onChange={(e) => handleDateChange('details.dateInstallation', e.target.value)} 
-              className="w-full bg-white border border-gray-100 rounded-xl pl-12 pr-4 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm transition-all cursor-pointer" 
-            />
-          </div>
+          <DateRangeField 
+            startField="details.dateInstallationStart"
+            endField="details.dateInstallationEnd"
+            startValue={project.details?.dateInstallationStart}
+            endValue={project.details?.dateInstallationEnd}
+          />
         </Field>
       </Section>
 
@@ -505,13 +507,9 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
         {project.details?.plansTechniques && (
           <div className="col-span-12 animate-in slide-in-from-top-4 duration-300">
              <Field label="Date de remise des plans" colSpan="col-span-12 md:col-span-12">
-                <div className="relative group" onClick={() => openDatePicker(remisePlansDateRef)}>
-                  <Calendar 
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-indigo-600 transition-colors cursor-pointer z-10" 
-                    size={18} 
-                  />
+                <div className="relative group">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 group-hover:text-indigo-600 transition-colors pointer-events-none z-10" size={18} />
                   <input 
-                    ref={remisePlansDateRef}
                     type="date" 
                     value={formatDateForInput(project.details?.dateRemisePlans)} 
                     onChange={(e) => handleDateChange('details.dateRemisePlans', e.target.value)}
@@ -572,20 +570,13 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
         
         {project.details?.permisAccorde && (
           <Field label="Date d'obtention Permis" colSpan="col-span-12 md:col-span-3">
-            <div 
-              className="relative group animate-in slide-in-from-left-2 duration-300 cursor-pointer"
-              onClick={() => openDatePicker(permisDateRef)}
-            >
-              <Calendar 
-                className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-indigo-600 transition-colors cursor-pointer z-10" 
-                size={18} 
-              />
+            <div className="relative group animate-in slide-in-from-left-2 duration-300">
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 group-hover:text-indigo-600 transition-colors pointer-events-none z-10" size={18} />
               <input 
-                ref={permisDateRef}
                 type="date" 
                 value={formatDateForInput(project.details?.datePermis)} 
                 onChange={(e) => handleDateChange('details.datePermis', e.target.value)} 
-                className="w-full bg-white border border-gray-100 rounded-xl pl-12 pr-4 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm transition-all cursor-pointer" 
+                className="w-full bg-white border border-gray-100 rounded-xl pl-11 pr-4 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm transition-all cursor-pointer" 
               />
             </div>
           </Field>

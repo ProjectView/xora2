@@ -121,7 +121,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
     }
   };
 
-  // Structure de base de la checklist
+  // Structure de la checklist avec les 3 blocs
   const checklist = useMemo(() => {
     const base = project.details?.checklist || {};
     return {
@@ -139,7 +139,16 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
             metreRealise: false,
             commandeSignee: false
           },
-      dossierTech: base.dossierTech || false
+      dossierTech: (typeof base.dossierTech === 'object' && base.dossierTech !== null)
+        ? base.dossierTech
+        : {
+            arValides: false,
+            dossierPose: false,
+            rdvLivraison: false,
+            rdvInstallation: false,
+            pvReception: false,
+            finition: false
+          }
     };
   }, [project.details?.checklist]);
 
@@ -159,12 +168,20 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
     return Math.round((completed / total) * 100);
   }, [checklist.commandeClient]);
 
-  // Calcul de la progression GLOBALE du projet (9 jalons au total: 4 Etude + 4 Commande + 1 Dossier Tech)
+  // Calcul du pourcentage local pour le troisième bloc (Dossier tech - 6 jalons)
+  const dossierTechProgress = useMemo(() => {
+    const steps = checklist.dossierTech;
+    const total = 6;
+    const completed = Object.values(steps).filter(v => v === true).length;
+    return Math.round((completed / total) * 100);
+  }, [checklist.dossierTech]);
+
+  // Calcul de la progression GLOBALE du projet (14 jalons au total: 4 Etude + 4 Commande + 6 Dossier Tech)
   const globalProgress = useMemo(() => {
     const steps = [
       ...Object.values(checklist.etudeClient),
       ...Object.values(checklist.commandeClient),
-      checklist.dossierTech
+      ...Object.values(checklist.dossierTech)
     ];
     const totalSteps = steps.length;
     const completedSteps = steps.filter(v => v === true).length;
@@ -175,20 +192,17 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
 
   const handleChecklistUpdate = async (path: string, value: boolean) => {
     try {
-      // Simulation locale pour le calcul immédiat avant sauvegarde
       const updatedChecklist = JSON.parse(JSON.stringify(checklist));
-      if (path.includes('.')) {
-        const [obj, field] = path.split('.');
-        updatedChecklist[obj][field] = value;
-      } else {
-        updatedChecklist[path] = value;
+      const parts = path.split('.');
+      if (parts.length === 2) {
+        updatedChecklist[parts[0]][parts[1]] = value;
       }
 
-      // Recalcul des jalons pour Firestore (total 9 étapes)
+      // Recalcul des jalons pour Firestore (total 14 étapes)
       const steps = [
         ...Object.values(updatedChecklist.etudeClient),
         ...Object.values(updatedChecklist.commandeClient),
-        updatedChecklist.dossierTech
+        ...Object.values(updatedChecklist.dossierTech)
       ];
       const newGlobalProgress = Math.round((steps.filter(v => v === true).length / steps.length) * 100) || 2;
 
@@ -423,7 +437,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
               <div className={`p-2 rounded-lg ${Object.values(checklist.commandeClient).every(v => v === true) ? 'bg-green-50 text-green-500' : 'bg-gray-50 text-gray-300'}`}>
                 <CheckSquare size={16} />
               </div>
-              <div className={`p-2 rounded-lg ${checklist.dossierTech ? 'bg-green-50 text-green-500' : 'bg-gray-50 text-gray-300'}`}>
+              <div className={`p-2 rounded-lg ${Object.values(checklist.dossierTech).every(v => v === true) ? 'bg-green-50 text-green-500' : 'bg-gray-50 text-gray-300'}`}>
                 <FileText size={16} />
               </div>
             </div>
@@ -466,9 +480,9 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
                 
                 <div className="space-y-4 pt-2">
                   {[
-                    { id: 'decouverte', label: 'Découverte réalisée' },
+                    { id: 'decouverte', label: 'Découverte client' },
                     { id: 'conception', label: 'Conception réalisée' },
-                    { id: 'presentation', label: 'Présentation éffectuée' },
+                    { id: 'presentation', label: 'Présentation effectuée' },
                     { id: 'devisValide', label: 'Devis validé par le client' }
                   ].map((item) => (
                     <label key={item.id} className="flex items-center gap-4 group cursor-pointer">
@@ -491,15 +505,13 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
               </div>
 
               {/* BLOC 2 : Commande Client */}
-              <div className={`p-6 border rounded-[24px] space-y-6 transition-all ${Object.values(checklist.commandeClient).every(v => v === true) ? 'bg-indigo-50/30 border-indigo-100' : 'bg-[#FBFBFB] border-gray-100'}`}>
-                <div className="flex justify-between items-end mb-2">
-                  <h4 className={`text-[11px] font-black uppercase tracking-[0.2em] transition-colors ${Object.values(checklist.commandeClient).some(v => v === true) ? 'text-indigo-600' : 'text-gray-500'}`}>
-                    Commande client
-                  </h4>
+              <div className="space-y-6">
+                <div className="flex justify-between items-end">
+                  <h4 className="text-[11px] font-black text-indigo-500 uppercase tracking-[0.2em]">Commande client</h4>
                   <span className="text-[12px] font-black text-gray-400">{commandeProgress}%</span>
                 </div>
                 
-                <div className="space-y-4">
+                <div className="space-y-4 pt-2">
                   {[
                     { id: 'docsSigner', label: 'Doc à signer' },
                     { id: 'devisSigner', label: 'Devis à signer' },
@@ -525,23 +537,39 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
                 </div>
               </div>
 
-              {/* BLOC 3 : Dossier Tech */}
-              <div className={`p-6 border rounded-[24px] space-y-4 transition-all ${checklist.dossierTech ? 'bg-indigo-50/30 border-indigo-100' : 'bg-[#FBFBFB] border-gray-100'}`}>
-                <label className="flex items-center gap-4 group cursor-pointer">
-                  <div 
-                    onClick={() => handleChecklistUpdate('dossierTech', !checklist.dossierTech)}
-                    className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
-                      checklist.dossierTech 
-                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' 
-                      : 'bg-white border-gray-100 group-hover:border-indigo-300'
-                    }`}
-                  >
-                    {checklist.dossierTech ? <Check size={14} strokeWidth={4} /> : null}
-                  </div>
-                  <h4 className={`text-[12px] font-black uppercase tracking-[0.1em] transition-colors ${checklist.dossierTech ? 'text-indigo-600' : 'text-gray-500'}`}>
-                    Dossier tech & install
-                  </h4>
-                </label>
+              {/* BLOC 3 : Dossier Tech & Install */}
+              <div className="space-y-6">
+                <div className="flex justify-between items-end">
+                  <h4 className="text-[11px] font-black text-indigo-500 uppercase tracking-[0.2em]">Dossier tech & install</h4>
+                  <span className="text-[12px] font-black text-gray-400">{dossierTechProgress}%</span>
+                </div>
+                
+                <div className="space-y-4 pt-2">
+                  {[
+                    { id: 'arValides', label: 'AR validés' },
+                    { id: 'dossierPose', label: 'Dossier pose terminé' },
+                    { id: 'rdvLivraison', label: 'Rdv livraison validé' },
+                    { id: 'rdvInstallation', label: 'Rdv installation validé' },
+                    { id: 'pvReception', label: 'PV reception installation signé' },
+                    { id: 'finition', label: 'Finition terminée' }
+                  ].map((item) => (
+                    <label key={item.id} className="flex items-center gap-4 group cursor-pointer">
+                      <div 
+                        onClick={() => handleChecklistUpdate(`dossierTech.${item.id}`, !checklist.dossierTech[item.id])}
+                        className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
+                          checklist.dossierTech[item.id] 
+                          ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg' 
+                          : 'bg-white border-gray-100 group-hover:border-indigo-300'
+                        }`}
+                      >
+                        {checklist.dossierTech[item.id] ? <Check size={14} strokeWidth={4} /> : <div className="w-1.5 h-1.5 rounded-full bg-gray-50" />}
+                      </div>
+                      <span className={`text-[13px] font-bold transition-colors ${checklist.dossierTech[item.id] ? 'text-gray-900' : 'text-gray-400'}`}>
+                        {item.label}
+                      </span>
+                    </label>
+                  ))}
+                </div>
               </div>
 
             </div>
