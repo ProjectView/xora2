@@ -75,6 +75,11 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, on
     return () => unsubTasks();
   }, [initialClient.id]);
 
+  // Règle de gestion : Statut effectif
+  const effectiveStatus = (client.status !== 'Client' && (client.projectCount || 0) > 0) 
+    ? 'Prospect' 
+    : client.status;
+
   const mainTabs = [
     { label: 'Information contact', key: 'Information contact' },
     { label: `Projet (${client.projectCount || 0})`, key: 'Projet' },
@@ -100,11 +105,11 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, on
               <div className="flex items-center gap-3">
                 <span className="text-[12px] font-bold text-gray-300">Créé le {client.dateAdded}</span>
                 <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded uppercase tracking-widest ${
-                  client.status === 'Leads' ? 'bg-purple-100 text-purple-600' :
-                  client.status === 'Prospect' ? 'bg-fuchsia-100 text-fuchsia-600' :
+                  effectiveStatus === 'Leads' ? 'bg-purple-100 text-purple-600' :
+                  effectiveStatus === 'Prospect' ? 'bg-fuchsia-100 text-fuchsia-600' :
                   'bg-cyan-100 text-cyan-600'
                 }`}>
-                  {client.status === 'Leads' ? 'Etudes à réaliser' : client.status}
+                  {effectiveStatus === 'Leads' ? 'Etudes à réaliser' : effectiveStatus}
                 </span>
               </div>
               

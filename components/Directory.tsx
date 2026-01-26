@@ -89,6 +89,14 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
+  // Règle de gestion : Statut effectif basé sur les projets en cours
+  const getEffectiveStatus = (c: Client) => {
+    if (c.status === 'Client') return 'Client';
+    // Si au moins 1 projet, devient automatiquement Prospect
+    if ((c.projectCount || 0) > 0) return 'Prospect';
+    return c.status;
+  };
+
   // Extraction des valeurs uniques pour les filtres
   const uniqueAgenceurs = useMemo(() => 
     Array.from(new Set(clients.map(c => c.addedBy?.name).filter(Boolean))).sort(), 
@@ -105,7 +113,8 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
   // Logique de filtrage globale
   const filteredClients = useMemo(() => {
     return clients.filter(c => {
-      const matchesTab = activeTab === 'Tous' || c.status === activeTab;
+      const effectiveStatus = getEffectiveStatus(c);
+      const matchesTab = activeTab === 'Tous' || effectiveStatus === activeTab;
       const matchesSearch = !searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesAgenceur = !filterAgenceur || c.addedBy?.name === filterAgenceur;
       const matchesOrigine = !filterOrigine || c.origin === filterOrigine;
@@ -182,12 +191,13 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
     </div>
   );
 
-  const tabs = [
+  // Mise à jour des compteurs d'onglets pour refléter le statut effectif
+  const tabs = useMemo(() => [
     { label: 'Tous', count: clients.length },
-    { label: 'Leads', count: clients.filter(c => c.status === 'Leads').length },
-    { label: 'Prospects', count: clients.filter(c => c.status === 'Prospect').length },
-    { label: 'Clients', count: clients.filter(c => c.status === 'Client').length },
-  ];
+    { label: 'Leads', count: clients.filter(c => getEffectiveStatus(c) === 'Leads').length },
+    { label: 'Prospects', count: clients.filter(c => getEffectiveStatus(c) === 'Prospect').length },
+    { label: 'Clients', count: clients.filter(c => getEffectiveStatus(c) === 'Client').length },
+  ], [clients]);
 
   return (
     <div className="p-6 space-y-4 bg-gray-50 h-[calc(100vh-64px)] flex flex-col overflow-hidden">
@@ -339,7 +349,9 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {filteredClients.map((client) => (
+                            {filteredClients.map((client) => {
+                                const effectiveStatus = getEffectiveStatus(client);
+                                return (
                                 <tr 
                                     key={client.id} 
                                     onClick={() => onClientClick(client)}
@@ -370,11 +382,11 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
                                     </td>
                                     <td className="px-6 py-4">
                                         <span className={`px-3 py-1 rounded-md text-[11px] font-extrabold uppercase tracking-tight ${
-                                            client.status === 'Prospect' ? 'bg-fuchsia-100 text-fuchsia-800' :
-                                            client.status === 'Client' ? 'bg-cyan-100 text-cyan-700' :
+                                            effectiveStatus === 'Prospect' ? 'bg-fuchsia-100 text-fuchsia-800' :
+                                            effectiveStatus === 'Client' ? 'bg-cyan-100 text-cyan-700' :
                                             'bg-purple-100 text-purple-800'
                                         }`}>
-                                            {client.status === 'Leads' ? 'Études' : client.status}
+                                            {effectiveStatus === 'Leads' ? 'Études' : effectiveStatus}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-sm font-bold text-gray-700">{client.dateAdded}</td>
@@ -390,7 +402,7 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
                                             <div className="relative">
                                                 <button 
                                                     onClick={() => setActiveMenuId(activeMenuId === client.id ? null : client.id)}
-                                                    className={`p-1.5 border border-gray-200 rounded-lg transition-all ${activeMenuId === client.id ? 'bg-gray-100 text-gray-900 shadow-sm' : 'text-gray-400 hover:bg-gray-50'}`}
+                                                    className={`p-1.5 border border-gray-200 rounded-lg transition-all ${activeMenuId === client.id ? 'bg-gray-100 text-gray-900' : 'text-gray-400 hover:bg-gray-50'}`}
                                                 >
                                                     <MoreHorizontal size={16} />
                                                 </button>
@@ -419,7 +431,7 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
                                         </div>
                                     </td>
                                 </tr>
-                            ))}
+                            )})}
                         </tbody>
                     </table>
                 </div>
