@@ -55,6 +55,7 @@ interface AddTaskModalProps {
   initialProjectId?: string;
   taskToEdit?: Task | null;
   isLeadAutoTask?: boolean; 
+  isProjectAutoTask?: boolean;
 }
 
 const AddTaskModal: React.FC<AddTaskModalProps> = ({ 
@@ -65,11 +66,12 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
   initialClientName = '',
   initialProjectId = '' ,
   taskToEdit = null,
-  isLeadAutoTask = false
+  isLeadAutoTask = false,
+  isProjectAutoTask = false
 }) => {
   const isEdit = !!taskToEdit;
   // Déterminer si on travaille sur une tâche auto (création ou édition)
-  const isCurrentlyAuto = isLeadAutoTask || (isEdit && taskToEdit?.type === 'Tâche auto');
+  const isCurrentlyAuto = isLeadAutoTask || isProjectAutoTask || (isEdit && taskToEdit?.type === 'Tâche auto');
   
   const [isMemo, setIsMemo] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -135,18 +137,29 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
     'Terminé'
   ];
 
-  const statusOptions = isCurrentlyAuto ? leadAutoStatusOptions : defaultStatusOptions;
+  const projectAutoStatusOptions = [
+    'Etude à réaliser',
+    'Etude à modifier',
+    'Etude à relancer',
+    'Etude cloturée'
+  ];
+
+  const statusOptions = isProjectAutoTask ? projectAutoStatusOptions : (isLeadAutoTask ? leadAutoStatusOptions : defaultStatusOptions);
 
   // MAPPING DES TITRES AUTOMATIQUES
   const getAutoTitle = (status: string, clientName: string) => {
-    const name = clientName || 'Nouveau lead';
+    const name = clientName || 'Client';
     switch (status) {
       case 'À qualifier': return `Qualifier : ${name}`;
       case 'À recontacter': return `Recontacter : ${name}`;
       case 'Projet long terme': return `Suivi long terme : ${name}`;
       case 'Non qualifié': return `Dossier non qualifié : ${name}`;
       case 'Terminé': return `Clôturé : ${name}`;
-      default: return `Qualifier : ${name}`;
+      case 'Etude à réaliser': return `Suivi : Etude à réaliser - ${name}`;
+      case 'Etude à modifier': return `Suivi : Etude à modifier - ${name}`;
+      case 'Etude à relancer': return `Suivi : Etude à relancer - ${name}`;
+      case 'Etude cloturée': return `Suivi : Etude cloturée - ${name}`;
+      default: return `Suivi : ${name}`;
     }
   };
 
@@ -309,9 +322,9 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
           setEndDate('');
         }
       } else {
-        // PRE-FILL TITLE FOR LEAD AUTO TASK
-        if (isLeadAutoTask) {
-          const defaultStatus = 'À qualifier';
+        // PRE-FILL TITLE FOR AUTO TASKS
+        if (isLeadAutoTask || isProjectAutoTask) {
+          const defaultStatus = isProjectAutoTask ? 'Etude à réaliser' : 'À qualifier';
           setSelectedStatusLabel(defaultStatus);
           setTitle(getAutoTitle(defaultStatus, initialClientName));
         } else {
@@ -329,7 +342,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
         setLinkedAppointmentId(null);
       }
     }
-  }, [isOpen, taskToEdit, initialClientId, initialProjectId, initialClientName, collaborators, isLeadAutoTask]);
+  }, [isOpen, taskToEdit, initialClientId, initialProjectId, initialClientName, collaborators, isLeadAutoTask, isProjectAutoTask]);
 
   // Clients & Projects Loading
   useEffect(() => {
@@ -363,7 +376,10 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
       if (initialProjectId && !isEdit) {
         const currentProject = loadedProjects.find(p => p.id === initialProjectId);
         if (currentProject) {
-          setTitle(`Suivi : ${currentProject.name}`);
+          // If title isn't already set by auto-logic
+          if (!isProjectAutoTask) {
+             setTitle(`Suivi : ${currentProject.name}`);
+          }
           if (collaborators.length > 0 && currentProject.agenceurUid) {
             const collabIdx = collaborators.findIndex(c => c.uid === currentProject.agenceurUid);
             if (collabIdx !== -1) setSelectedCollaboratorIdx(collabIdx);
@@ -373,7 +389,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
     };
 
     fetchData();
-  }, [isOpen, userProfile?.companyId, initialClientId, initialProjectId, taskToEdit, collaborators]);
+  }, [isOpen, userProfile?.companyId, initialClientId, initialProjectId, taskToEdit, collaborators, isProjectAutoTask]);
 
   const filteredClients = useMemo(() => {
     if (!clientSearchQuery.trim()) return clients;
@@ -427,11 +443,11 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
 
       // DETERMINER LE STATUT OPERATIONNEL (completed ou pending/in-progress)
       let operationalStatus = 'pending';
-      if (selectedStatusLabel === 'Terminé' && !isMemo) {
+      if ((selectedStatusLabel === 'Terminé' || selectedStatusLabel === 'Etude cloturée') && !isMemo) {
         operationalStatus = 'completed';
       } else if (isEdit && taskToEdit) {
         // En édition, si le label n'est plus "Terminé" mais que la tâche l'était, on la réouvre
-        if (taskToEdit.status === 'completed' && selectedStatusLabel !== 'Terminé') {
+        if (taskToEdit.status === 'completed' && selectedStatusLabel !== 'Terminé' && selectedStatusLabel !== 'Etude cloturée') {
           operationalStatus = 'pending';
         } else {
           operationalStatus = taskToEdit.status;
@@ -476,8 +492,8 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
         taskId = docRef.id;
       }
 
-      // SYNC QUALIFICATION DATA TO CLIENT
-      if (isCurrentlyAuto && selectedClientId) {
+      // SYNC QUALIFICATION DATA TO CLIENT (ONLY FOR LEAD AUTO TASK)
+      if (isLeadAutoTask && selectedClientId) {
         const clientRef = doc(db, 'clients', selectedClientId);
         await updateDoc(clientRef, {
           "details.category": qualifData.categorie,
@@ -542,7 +558,16 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
               </div>
               <div>
                 <h2 className="text-xl font-bold text-gray-900 tracking-tight">
-                  {isCurrentlyAuto ? 'Qualification de la fiche lead' : (isEdit ? `Modifier : ${taskToEdit?.title}` : `Créer une ${isMemo ? 'note mémo' : 'tâche manuelle'}`)}
+                  {isProjectAutoTask 
+                    ? 'Créer une tâche automatique pour le projet' 
+                    : (isLeadAutoTask 
+                        ? 'Qualification de la fiche lead' 
+                        : (isEdit 
+                            ? `Modifier : ${taskToEdit?.title}` 
+                            : `Créer une ${isMemo ? 'note mémo' : 'tâche manuelle'}`
+                          )
+                      )
+                  }
                 </h2>
                 {isEdit && <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mt-0.5">Mode édition actif</p>}
               </div>
@@ -554,7 +579,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
 
           <div className="p-8 space-y-8">
             {/* Qualification Section for Auto Tasks */}
-            {isCurrentlyAuto && (
+            {isLeadAutoTask && (
               <div className="space-y-4">
                 <div className="flex items-center gap-2 mb-2">
                   <Layers size={16} className="text-indigo-500" />

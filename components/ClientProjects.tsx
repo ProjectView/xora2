@@ -300,7 +300,9 @@ const ClientProjects: React.FC<ClientProjectsProps> = ({ client, userProfile, on
         onClose={() => setIsAddTaskOpen(false)}
         userProfile={userProfile}
         initialClientId={client?.id}
+        initialClientName={client?.name}
         initialProjectId={lastCreatedProjectId}
+        isProjectAutoTask={true}
       />
     </div>
   );
