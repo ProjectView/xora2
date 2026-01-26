@@ -190,7 +190,7 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, on
           )}
           <div className="flex-1 px-10 overflow-y-auto hide-scrollbar">
             
-            {activeTab === 'Information contact' && <ClientContactInfo client={client} />}
+            {activeTab === 'Information contact' && <ClientContactInfo client={client} userProfile={userProfile} />}
 
             {activeTab === 'Tâches' && (
               <ClientTasks 

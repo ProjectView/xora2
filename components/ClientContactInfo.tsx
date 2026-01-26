@@ -7,18 +7,19 @@ import { Client } from '../types';
 
 interface ClientContactInfoProps {
   client: Client;
+  userProfile: any;
 }
 
-const ClientContactInfo: React.FC<ClientContactInfoProps> = ({ client }) => {
+const ClientContactInfo: React.FC<ClientContactInfoProps> = ({ client, userProfile }) => {
   const [activeSubTab, setActiveSubTab] = useState('Infos client');
   const subTabs = ['Infos client', 'Contact externe', 'Infos des biens'];
 
   const renderSubTab = () => {
     switch (activeSubTab) {
-      case 'Infos client': return <ClientContactGeneral client={client} />;
+      case 'Infos client': return <ClientContactGeneral client={client} userProfile={userProfile} />;
       case 'Contact externe': return <ClientExternalContact client={client} />;
       case 'Infos des biens': return <ClientPropertyInfo client={client} />;
-      default: return <ClientContactGeneral client={client} />;
+      default: return <ClientContactGeneral client={client} userProfile={userProfile} />;
     }
   };
 

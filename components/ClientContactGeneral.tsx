@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { ChevronDown, ChevronUp, Plus, Search, MapPin, Loader2, Trash2, Check, User, Phone, Mail, AlertTriangle, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Plus, Search, MapPin, Loader2, Trash2, Check, User, Phone, Mail, AlertTriangle, X, ShieldCheck } from 'lucide-react';
 import { Client } from '../types';
 import { db } from '../firebase';
-import { doc, updateDoc, onSnapshot } from '@firebase/firestore';
+import { doc, updateDoc, onSnapshot, query, collection, where, getDocs } from '@firebase/firestore';
 
 // Structure de données hiérarchique
 const HIERARCHY_DATA: Record<string, Record<string, string[]>> = {
@@ -213,9 +213,10 @@ const ContactCard: React.FC<ContactCardProps> = ({
 
 interface ClientContactGeneralProps {
   client: Client;
+  userProfile: any;
 }
 
-const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: initialClient }) => {
+const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: initialClient, userProfile }) => {
   const [client, setClient] = useState<Client>(initialClient);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(['main']));
   const [isEditingAddress, setIsEditingAddress] = useState(false);
@@ -229,6 +230,7 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
     civility: '', lastName: '', firstName: '', email: '', phone: '', fixed: ''
   });
   const [additionalContacts, setAdditionalContacts] = useState<AdditionalContact[]>([]);
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
 
   const searchRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -257,6 +259,25 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
     });
     return () => unsub();
   }, [initialClient.id]);
+
+  // Fetch team members
+  useEffect(() => {
+    if (!userProfile?.companyId) return;
+    const fetchTeam = async () => {
+      try {
+        const q = query(
+          collection(db, 'users'),
+          where('companyId', '==', userProfile.companyId)
+        );
+        const snap = await getDocs(q);
+        const members = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+        setTeamMembers(members);
+      } catch (e) {
+        console.error("Erreur chargement équipe:", e);
+      }
+    };
+    fetchTeam();
+  }, [userProfile?.companyId]);
 
   const toggleExpand = (id: string) => {
     setExpandedIds(prev => {
@@ -383,6 +404,16 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
 
   const handleOriginChange = async (val: string) => {
     await updateDoc(doc(db, 'clients', client.id), { "origin": val, "details.subOrigin": "" });
+  };
+
+  const handleUpdateAffectation = async (field: string, value: any) => {
+    try {
+      await updateDoc(doc(db, 'clients', client.id), {
+        [`details.${field}`]: value
+      });
+    } catch (e) {
+      console.error("Erreur affectation:", e);
+    }
   };
 
   return (
@@ -520,6 +551,62 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
                 {subOrigins.map(so => <option key={so} value={so}>{so}</option>)}
               </select>
               <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Section Affectation (New Block) */}
+      <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm space-y-6">
+        <h3 className="text-[15px] font-black text-gray-900 uppercase tracking-tight">Affectation</h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Agenceur Référent */}
+          <div className="space-y-2">
+            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Agenceur référent</label>
+            <div className="relative group">
+              <div className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center pointer-events-none z-10">
+                <img 
+                  src={teamMembers.find(m => m.name === (client.details?.referent || client.addedBy?.name))?.avatar || 'https://i.pravatar.cc/150?u=fallback'} 
+                  alt="" 
+                  className="w-7 h-7 rounded-full border border-white shadow-sm" 
+                />
+              </div>
+              <select 
+                value={client.details?.referent || client.addedBy?.name || ''}
+                onChange={(e) => handleUpdateAffectation('referent', e.target.value)}
+                className="w-full appearance-none bg-white border border-gray-200 rounded-xl py-3 pl-12 pr-10 text-sm font-bold text-gray-800 focus:outline-none focus:border-indigo-500 transition-all shadow-sm"
+              >
+                <option value="">Sélectionner un collaborateur</option>
+                {teamMembers.map((member) => (
+                  <option key={member.uid} value={member.name}>
+                    {member.name} {member.uid === userProfile?.uid ? '(Moi)' : ''}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
+            </div>
+          </div>
+
+          {/* Compte accès client */}
+          <div className="space-y-2">
+            <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Compte accès client</label>
+            <div className="bg-gray-50 rounded-2xl border border-gray-100 px-6 py-3 flex items-center justify-between shadow-inner">
+               <div className="flex items-center gap-2">
+                  <ShieldCheck size={16} className={client.details?.clientAccessAccount ? 'text-indigo-600' : 'text-gray-300'} />
+                  <span className="text-[13px] font-bold text-gray-700">Autoriser l'accès client</span>
+               </div>
+               <div className="flex items-center space-x-4">
+                  <span className={`text-[12px] font-bold transition-colors ${!client.details?.clientAccessAccount ? 'text-gray-900' : 'text-gray-300'}`}>Non</span>
+                  <button 
+                      type="button"
+                      onClick={() => handleUpdateAffectation('clientAccessAccount', !client.details?.clientAccessAccount)}
+                      className={`w-14 h-7 rounded-full relative transition-all duration-300 shadow-sm ${client.details?.clientAccessAccount ? 'bg-indigo-600' : 'bg-gray-300'}`}
+                  >
+                      <div className={`w-5 h-5 bg-white rounded-full absolute top-1 transition-all duration-300 shadow-md ${client.details?.clientAccessAccount ? 'right-1' : 'left-1'}`}></div>
+                  </button>
+                  <span className={`text-[12px] font-bold transition-colors ${client.details?.clientAccessAccount ? 'text-gray-900' : 'text-gray-300'}`}>Oui</span>
+               </div>
             </div>
           </div>
         </div>
