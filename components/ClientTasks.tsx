@@ -351,7 +351,7 @@ const ClientTasks: React.FC<ClientTasksProps> = ({ clientId, clientName, userPro
                           {activeMenuId === task.id && (
                             <>
                               <div className="fixed inset-0 z-40" onClick={() => setActiveMenuId(null)}></div>
-                              <div className="absolute right-0 mt-2 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 py-2 w-48 animate-in fade-in zoom-in-95 duration-150 text-left">
+                              <div className={`absolute right-0 ${index >= filteredTasks.length - 2 && filteredTasks.length > 2 ? 'bottom-full mb-2' : 'mt-2'} bg-white border border-gray-100 rounded-xl shadow-2xl z-50 py-2 w-48 animate-in fade-in zoom-in-95 duration-150 text-left`}>
                                 <button 
                                   onClick={(e) => { e.stopPropagation(); handleEditTask(task); }}
                                   className="w-full text-left px-4 py-2.5 text-[12px] font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2">
@@ -377,7 +377,7 @@ const ClientTasks: React.FC<ClientTasksProps> = ({ clientId, clientName, userPro
         </div>
       </div>
 
-      {/* Modale de Confirmation de Suppression */}
+      {/* Modale de Confirmation de Suppression In-App */}
       {taskToDelete && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300 border border-gray-100">

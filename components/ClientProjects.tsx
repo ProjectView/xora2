@@ -161,7 +161,7 @@ const ClientProjects: React.FC<ClientProjectsProps> = ({ client, userProfile, on
                    </td>
                 </tr>
               ) : (
-                projects.map((project) => (
+                projects.map((project, index) => (
                   <tr 
                     key={project.id} 
                     onClick={() => onProjectSelect?.(project)}
@@ -201,7 +201,7 @@ const ClientProjects: React.FC<ClientProjectsProps> = ({ client, userProfile, on
                               e.stopPropagation();
                               setActiveMenuId(activeMenuId === project.id ? null : project.id);
                             }}
-                            className={`p-1.5 border border-gray-200 rounded-lg hover:bg-gray-100 text-gray-400 transition-all ${activeMenuId === project.id ? 'bg-gray-100 text-gray-900' : ''}`}
+                            className={`p-1.5 border border-gray-200 rounded-lg hover:bg-gray-100 text-gray-400 shadow-sm transition-all ${activeMenuId === project.id ? 'bg-gray-100 text-gray-900' : ''}`}
                           >
                             <MoreHorizontal size={16} />
                           </button>
@@ -209,7 +209,7 @@ const ClientProjects: React.FC<ClientProjectsProps> = ({ client, userProfile, on
                           {activeMenuId === project.id && (
                             <>
                               <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setActiveMenuId(null); }}></div>
-                              <div className="absolute right-0 mt-2 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 py-2 w-48 animate-in fade-in zoom-in-95 duration-150">
+                              <div className={`absolute right-0 ${index >= projects.length - 2 && projects.length > 2 ? 'bottom-full mb-2' : 'mt-2'} bg-white border border-gray-100 rounded-xl shadow-2xl z-50 py-2 w-48 animate-in fade-in zoom-in-95 duration-150`}>
                                 <button 
                                   onClick={(e) => handleEditClick(e, project)}
                                   className="w-full text-left px-4 py-2.5 text-[12px] font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2"

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { X, ChevronDown, Plus, CheckSquare, Calendar as CalendarIcon, Loader2, Save, CalendarClock, Clock, Search, User as UserIcon, AlertTriangle, Trash2, Info, Layers } from 'lucide-react';
+import { X, ChevronDown, Plus, CheckSquare, Calendar as CalendarIcon, Loader2, Save, CalendarClock, Clock, Search, User as UserIcon, AlertTriangle, Trash2, Info, Layers, UserCheck, Check, Link } from 'lucide-react';
 import { db } from '../firebase';
 // Use @firebase/firestore to fix named export resolution issues
 import { collection, addDoc, query, where, onSnapshot, getDocs, doc, updateDoc, getCountFromServer, deleteDoc, getDoc } from '@firebase/firestore';
@@ -46,6 +46,22 @@ const HIERARCHY_DATA: Record<string, Record<string, string[]>> = {
   }
 };
 
+// Fonction utilitaire pour formater le nom du client (Prénom en casse mixte, Nom en majuscules)
+const formatClientNameDisplay = (fullName: string) => {
+  if (!fullName) return '';
+  const parts = fullName.trim().split(/\s+/);
+  if (parts.length < 2) return fullName;
+  
+  // On considère que le premier mot est le Prénom et le reste le Nom
+  const firstName = parts[0];
+  const lastName = parts.slice(1).join(' ');
+  
+  const formattedFirst = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
+  const formattedLast = lastName.toUpperCase();
+  
+  return `${formattedFirst} ${formattedLast}`;
+};
+
 interface AddTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -80,9 +96,10 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
   // Form States
   const [title, setTitle] = useState('');
   const [selectedCollaboratorIdx, setSelectedCollaboratorIdx] = useState(0);
+  const [selectedReferentName, setSelectedReferentName] = useState('');
   const [selectedClientId, setSelectedClientId] = useState(initialClientId);
   const [selectedProjectId, setSelectedProjectId] = useState(initialProjectId);
-  const [selectedStatusLabel, setSelectedStatusLabel] = useState('A faire');
+  const [selectedStatusLabel, setSelectedStatusLabel] = useState('À qualifier');
   const [endDate, setEndDate] = useState('');
   const [note, setNote] = useState('');
 
@@ -92,6 +109,14 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
     origine: '',
     sousOrigine: ''
   });
+
+  // Sponsorship States
+  const [sponsorSearch, setSponsorSearch] = useState('');
+  const [sponsorSuggestions, setSponsorSuggestions] = useState<any[]>([]);
+  const [showSponsorResults, setShowSponsorResults] = useState(false);
+  const sponsorSearchRef = useRef<HTMLDivElement>(null);
+  const [selectedSponsor, setSelectedSponsor] = useState<{id: string, name: string} | null>(null);
+  const [sponsorLink, setSponsorLink] = useState('');
 
   // Refs for Date Pickers
   const endDateRef = useRef<HTMLInputElement>(null);
@@ -119,17 +144,8 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
   const [clients, setClients] = useState<any[]>([]);
   const [allProjects, setAllProjects] = useState<any[]>([]);
 
-  const defaultStatusOptions = [
-    'A faire',
-    'En attente',
-    'Urgent',
-    'Prioritaire',
-    'Dossier technique',
-    'Appel à passer',
-    'Terminé'
-  ];
-
-  const leadAutoStatusOptions = [
+  // Liste unifiée pour les leads et les tâches manuelles
+  const taskStatusOptions = [
     'À qualifier',
     'À recontacter',
     'Projet long terme',
@@ -144,11 +160,11 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
     'Etude cloturée'
   ];
 
-  const statusOptions = isProjectAutoTask ? projectAutoStatusOptions : (isLeadAutoTask ? leadAutoStatusOptions : defaultStatusOptions);
+  const statusOptions = isProjectAutoTask ? projectAutoStatusOptions : taskStatusOptions;
 
   // MAPPING DES TITRES AUTOMATIQUES
   const getAutoTitle = (status: string, clientName: string) => {
-    const name = clientName || 'Client';
+    const name = formatClientNameDisplay(clientName) || 'Client';
     switch (status) {
       case 'À qualifier': return `Qualifier : ${name}`;
       case 'À recontacter': return `Recontacter : ${name}`;
@@ -204,21 +220,34 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
   const origins = useMemo(() => qualifData.categorie ? Object.keys(HIERARCHY_DATA[qualifData.categorie] || {}) : [], [qualifData.categorie]);
   const sources = useMemo(() => (qualifData.categorie && qualifData.origine) ? (HIERARCHY_DATA[qualifData.categorie]?.[qualifData.origine] || []) : [], [qualifData.categorie, qualifData.origine]);
 
-  // Load Client Origin Info when a client is selected for an Auto Task
+  // Load Client Info when a client is selected
   useEffect(() => {
-    if (isOpen && isCurrentlyAuto && selectedClientId) {
-      const fetchClientQualif = async () => {
+    if (isOpen && selectedClientId) {
+      const fetchClientInfo = async () => {
         const clientSnap = await getDoc(doc(db, 'clients', selectedClientId));
         if (clientSnap.exists()) {
           const data = clientSnap.data();
-          setQualifData({
-            categorie: data.details?.category || '',
-            origine: data.origin || '',
-            sousOrigine: data.details?.subOrigin || ''
-          });
+          
+          // Récupérer le référent : par défaut le créateur si non défini
+          setSelectedReferentName(data.details?.referent || data.addedBy?.name || '');
+          
+          // Données de qualification pour les tâches auto
+          if (isCurrentlyAuto) {
+            setQualifData({
+              categorie: data.details?.category || '',
+              origine: data.origin || '',
+              sousOrigine: data.details?.subOrigin || ''
+            });
+
+            // Charger les infos de parrainage existantes
+            if (data.details?.sponsorId) {
+              setSelectedSponsor({ id: data.details.sponsorId, name: data.details.sponsorName });
+            }
+            setSponsorLink(data.details?.sponsorLink || '');
+          }
         }
       };
-      fetchClientQualif();
+      fetchClientInfo();
     }
   }, [isOpen, isCurrentlyAuto, selectedClientId]);
 
@@ -288,11 +317,42 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
     setConflictingEvents(conflicts);
   }, [isScheduled, agendaDate, startTime, endTime, selectedCollaboratorIdx, collaborators, allAppointments, linkedAppointmentId]);
 
+  // Recherche parrain dans l'annuaire
+  useEffect(() => {
+    const searchSponsor = async () => {
+      if (sponsorSearch.length < 2 || !userProfile?.companyId) {
+        setSponsorSuggestions([]);
+        return;
+      }
+      try {
+        const q = query(
+          collection(db, 'clients'), 
+          where('companyId', '==', userProfile.companyId)
+        );
+        const snap = await getDocs(q);
+        const normalizedQuery = sponsorSearch.toLowerCase();
+        const results = snap.docs
+          .map(d => ({ id: d.id, ...d.data() } as any))
+          .filter(c => c.id !== selectedClientId && c.name.toLowerCase().includes(normalizedQuery))
+          .slice(0, 5);
+        setSponsorSuggestions(results);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
+    const timer = setTimeout(searchSponsor, 300);
+    return () => clearTimeout(timer);
+  }, [sponsorSearch, userProfile?.companyId, selectedClientId]);
+
   // Click outside search
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (clientSearchRef.current && !clientSearchRef.current.contains(event.target as Node)) {
         setShowClientResults(false);
+      }
+      if (sponsorSearchRef.current && !sponsorSearchRef.current.contains(event.target as Node)) {
+        setShowSponsorResults(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -305,7 +365,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
       if (taskToEdit) {
         setTitle(taskToEdit.title);
         setIsMemo(taskToEdit.type === 'Mémo');
-        setSelectedStatusLabel(taskToEdit.statusLabel || 'A faire');
+        setSelectedStatusLabel(taskToEdit.statusLabel || 'À qualifier');
         setNote((taskToEdit as any).note || '');
         setSelectedClientId((taskToEdit as any).clientId || '');
         setSelectedProjectId((taskToEdit as any).projectId || '');
@@ -329,7 +389,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
           setTitle(getAutoTitle(defaultStatus, initialClientName));
         } else {
           setTitle('');
-          setSelectedStatusLabel('A faire');
+          setSelectedStatusLabel('À qualifier');
         }
         
         setIsMemo(false);
@@ -340,6 +400,8 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
         setAgendaDate('');
         setIsScheduled(false);
         setLinkedAppointmentId(null);
+        setSelectedSponsor(null);
+        setSponsorLink('');
       }
     }
   }, [isOpen, taskToEdit, initialClientId, initialProjectId, initialClientName, collaborators, isLeadAutoTask, isProjectAutoTask]);
@@ -358,7 +420,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
       if (currentClientId) {
         const found = loadedClients.find(c => c.id === currentClientId);
         if (found) {
-          setClientSearchQuery(found.name);
+          setClientSearchQuery(formatClientNameDisplay(found.name));
           setSelectedClientId(found.id);
         }
       }
@@ -492,14 +554,31 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
         taskId = docRef.id;
       }
 
-      // SYNC QUALIFICATION DATA TO CLIENT (ONLY FOR LEAD AUTO TASK)
-      if (isLeadAutoTask && selectedClientId) {
+      // MISE À JOUR DE LA FICHE CLIENT (SYNCHRO QUALIF + RÉFÉRENT + PARRAINAGE)
+      if (selectedClientId) {
         const clientRef = doc(db, 'clients', selectedClientId);
-        await updateDoc(clientRef, {
-          "details.category": qualifData.categorie,
-          "origin": qualifData.origine,
-          "details.subOrigin": qualifData.sousOrigine
-        });
+        const clientUpdate: any = {
+          "details.referent": selectedReferentName
+        };
+
+        if (isLeadAutoTask) {
+          clientUpdate["details.category"] = qualifData.categorie;
+          clientUpdate["origin"] = qualifData.origine;
+          clientUpdate["details.subOrigin"] = qualifData.sousOrigine;
+
+          // Sauvegarde des infos de parrainage
+          if (qualifData.categorie === 'Parrainage' || qualifData.origine === 'Parrainage') {
+            clientUpdate["details.sponsorId"] = selectedSponsor?.id || null;
+            clientUpdate["details.sponsorName"] = selectedSponsor?.name || null;
+            clientUpdate["details.sponsorLink"] = sponsorLink || '';
+          } else {
+            clientUpdate["details.sponsorId"] = null;
+            clientUpdate["details.sponsorName"] = null;
+            clientUpdate["details.sponsorLink"] = '';
+          }
+        }
+
+        await updateDoc(clientRef, clientUpdate);
       }
 
       if (isScheduled && agendaDate) {
@@ -591,7 +670,14 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
                     <div className="relative">
                       <select 
                         value={qualifData.categorie}
-                        onChange={(e) => setQualifData({ ...qualifData, categorie: e.target.value, origine: '', sousOrigine: '' })}
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            setQualifData({ ...qualifData, categorie: val, origine: '', sousOrigine: '' });
+                            if (val !== 'Parrainage') {
+                                setSelectedSponsor(null);
+                                setSponsorLink('');
+                            }
+                        }}
                         className="w-full appearance-none bg-white border border-gray-100 rounded-xl py-2.5 px-4 text-sm font-bold text-gray-800 focus:outline-none focus:border-indigo-500 transition-all shadow-sm"
                       >
                         <option value="">Sélectionner</option>
@@ -606,7 +692,14 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
                       <select 
                         disabled={!qualifData.categorie}
                         value={qualifData.origine}
-                        onChange={(e) => setQualifData({ ...qualifData, origine: e.target.value, sousOrigine: '' })}
+                        onChange={(e) => {
+                            const val = e.target.value;
+                            setQualifData({ ...qualifData, origine: val, sousOrigine: '' });
+                            if (val !== 'Parrainage' && qualifData.categorie !== 'Parrainage') {
+                                setSelectedSponsor(null);
+                                setSponsorLink('');
+                            }
+                        }}
                         className="w-full appearance-none bg-white border border-gray-100 rounded-xl py-2.5 px-4 text-sm font-bold text-gray-800 focus:outline-none focus:border-indigo-500 transition-all shadow-sm disabled:opacity-50 disabled:bg-gray-50"
                       >
                         <option value="">Sélectionner</option>
@@ -631,6 +724,104 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
                     </div>
                   </div>
                 </div>
+
+                {/* Bloc Parrainage (Conditionnel) */}
+                {(qualifData.categorie === 'Parrainage' || qualifData.origine === 'Parrainage') && (
+                  <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100 animate-in slide-in-from-top-2 duration-300 space-y-4">
+                      <div className="flex items-center gap-2 mb-2">
+                          <Plus size={14} className="text-indigo-600" />
+                          <h4 className="text-[11px] font-black text-indigo-600 uppercase tracking-widest">Identification du Parrain</h4>
+                      </div>
+                      
+                      <div className="relative" ref={sponsorSearchRef}>
+                          {selectedSponsor ? (
+                              <div className="flex items-center justify-between bg-white border border-indigo-200 rounded-xl px-5 py-4 shadow-sm animate-in zoom-in-95">
+                                  <div className="flex items-center gap-3">
+                                      <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
+                                          <UserIcon size={16} />
+                                      </div>
+                                      <div>
+                                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Parrain sélectionné</p>
+                                          <p className="text-sm font-black text-gray-900 uppercase">{selectedSponsor.name}</p>
+                                      </div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                      <Check size={18} className="text-green-500" />
+                                      <button 
+                                          type="button"
+                                          onClick={() => { setSelectedSponsor(null); setSponsorSearch(''); }}
+                                          className="p-2 hover:bg-red-50 text-gray-300 hover:text-red-500 rounded-lg transition-all"
+                                      >
+                                          <X size={18} />
+                                      </button>
+                                  </div>
+                              </div>
+                          ) : (
+                              <>
+                                  <div className="relative group">
+                                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-300 group-focus-within:text-indigo-600 transition-colors" size={18} />
+                                      <input 
+                                          value={sponsorSearch}
+                                          onChange={(e) => {
+                                              setSponsorSearch(e.target.value);
+                                              setShowSponsorResults(true);
+                                          }}
+                                          onFocus={() => setShowSponsorResults(true)}
+                                          type="text" 
+                                          placeholder="Rechercher le parrain dans l'annuaire (ex: DUBOIS)..." 
+                                          className="w-full pl-12 pr-10 py-3.5 bg-white border border-indigo-100 rounded-xl text-sm font-bold text-gray-800 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 transition-all placeholder:text-indigo-200" 
+                                      />
+                                  </div>
+
+                                  {showSponsorResults && sponsorSuggestions.length > 0 && (
+                                      <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-100 rounded-2xl shadow-2xl overflow-hidden z-[110] animate-in zoom-in-95">
+                                          {sponsorSuggestions.map((sponsor) => (
+                                              <button
+                                                  key={sponsor.id}
+                                                  type="button"
+                                                  onClick={() => {
+                                                      setSelectedSponsor({ id: sponsor.id, name: sponsor.name });
+                                                      
+                                                      // Mise à jour de l'agenceur référent : référent du parrain ou à défaut créateur du parrain
+                                                      if (sponsor.details?.referent) {
+                                                        setSelectedReferentName(sponsor.details.referent);
+                                                      } else if (sponsor.addedBy?.name) {
+                                                        setSelectedReferentName(sponsor.addedBy.name);
+                                                      }
+                                                      setShowSponsorResults(false);
+                                                  }}
+                                                  className="w-full px-5 py-4 text-left hover:bg-indigo-50 flex items-start gap-4 border-b border-gray-50 last:border-0 group transition-all"
+                                              >
+                                                  <div className="p-1.5 bg-gray-50 rounded-lg text-gray-300 group-hover:text-indigo-600 transition-all">
+                                                      <UserIcon size={16} />
+                                                  </div>
+                                                  <div className="flex flex-col">
+                                                      <span className="text-[13px] font-bold text-gray-900 uppercase">{sponsor.name}</span>
+                                                      <span className="text-[11px] text-gray-400 font-medium">{sponsor.location || 'Localisation non définie'}</span>
+                                                  </div>
+                                              </button>
+                                          ))}
+                                      </div>
+                                  )}
+                              </>
+                          )}
+                      </div>
+
+                      <div className="space-y-2 animate-in slide-in-from-top-1 duration-300">
+                        <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Lien parrain</label>
+                        <div className="relative group">
+                          <Link className="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-300 group-focus-within:text-indigo-600 transition-colors" size={16} />
+                          <input 
+                            type="text" 
+                            value={sponsorLink}
+                            onChange={(e) => setSponsorLink(e.target.value)}
+                            placeholder="Ex: Cousin, Ami, Voisin, Collègue..." 
+                            className="w-full pl-11 pr-4 py-2.5 bg-white border border-indigo-100 rounded-xl text-sm font-bold text-gray-800 focus:outline-none focus:border-indigo-500 transition-all shadow-sm placeholder:text-indigo-200" 
+                          />
+                        </div>
+                      </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -665,7 +856,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
 
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
               <div className="md:col-span-6 space-y-2">
-                <label className="block text-xs font-bold text-gray-500 ml-1">Collaborateur assigné</label>
+                <label className="block text-xs font-bold text-gray-500 ml-1">Collaborateur assigné (Tâche)</label>
                 <div className="relative group">
                   <select 
                     className="w-full appearance-none flex items-center pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 hover:border-[#A886D7] focus:ring-2 focus:ring-purple-50 outline-none transition-all cursor-pointer"
@@ -690,6 +881,36 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
               </div>
 
               <div className="md:col-span-6 space-y-2">
+                <label className="block text-xs font-bold text-gray-500 ml-1">Agenceur référent (Contact)</label>
+                <div className="relative group">
+                  <select 
+                    className="w-full appearance-none flex items-center pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 hover:border-[#A886D7] focus:ring-2 focus:ring-purple-50 outline-none transition-all cursor-pointer disabled:bg-gray-50 disabled:opacity-50"
+                    disabled={!selectedClientId}
+                    onChange={(e) => setSelectedReferentName(e.target.value)}
+                    value={selectedReferentName}
+                  >
+                    <option value="">{!selectedClientId ? 'Choisir un client d\'abord' : 'Sélectionner un référent'}</option>
+                    {collaborators.map((c, i) => (
+                      <option key={i} value={c.name}>{c.name}</option>
+                    ))}
+                  </select>
+                  <div className="absolute left-3 top-1/2 -translate-y-1/2">
+                     {selectedReferentName && (
+                       <img 
+                        src={collaborators.find(c => c.name === selectedReferentName)?.avatar || "https://i.pravatar.cc/150?u=fallback"} 
+                        className="w-6 h-6 rounded-full border border-white shadow-sm" 
+                        alt="" 
+                       />
+                     )}
+                     {!selectedReferentName && <UserCheck size={18} className="text-gray-300" />}
+                  </div>
+                  <ChevronDown size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+              <div className="md:col-span-12 space-y-2">
                 <label className="block text-xs font-bold text-gray-500 ml-1">Échéance de la {isMemo ? 'note' : 'tâche'}</label>
                 <div 
                   className="relative group cursor-pointer"
@@ -854,7 +1075,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
                               type="button"
                               onClick={() => {
                                 setSelectedClientId(client.id);
-                                setClientSearchQuery(client.name);
+                                setClientSearchQuery(formatClientNameDisplay(client.name));
                                 setShowClientResults(false);
                               }}
                               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-left ${selectedClientId === client.id ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50 text-gray-700'}`}
@@ -862,7 +1083,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
                               <div className={`p-1.5 rounded-lg ${selectedClientId === client.id ? 'bg-white text-indigo-600' : 'bg-gray-100 text-gray-400'}`}>
                                 <UserIcon size={14} />
                               </div>
-                              <span className="text-sm font-bold">{client.name}</span>
+                              <span className="text-sm font-bold">{formatClientNameDisplay(client.name)}</span>
                             </button>
                           ))
                         ) : (

@@ -367,7 +367,7 @@ const TasksMemo: React.FC<TasksMemoProps> = ({ userProfile }) => {
                                     {activeMenuId === task.id && (
                                         <>
                                             <div className="fixed inset-0 z-40" onClick={() => setActiveMenuId(null)} />
-                                            <div className="absolute right-0 top-10 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 w-40 py-2 animate-in fade-in zoom-in-95 duration-150">
+                                            <div className={`absolute right-0 ${index >= filteredTasks.length - 2 && filteredTasks.length > 2 ? 'bottom-full mb-2' : 'top-10'} bg-white border border-gray-100 rounded-xl shadow-2xl z-50 w-48 py-2 animate-in fade-in zoom-in-95 duration-150 text-left`}>
                                                 <button onClick={() => setTaskToDelete(task)} className="w-full text-left px-4 py-2 text-[12px] font-bold text-red-600 hover:bg-red-50 flex items-center">
                                                   <Trash2 size={14} className="mr-2" /> Supprimer
                                                 </button>

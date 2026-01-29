@@ -122,7 +122,7 @@ const ClientAppointments: React.FC<ClientAppointmentsProps> = ({ clientId, clien
                   </td>
                 </tr>
               ) : (
-                appointments.map((rdv) => (
+                appointments.map((rdv, index) => (
                   <tr key={rdv.id} className="group bg-white hover:bg-gray-50/50 transition-all border border-gray-100">
                     <td className="px-6 py-5 first:rounded-l-2xl border-y border-l border-gray-50">
                       <div className="flex items-center gap-3">
@@ -181,7 +181,7 @@ const ClientAppointments: React.FC<ClientAppointmentsProps> = ({ clientId, clien
                           {activeMenuId === rdv.id && (
                             <>
                               <div className="fixed inset-0 z-40" onClick={() => setActiveMenuId(null)}></div>
-                              <div className="absolute right-0 mt-2 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 py-2 w-48 animate-in fade-in zoom-in-95 duration-150">
+                              <div className={`absolute right-0 ${index >= appointments.length - 2 && appointments.length > 2 ? 'bottom-full mb-2' : 'mt-2'} bg-white border border-gray-100 rounded-xl shadow-2xl z-50 py-2 w-48 animate-in fade-in zoom-in-95 duration-150`}>
                                 <button className="w-full text-left px-4 py-2.5 text-[12px] font-bold text-gray-700 hover:bg-gray-50 flex items-center gap-2">
                                   <PenSquare size={14} className="text-gray-400" /> Modifier
                                 </button>

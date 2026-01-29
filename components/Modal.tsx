@@ -6,43 +6,65 @@ import { db } from '../firebase';
 import { collection, addDoc, getDocs, query, where, doc, updateDoc } from '@firebase/firestore';
 import { Client } from '../types';
 
-// Structure de données hiérarchique identique aux autres composants
+// Structure de données mise à jour selon le fichier CSV
 const HIERARCHY_DATA: Record<string, Record<string, string[]>> = {
-  "Actif commercial": {
-    "Prospection terrain": ["Porte-à-porte", "Tour de chantier"],
-    "Relance fichier": ["Anciens devis", "Clients perdus", "SAV"],
-    "Parrainage": ["Bon de parrainage", "Spontanée"],
-    "Prescripteur": ["Artisan partenaire", "Architecte", "Courtier", "Décorateur"],
-    "Démarchage téléphonique": ["Appel froid", "Suivi salon", "Relance mailing"]
+  "Prospection": {
+    "terrain": ["voisin", "porte-à porte", "Tour de chantier"],
+    "téléphonique": ["Appel froid"]
   },
-  "Notoriété": {
-    "Bouche-à-oreille": ["Famille/ami", "Voisin"],
-    "Recommandation spontanée": ["Sans lien identifié"],
-    "Ancien client": ["Autre projet", "Retour suite SAV"],
-    "Avis en ligne": ["Google", "PagesJaunes", "Site d’avis"]
+  "Parrainage": {
+    "Spontanné": [],
+    "Bon de parrainage": []
+  },
+  "Prescripteur": {
+    "Architecte": [],
+    "Artisan": [],
+    "Courtier": [],
+    "Décorateur": [],
+    "Boutiques voisines": [],
+    "Fournisseur": []
+  },
+  "Anciens clients": {
+    "Général": []
+  },
+  "Notoriété entreprise": {
+    "Général": []
+  },
+  "Digital": {
+    "Réseaux sociaux": ["Facebook", "Instagram", "Linkedin", "Tik-tok", "YouTube", "Pinterest"],
+    "Pub digitales": ["Google Ads", "Facebook Ads", "Instagram Ads"],
+    "Web": ["Recherche Google", "Google maps", "Waze", "Avis Google", "Avis en lignes divers", "Pages jaunes", "Forum"],
+    "IA": ["ChatGPT", "Gemini", "Claude", "Mistral"],
+    "Site web entreprise": ["Formulaire contact", "Prise de rdv en ligne", "Chatbot"]
   },
   "Marketing": {
-    "Publicité digitale": ["Google Ads", "Facebook Ads", "Instagram Ads", "Retargeting"],
-    "Site web": ["Formulaire contact", "Prise de RDV en ligne", "Chatbot"],
-    "Emailing": ["Newsletter", "Email promo", "Relance devis automatique"],
-    "SMS marketing": ["Campagne promo", "Relance devis"],
-    "Réseaux sociaux": ["Facebook perso", "Instagram", "TikTok", "Live", "Story promo"],
-    "Affichage": ["Panneau pub", "Abribus", "Panneau chantier", "Véhicule floqué"],
-    "Média traditionnel": ["Magazine", "Journal gratuit", "Publication pro", "Radio"],
-    "Événementiel": ["Salon", "Foire"],
-    "Réseaux pro": ["BNI", "Club entrepreneurs", "Groupement métiers"],
-    "Événement magasin": ["Portes ouvertes", "Inauguration", "Anniversaire showroom"]
+    "Emailing": ["Newsletter", "Email promo"],
+    "SMS marketing": [],
+    "Affichage": ["4x3", "Abribus", "Panneau chantier", "Véhicule floqué"],
+    "Magazine": [],
+    "Journal gratuit": [],
+    "Publication pro": [],
+    "Radio": [],
+    "Pages jaunes": [],
+    "Evenementiel": ["Salon", "Foire", "Galerie commerciale"],
+    "Evènements showroom": ["Portes ouvertes", "Innauguration", "Anniversaire", "Démo culinaires", "Autres"]
   },
-  "Magasin": {
-    "Passage magasin": ["Sans RDV"],
-    "Vitrine": ["Promo vitrine", "PLV"],
-    "Référencement local": ["Google Maps", "PagesJaunes", "GPS", "Plan local"],
-    "Bouche-à-oreille local": ["Habitant quartier", "Voisinage proche"]
+  "Réseaux pro": {
+    "BNI": [],
+    "Club entrepreneurs": ["Club 1", "Club 2", "Club 3", "Club 4"],
+    "Groupements métiers": []
+  },
+  "Passage devant showroom": {
+    "Spontanné": [],
+    "Promo vitrine": [],
+    "PLV": []
+  },
+  "Cercle proche": {
+    "Famille": [],
+    "Amis": []
   },
   "Autres": {
-    "Carte de visite": ["Récupérée événement", "Posée en magasin"],
-    "Opportunité": ["Spontanée"],
-    "Autre": ["À préciser"]
+    "Autre": []
   }
 };
 
@@ -275,7 +297,11 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
     
     setIsLoading(true);
     try {
-      const clientName = `${formData.firstName} ${formData.lastName}`.toUpperCase().trim();
+      // Formatage du nom du client : Prénom (Casse mixte), Nom (MAJUSCULES)
+      const firstNameTrimmed = formData.firstName.trim();
+      const capitalizedFirstName = firstNameTrimmed.charAt(0).toUpperCase() + firstNameTrimmed.slice(1).toLowerCase();
+      const lastNameUpper = formData.lastName.trim().toUpperCase();
+      const clientName = `${capitalizedFirstName} ${lastNameUpper}`;
       
       const clientData: any = {
         name: clientName,
@@ -503,13 +529,20 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
                           <div className="relative">
                               <select 
                                 value={formData.category}
-                                onChange={(e) => setFormData({...formData, category: e.target.value, origin: '', subOrigin: ''})}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    setFormData({...formData, category: val, origin: '', subOrigin: ''});
+                                    if(val !== 'Parrainage') {
+                                      setSelectedSponsor(null);
+                                      setFormData(prev => ({ ...prev, sponsorLink: '' }));
+                                    }
+                                }}
                                 className="w-full appearance-none bg-white border border-gray-200 rounded-xl py-2.5 px-4 text-sm font-bold text-gray-800 focus:outline-none focus:border-indigo-500 transition-all shadow-sm"
                               >
                                   <option value="">Sélectionner</option>
                                   {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                               </select>
-                              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" size={14} />
+                              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
                           </div>
                       </div>
                       <div className="space-y-2">
@@ -519,8 +552,9 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
                                 disabled={!formData.category}
                                 value={formData.origin}
                                 onChange={(e) => {
-                                    setFormData({...formData, origin: e.target.value, subOrigin: ''});
-                                    if(e.target.value !== 'Parrainage') {
+                                    const val = e.target.value;
+                                    setFormData({...formData, origin: val, subOrigin: ''});
+                                    if(val !== 'Parrainage' && formData.category !== 'Parrainage') {
                                       setSelectedSponsor(null);
                                       setFormData(prev => ({ ...prev, sponsorLink: '' }));
                                     }
@@ -530,7 +564,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
                                   <option value="">Sélectionner</option>
                                   {origins.map(orig => <option key={orig} value={orig}>{orig}</option>)}
                               </select>
-                              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" size={14} />
+                              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
                           </div>
                       </div>
                       <div className="space-y-2">
@@ -545,13 +579,13 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
                                   <option value="">Sélectionner</option>
                                   {subOrigins.map(so => <option key={so} value={so}>{so}</option>)}
                               </select>
-                              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" size={14} />
+                              <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
                           </div>
                       </div>
                   </div>
 
-                  {/* Bloc Parrainage (Conditionnel) */}
-                  {formData.origin === 'Parrainage' && (
+                  {/* Bloc Parrainage (Conditionnel - Apparaît si l'Origine OU la Sous-origine est Parrainage) */}
+                  {(formData.category === 'Parrainage' || formData.origin === 'Parrainage') && (
                     <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100 animate-in slide-in-from-top-2 duration-300 space-y-4">
                         <div className="flex items-center gap-2 mb-2">
                             <Plus size={14} className="text-indigo-600" />
@@ -726,7 +760,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, userProfile, onClientCre
           <div className="p-8 border-t border-gray-100 flex justify-center bg-[#FBFBFB]">
               <button 
                 type="submit"
-                disabled={isLoading || !formData.lastName || !formData.firstName || !addressSearch || !formData.category || !formData.origin || (formData.origin === 'Parrainage' && !selectedSponsor) || !userProfile?.companyId}
+                disabled={isLoading || !formData.lastName || !formData.firstName || !addressSearch || !formData.category || !formData.origin || (formData.category === 'Parrainage' && !selectedSponsor) || !userProfile?.companyId}
                 className={`flex items-center space-x-3 px-12 py-4 text-white rounded-2xl text-[15px] font-bold shadow-2xl transition-all disabled:opacity-50 disabled:cursor-not-allowed group ${isEdit ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-100' : 'bg-gray-900 hover:bg-black shadow-gray-200'}`}
               >
                   {isLoading ? (

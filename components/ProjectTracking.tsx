@@ -187,7 +187,7 @@ const ProjectTracking: React.FC<ProjectTrackingProps> = ({ userProfile, onProjec
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {filteredProjects.map((project) => (
+              {filteredProjects.map((project, index) => (
                 <tr 
                   key={project.id} 
                   onClick={() => onProjectClick?.(project)}
@@ -242,7 +242,7 @@ const ProjectTracking: React.FC<ProjectTrackingProps> = ({ userProfile, onProjec
                         {activeMenuId === project.id && (
                           <>
                             <div className="fixed inset-0 z-40" onClick={() => setActiveMenuId(null)}></div>
-                            <div className="absolute right-0 mt-2 bg-white border border-gray-100 rounded-xl shadow-2xl z-50 py-2 w-48 animate-in fade-in zoom-in-95 duration-150">
+                            <div className={`absolute right-0 ${index >= filteredProjects.length - 2 && filteredProjects.length > 2 ? 'bottom-full mb-2' : 'mt-2'} bg-white border border-gray-100 rounded-xl shadow-2xl z-50 py-2 w-48 animate-in fade-in zoom-in-95 duration-150`}>
                               <button 
                                 onClick={() => {
                                   setProjectToEdit(project);
