@@ -43,11 +43,12 @@ const ProjectAppointments: React.FC<ProjectAppointmentsProps> = ({
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
-    if (!projectId) return;
+    if (!projectId || !userProfile?.companyId) return;
     
     const q = query(
       collection(db, 'appointments'), 
-      where('projectId', '==', projectId)
+      where('projectId', '==', projectId),
+      where('companyId', '==', userProfile.companyId)
     );
 
     const unsub = onSnapshot(q, (snapshot) => {
@@ -59,9 +60,11 @@ const ProjectAppointments: React.FC<ProjectAppointmentsProps> = ({
       });
       setAppointments(data);
       setIsLoading(false);
+    }, (error) => {
+      console.error("Erreur ProjectAppointments permissions:", error);
     });
     return () => unsub();
-  }, [projectId]);
+  }, [projectId, userProfile?.companyId]);
 
   const confirmDelete = async () => {
     if (!appointmentToDelete) return;

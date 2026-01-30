@@ -65,6 +65,8 @@ const ProjectTracking: React.FC<ProjectTrackingProps> = ({ userProfile, onProjec
       })) as Project[];
       setProjects(projectsList);
       setIsLoading(false);
+    }, (error) => {
+      console.error("Erreur ProjectTracking permissions:", error);
     });
 
     return () => unsubscribe();

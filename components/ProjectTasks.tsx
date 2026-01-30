@@ -34,13 +34,14 @@ const ProjectTasks: React.FC<ProjectTasksProps> = ({ projectId, clientId, projec
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
-  // Charger les tâches liées à ce PROJET en temps réel
+  // Charger les tâches liées à ce PROJET en temps réel - AJOUT FILTRE COMPANYID
   useEffect(() => {
-    if (!projectId) return;
+    if (!projectId || !userProfile?.companyId) return;
 
     const q = query(
       collection(db, 'tasks'), 
-      where('projectId', '==', projectId)
+      where('projectId', '==', projectId),
+      where('companyId', '==', userProfile.companyId)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -53,7 +54,7 @@ const ProjectTasks: React.FC<ProjectTasksProps> = ({ projectId, clientId, projec
     });
 
     return () => unsubscribe();
-  }, [projectId]);
+  }, [projectId, userProfile?.companyId]);
 
   const handleDeleteTask = async (id: string) => {
     if (!window.confirm("Attention, vous êtes sur de vouloir supprimer ?")) return;

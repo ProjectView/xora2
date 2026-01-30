@@ -37,6 +37,16 @@ interface ProjectDetailsProps {
   onBack: () => void;
 }
 
+// Configuration des statuts et couleurs synchronisée avec le Suivi Projets
+const STATUS_OPTIONS = [
+  { label: 'Lead à qualifier', color: 'bg-purple-100 text-purple-600 border-purple-200' },
+  { label: 'Étude client', color: 'bg-fuchsia-100 text-fuchsia-600 border-fuchsia-200' },
+  { label: 'Commande', color: 'bg-blue-100 text-blue-600 border-blue-200' },
+  { label: 'Dossier technique et Installation', color: 'bg-cyan-100 text-cyan-600 border-cyan-200' },
+  { label: 'Finition et SAV', color: 'bg-orange-100 text-orange-600 border-orange-200' },
+  { label: 'Terminé', color: 'bg-green-100 text-green-700 border-green-200' },
+];
+
 const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject, userProfile, onBack }) => {
   const [activeTab, setActiveTab] = useState('Etude client');
   const [activeSubTab, setActiveSubTab] = useState('Découverte');
@@ -71,21 +81,31 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
 
   // Compteur de tâches en temps réel
   useEffect(() => {
-    const q = query(collection(db, 'tasks'), where('projectId', '==', initialProject.id));
+    if (!userProfile?.companyId) return;
+    const q = query(
+      collection(db, 'tasks'), 
+      where('projectId', '==', initialProject.id),
+      where('companyId', '==', userProfile.companyId)
+    );
     const unsubTasks = onSnapshot(q, (snapshot) => {
       setTaskCount(snapshot.size);
     });
     return () => unsubTasks();
-  }, [initialProject.id]);
+  }, [initialProject.id, userProfile?.companyId]);
 
   // Compteur de rendez-vous en temps réel
   useEffect(() => {
-    const q = query(collection(db, 'appointments'), where('projectId', '==', initialProject.id));
+    if (!userProfile?.companyId) return;
+    const q = query(
+      collection(db, 'appointments'), 
+      where('projectId', '==', initialProject.id),
+      where('companyId', '==', userProfile.companyId)
+    );
     const unsubAppts = onSnapshot(q, (snapshot) => {
       setAppointmentCount(snapshot.size);
     });
     return () => unsubAppts();
-  }, [initialProject.id]);
+  }, [initialProject.id, userProfile?.companyId]);
 
   useEffect(() => {
     if (!project?.clientId) return;
@@ -108,12 +128,26 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
     }
   };
 
+  const handleStatusChange = async (newStatus: string) => {
+    const selectedOption = STATUS_OPTIONS.find(opt => opt.label === newStatus);
+    if (!selectedOption) return;
+
+    try {
+      await updateDoc(doc(db, 'projects', project.id), {
+        status: selectedOption.label,
+        statusColor: selectedOption.color
+      });
+    } catch (e) {
+      console.error("Erreur lors de la mise à jour du statut:", e);
+    }
+  };
+
   const handleMarkAsLost = async () => {
     if (!window.confirm("Voulez-vous vraiment marquer ce projet comme PERDU ?")) return;
     try {
       await updateDoc(doc(db, 'projects', project.id), {
         status: 'Projet perdu',
-        statusColor: 'bg-red-100 text-red-700',
+        statusColor: 'bg-red-100 text-red-700 border-red-200',
         progress: 0
       });
     } catch (e) {
@@ -121,7 +155,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
     }
   };
 
-  // Structure de la checklist avec les 3 blocs
+  // Structure de la checklist
   const checklist = useMemo(() => {
     const base = project.details?.checklist || {};
     return {
@@ -152,43 +186,34 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
     };
   }, [project.details?.checklist]);
 
-  // Calcul du pourcentage local pour le premier bloc (Étude Client - 4 jalons)
   const etudeProgress = useMemo(() => {
     const steps = checklist.etudeClient;
-    const total = 4;
     const completed = Object.values(steps).filter(v => v === true).length;
-    return Math.round((completed / total) * 100);
+    return Math.round((completed / 4) * 100);
   }, [checklist.etudeClient]);
 
-  // Calcul du pourcentage local pour le second bloc (Commande Client - 4 jalons)
   const commandeProgress = useMemo(() => {
     const steps = checklist.commandeClient;
-    const total = 4;
     const completed = Object.values(steps).filter(v => v === true).length;
-    return Math.round((completed / total) * 100);
+    return Math.round((completed / 4) * 100);
   }, [checklist.commandeClient]);
 
-  // Calcul du pourcentage local pour le troisième bloc (Dossier tech - 6 jalons)
   const dossierTechProgress = useMemo(() => {
     const steps = checklist.dossierTech;
-    const total = 6;
     const completed = Object.values(steps).filter(v => v === true).length;
-    return Math.round((completed / total) * 100);
+    return Math.round((completed / 6) * 100);
   }, [checklist.dossierTech]);
 
-  // Calcul de la progression GLOBALE du projet (14 jalons au total: 4 Etude + 4 Commande + 6 Dossier Tech)
   const globalProgress = useMemo(() => {
     const steps = [
       ...Object.values(checklist.etudeClient),
       ...Object.values(checklist.commandeClient),
       ...Object.values(checklist.dossierTech)
     ];
-    const totalSteps = steps.length;
     const completedSteps = steps.filter(v => v === true).length;
-    
-    if (completedSteps === 0) return 2; // On garde 2% par défaut pour le visuel
-    return Math.round((completedSteps / totalSteps) * 100);
-  }, [checklist]);
+    if (completedSteps === 0) return project.progress || 2;
+    return Math.round((completedSteps / steps.length) * 100);
+  }, [checklist, project.progress]);
 
   const handleChecklistUpdate = async (path: string, value: boolean) => {
     try {
@@ -198,7 +223,6 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
         updatedChecklist[parts[0]][parts[1]] = value;
       }
 
-      // Recalcul des jalons pour Firestore (total 14 étapes)
       const steps = [
         ...Object.values(updatedChecklist.etudeClient),
         ...Object.values(updatedChecklist.commandeClient),
@@ -238,6 +262,11 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
     return <div className="h-screen flex items-center justify-center bg-white"><Loader2 className="animate-spin text-gray-300" size={48} /></div>;
   }
 
+  // Détermination de l'option de statut actuelle pour le style du sélecteur
+  const currentStatusOption = STATUS_OPTIONS.find(opt => opt.label === project.status);
+  // Extraction de la classe de texte pour l'icône Chevron
+  const textColorClass = currentStatusOption?.color.split(' ').find(c => c.startsWith('text-')) || 'text-gray-400';
+
   return (
     <div className="flex h-screen bg-[#F8F9FA] overflow-hidden font-sans">
       <div className="flex-1 flex flex-col h-full overflow-y-auto hide-scrollbar">
@@ -271,9 +300,26 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
                   ) : (
                     <h1 className="text-[20px] font-bold text-gray-900">{project.projectName}</h1>
                   )}
-                  <span className={`px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-tight ${project.statusColor || 'bg-gray-100 text-gray-400'}`}>
-                    {project.status}
-                  </span>
+                  
+                  {/* Sélecteur de Statut Coloré - Style calqué sur le tableau Suivi Projets */}
+                  <div className="relative group/status inline-block">
+                    <select
+                      value={project.status}
+                      onChange={(e) => handleStatusChange(e.target.value)}
+                      className={`appearance-none cursor-pointer px-3 py-1.5 pr-8 rounded-md text-[10px] font-black uppercase tracking-tight outline-none border transition-all shadow-sm hover:shadow-md ${
+                        currentStatusOption?.color || project.statusColor || 'bg-gray-100 text-gray-600 border-gray-200'
+                      }`}
+                    >
+                      {/* Affichage de l'option actuelle si elle ne fait pas partie des options standard (ex: Projet perdu) */}
+                      {!currentStatusOption && <option value={project.status}>{project.status}</option>}
+                      {STATUS_OPTIONS.map((opt) => (
+                        <option key={opt.label} value={opt.label} className="bg-white text-gray-900 font-bold capitalize">
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown size={12} className={`absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 group-hover/status:opacity-100 transition-opacity ${textColorClass}`} />
+                  </div>
                 </div>
               </div>
             </div>
@@ -338,7 +384,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
           </div>
         </div>
 
-        {/* Sous-navigation Dynamique */}
+        {/* Sous-navigation */}
         {(activeTab === 'Etude client') && (
           <div className="bg-white border-b border-gray-100 px-8 flex gap-12 shrink-0 z-10 sticky top-0">
             {subTabs.map((sub) => (
@@ -360,7 +406,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
           </div>
         )}
 
-        {/* Zone de contenu Principal */}
+        {/* Contenu Principal */}
         <div className="p-8 space-y-6 flex-1 bg-[#F9FAFB]">
           
           {activeTab === 'Etude client' && activeSubTab === 'Découverte' && (
@@ -398,25 +444,14 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
             />
           )}
 
-          {activeTab === 'Etude client' && (activeSubTab !== 'Découverte' && activeSubTab !== 'Découverte cuisine') && (
-            <div className="h-96 flex flex-col items-center justify-center text-center p-12 bg-white border border-gray-100 rounded-3xl animate-in fade-in duration-300 shadow-sm">
-              <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-6 text-gray-200">
-                <FileIcon size={40} />
-              </div>
-              <h3 className="text-lg font-bold text-gray-800 mb-2">Section {activeSubTab}</h3>
-              <p className="text-sm text-gray-400 max-w-sm">Cet espace est prêt à recevoir vos plans, présentations et documents relatifs à cette phase du projet.</p>
-            </div>
-          )}
-
           <div className="pb-20" />
         </div>
       </div>
 
-      {/* Barre latérale droite EXTENSIBLE (Checklist) */}
+      {/* Barre latérale droite (Checklist) */}
       <div 
         className={`${isChecklistOpen ? 'w-[350px]' : 'w-20'} bg-white border-l border-gray-100 flex flex-col h-screen transition-all duration-500 ease-in-out z-40 relative shadow-2xl shrink-0`}
       >
-        {/* Toggle Button */}
         <button 
           onClick={() => setIsChecklistOpen(!isChecklistOpen)}
           className={`absolute -left-4 top-10 w-8 h-8 bg-white border border-gray-100 rounded-full shadow-lg flex items-center justify-center text-gray-400 hover:text-indigo-600 transition-all z-50 ${isChecklistOpen ? 'rotate-180' : ''}`}
@@ -424,7 +459,6 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
           <ChevronLeft size={18} />
         </button>
 
-        {/* Vue compacte (Quand fermée) */}
         {!isChecklistOpen && (
           <div className="flex flex-col items-center py-10 gap-8 animate-in fade-in duration-500 h-full">
             <LayoutList size={22} className="text-gray-300" />
@@ -434,12 +468,6 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
                 <ProgressCircle progress={globalProgress} color="#6366f1" size="w-8 h-8" />
                 <span className="text-[10px] font-black text-gray-900">{globalProgress}%</span>
               </div>
-              <div className={`p-2 rounded-lg ${Object.values(checklist.commandeClient).every(v => v === true) ? 'bg-green-50 text-green-500' : 'bg-gray-50 text-gray-300'}`}>
-                <CheckSquare size={16} />
-              </div>
-              <div className={`p-2 rounded-lg ${Object.values(checklist.dossierTech).every(v => v === true) ? 'bg-green-50 text-green-500' : 'bg-gray-50 text-gray-300'}`}>
-                <FileText size={16} />
-              </div>
             </div>
             <div className="mt-auto flex flex-col items-center gap-4 mb-4">
               <button className="p-3 bg-gray-50 text-gray-400 hover:text-indigo-600 rounded-xl transition-all shadow-sm"><Mail size={18} /></button>
@@ -448,7 +476,6 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
           </div>
         )}
 
-        {/* Vue complète (Quand ouverte) */}
         {isChecklistOpen && (
           <div className="flex flex-col h-full animate-in slide-in-from-right-10 duration-500">
             <div className="p-8 border-b border-gray-50">
@@ -460,7 +487,6 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
                 <span className="text-[22px] font-black text-indigo-600">{globalProgress}%</span>
               </div>
               
-              {/* Progress Bar Globale (Sommet de la checklist) */}
               <div className="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden mt-6">
                 <div 
                   className="h-full bg-indigo-600 rounded-full transition-all duration-700 shadow-[0_0_15px_rgba(79,70,229,0.4)]"
@@ -470,14 +496,11 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
             </div>
 
             <div className="flex-1 overflow-y-auto p-8 space-y-10 hide-scrollbar">
-              
-              {/* BLOC 1 : Étude Client */}
               <div className="space-y-6">
                 <div className="flex justify-between items-end">
                   <h4 className="text-[11px] font-black text-indigo-500 uppercase tracking-[0.2em]">Étude client</h4>
                   <span className="text-[12px] font-black text-gray-400">{etudeProgress}%</span>
                 </div>
-                
                 <div className="space-y-4 pt-2">
                   {[
                     { id: 'decouverte', label: 'Découverte client' },
@@ -504,13 +527,11 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
                 </div>
               </div>
 
-              {/* BLOC 2 : Commande Client */}
               <div className="space-y-6">
                 <div className="flex justify-between items-end">
                   <h4 className="text-[11px] font-black text-indigo-500 uppercase tracking-[0.2em]">Commande client</h4>
                   <span className="text-[12px] font-black text-gray-400">{commandeProgress}%</span>
                 </div>
-                
                 <div className="space-y-4 pt-2">
                   {[
                     { id: 'docsSigner', label: 'Doc à signer' },
@@ -537,13 +558,11 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
                 </div>
               </div>
 
-              {/* BLOC 3 : Dossier Tech & Install */}
               <div className="space-y-6">
                 <div className="flex justify-between items-end">
                   <h4 className="text-[11px] font-black text-indigo-500 uppercase tracking-[0.2em]">Dossier tech & install</h4>
                   <span className="text-[12px] font-black text-gray-400">{dossierTechProgress}%</span>
                 </div>
-                
                 <div className="space-y-4 pt-2">
                   {[
                     { id: 'arValides', label: 'AR validés' },
@@ -571,10 +590,8 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
                   ))}
                 </div>
               </div>
-
             </div>
 
-            {/* Footer Profil Panel */}
             <div className="p-8 border-t border-gray-50 bg-[#FBFBFB]">
                <div className="flex items-center gap-4">
                   <img src={project.agenceur?.avatar} className="w-10 h-10 rounded-full border-2 border-white shadow-md" alt="" />
@@ -588,7 +605,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
         )}
       </div>
 
-      {/* Modales pré-remplies */}
+      {/* Modales */}
       <AddAppointmentModal 
         isOpen={isAppointmentModalOpen}
         onClose={() => setIsAppointmentModalOpen(false)}

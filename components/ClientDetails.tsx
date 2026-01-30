@@ -47,25 +47,30 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, on
     return () => unsub();
   }, [initialClient.id]);
 
-  // Compteur de rendez-vous en temps réel
+  // Compteur de rendez-vous en temps réel - AJOUT FILTRE COMPANYID POUR PERMISSIONS
   useEffect(() => {
-    const q = query(collection(db, 'appointments'), where('clientId', '==', initialClient.id));
+    if (!userProfile?.companyId) return;
+    const q = query(
+      collection(db, 'appointments'), 
+      where('clientId', '==', initialClient.id),
+      where('companyId', '==', userProfile.companyId)
+    );
     const unsubCount = onSnapshot(q, (snapshot) => {
       setAppointmentCount(snapshot.size);
     });
     return () => unsubCount();
-  }, [initialClient.id]);
+  }, [initialClient.id, userProfile?.companyId]);
 
-  // Compteur de tâches EN COURS en temps réel (Fix : Filtre status côté client pour éviter l'erreur d'index)
+  // Compteur de tâches EN COURS en temps réel - AJOUT FILTRE COMPANYID POUR PERMISSIONS
   useEffect(() => {
-    // On récupère toutes les tâches du client (égalité simple, pas d'index composite requis)
+    if (!userProfile?.companyId) return;
     const q = query(
       collection(db, 'tasks'), 
-      where('clientId', '==', initialClient.id)
+      where('clientId', '==', initialClient.id),
+      where('companyId', '==', userProfile.companyId)
     );
     
     const unsubTasks = onSnapshot(q, (snapshot) => {
-      // On filtre manuellement le statut ici pour éviter l'index Firestore complexe
       const pendingTasks = snapshot.docs.filter(doc => doc.data().status !== 'completed');
       setTaskPendingCount(pendingTasks.length);
     }, (error) => {
@@ -73,7 +78,7 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, on
     });
     
     return () => unsubTasks();
-  }, [initialClient.id]);
+  }, [initialClient.id, userProfile?.companyId]);
 
   // Règle de gestion : Statut effectif
   const effectiveStatus = (client.status !== 'Client' && (client.projectCount || 0) > 0) 

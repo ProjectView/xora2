@@ -38,13 +38,14 @@ const ClientTasks: React.FC<ClientTasksProps> = ({ clientId, clientName, userPro
   // Drag and Drop state
   const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
 
-  // Charger TOUTES les tâches liées à ce client
+  // Charger TOUTES les tâches liées à ce client - AJOUT FILTRE COMPANYID
   useEffect(() => {
-    if (!clientId) return;
+    if (!clientId || !userProfile?.companyId) return;
 
     const q = query(
       collection(db, 'tasks'), 
-      where('clientId', '==', clientId)
+      where('clientId', '==', clientId),
+      where('companyId', '==', userProfile.companyId)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -61,7 +62,7 @@ const ClientTasks: React.FC<ClientTasksProps> = ({ clientId, clientName, userPro
     });
 
     return () => unsubscribe();
-  }, [clientId]);
+  }, [clientId, userProfile?.companyId]);
 
   // Logic pour le Drag & Drop
   const onDragStart = (index: number) => {
