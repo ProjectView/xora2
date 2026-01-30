@@ -100,7 +100,7 @@ const CustomDropdown = ({
 
       {isOpen && (
         <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-100 rounded-[18px] shadow-[0_10px_40px_rgba(0,0,0,0.12)] overflow-hidden z-50 animate-in fade-in zoom-in-95 duration-200">
-          <div className="max-h-[250px] overflow-y-auto py-2 px-2 scrollbar-thin scrollbar-thumb-gray-200">
+          <div className="max-h-[250px] overflow-y-auto py-2 px-2 custom-scrollbar">
             {options.map((opt) => {
               const isSelected = multiple 
                 ? (Array.isArray(value) && value.includes(opt))
@@ -186,10 +186,18 @@ const ProjectKitchenFurniture: React.FC<ProjectKitchenFurnitureProps> = ({ proje
       {/* 1. Rangements */}
       <Section title="Rangements" icon={Layers}>
         <Field label="Volume de rangement actuel" colSpan="col-span-12 md:col-span-6">
-          <NumberInput value={furnitureData.volumeActuel} onChange={(v) => handleUpdate('details.kitchen.furniture.volumeActuel', v)} />
+          <CustomDropdown 
+            value={furnitureData.volumeActuel} 
+            options={['Insuffisant', 'Suffisant', 'Excessif']} 
+            onChange={(v: string) => handleUpdate('details.kitchen.furniture.volumeActuel', v)} 
+          />
         </Field>
         <Field label="Volume de rangement souhaité" colSpan="col-span-12 md:col-span-6">
-          <NumberInput value={furnitureData.volumeSouhaite} onChange={(v) => handleUpdate('details.kitchen.furniture.volumeSouhaite', v)} />
+          <CustomDropdown 
+            value={furnitureData.volumeSouhaite} 
+            options={['1 = Minimum nécessaire', '2 = Normal', '3 = Important', '4 = Très important', '5 = XXL']} 
+            onChange={(v: string) => handleUpdate('details.kitchen.furniture.volumeSouhaite', v)} 
+          />
         </Field>
       </Section>
 
