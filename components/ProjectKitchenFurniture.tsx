@@ -211,11 +211,12 @@ const ProjectKitchenFurniture: React.FC<ProjectKitchenFurnitureProps> = ({ proje
             onChange={(v: string[]) => handleUpdate('details.kitchen.furniture.typeMeublesHauts', v)} 
           />
         </Field>
-        <Field label="Colonnes" colSpan="col-span-12 md:col-span-4">
+        <Field label="Colonnes (Sélection multiple)" colSpan="col-span-12 md:col-span-4">
           <CustomDropdown 
-            value={furnitureData.colonnes} 
+            multiple
+            value={furnitureData.colonnes || []} 
             options={['Garde-manger', 'Frigo intégré', 'Four & MO', 'Pharmacie', 'Balai / Entretien', 'Sans colonne']} 
-            onChange={(v: string) => handleUpdate('details.kitchen.furniture.colonnes', v)} 
+            onChange={(v: string[]) => handleUpdate('details.kitchen.furniture.colonnes', v)} 
           />
         </Field>
 

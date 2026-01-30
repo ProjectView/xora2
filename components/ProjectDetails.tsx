@@ -63,6 +63,11 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
   const [isAppointmentModalOpen, setIsAppointmentModalOpen] = useState(false);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
 
+  // État pour la modale de note
+  const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
+  const [tempNote, setTempNote] = useState('');
+  const [isSavingNote, setIsSavingNote] = useState(false);
+
   // État pour la checklist latérale
   const [isChecklistOpen, setIsChecklistOpen] = useState(false);
 
@@ -73,6 +78,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
         const data = docSnap.data();
         setProject({ id: docSnap.id, ...data });
         setEditedTitle(data.projectName);
+        setTempNote(data.details?.projectNote || '');
       }
       setLoading(false);
     });
@@ -152,6 +158,20 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
       });
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  const saveProjectNote = async () => {
+    setIsSavingNote(true);
+    try {
+      await updateDoc(doc(db, 'projects', project.id), {
+        'details.projectNote': tempNote
+      });
+      setIsNoteModalOpen(false);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSavingNote(false);
     }
   };
 
@@ -448,7 +468,7 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
         </div>
       </div>
 
-      {/* Barre latérale droite (Checklist) */}
+      {/* Barre latérale droite (Checklist & Notes) */}
       <div 
         className={`${isChecklistOpen ? 'w-[350px]' : 'w-20'} bg-white border-l border-gray-100 flex flex-col h-screen transition-all duration-500 ease-in-out z-40 relative shadow-2xl shrink-0`}
       >
@@ -469,7 +489,16 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
                 <span className="text-[10px] font-black text-gray-900">{globalProgress}%</span>
               </div>
             </div>
+            
             <div className="mt-auto flex flex-col items-center gap-4 mb-4">
+              <button 
+                onClick={() => { setTempNote(project.details?.projectNote || ''); setIsNoteModalOpen(true); }}
+                className="p-3 bg-gray-50 text-gray-400 hover:text-indigo-600 rounded-xl transition-all shadow-sm relative group"
+                title="Notes du projet"
+              >
+                <FileText size={18} />
+                {project.details?.projectNote && <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-indigo-500 rounded-full border-2 border-white shadow-sm"></div>}
+              </button>
               <button className="p-3 bg-gray-50 text-gray-400 hover:text-indigo-600 rounded-xl transition-all shadow-sm"><Mail size={18} /></button>
               <button className="p-3 bg-gray-50 text-gray-400 hover:text-indigo-600 rounded-xl transition-all shadow-sm"><MessageSquare size={18} /></button>
             </div>
@@ -593,6 +622,19 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
             </div>
 
             <div className="p-8 border-t border-gray-50 bg-[#FBFBFB]">
+               <div className="flex items-center justify-between mb-6">
+                 <div className="flex gap-4">
+                   <button 
+                     onClick={() => { setTempNote(project.details?.projectNote || ''); setIsNoteModalOpen(true); }}
+                     className="p-3 bg-white border border-gray-100 text-gray-400 hover:text-indigo-600 rounded-xl transition-all shadow-sm relative group"
+                   >
+                     <FileText size={18} />
+                     {project.details?.projectNote && <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-indigo-500 rounded-full border-2 border-white shadow-sm"></div>}
+                   </button>
+                   <button className="p-3 bg-white border border-gray-100 text-gray-400 hover:text-indigo-600 rounded-xl transition-all shadow-sm"><Mail size={18} /></button>
+                   <button className="p-3 bg-white border border-gray-100 text-gray-400 hover:text-indigo-600 rounded-xl transition-all shadow-sm"><MessageSquare size={18} /></button>
+                 </div>
+               </div>
                <div className="flex items-center gap-4">
                   <img src={project.agenceur?.avatar} className="w-10 h-10 rounded-full border-2 border-white shadow-md" alt="" />
                   <div>
@@ -604,6 +646,56 @@ const ProjectDetails: React.FC<ProjectDetailsProps> = ({ project: initialProject
           </div>
         )}
       </div>
+
+      {/* MODALE NOTE PROJET */}
+      {isNoteModalOpen && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-300 border border-gray-100">
+            <div className="px-8 py-6 border-b border-gray-50 flex items-center justify-between bg-[#FBFBFB]">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl shadow-sm">
+                  <FileText size={20} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900 tracking-tight">Note sur le Projet</h3>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Commentaires libres du projet</p>
+                </div>
+              </div>
+              <button onClick={() => setIsNoteModalOpen(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-400 transition-all">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-8">
+              <textarea
+                autoFocus
+                rows={6}
+                value={tempNote}
+                onChange={(e) => setTempNote(e.target.value)}
+                placeholder="Saisissez vos notes libres sur ce projet..."
+                className="w-full bg-[#F8F9FA] border border-gray-100 rounded-2xl p-6 text-[14px] font-medium text-gray-900 outline-none focus:bg-white focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 transition-all shadow-inner resize-none"
+              />
+            </div>
+
+            <div className="p-8 pt-0 flex gap-4">
+              <button 
+                onClick={() => setIsNoteModalOpen(false)}
+                className="flex-1 px-6 py-4 bg-gray-50 text-gray-600 rounded-2xl font-bold text-[13px] hover:bg-gray-100 transition-all"
+              >
+                Annuler
+              </button>
+              <button 
+                onClick={saveProjectNote}
+                disabled={isSavingNote}
+                className="flex-1 px-6 py-4 bg-indigo-600 text-white rounded-2xl font-bold text-[13px] hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isSavingNote ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+                Enregistrer la note
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modales */}
       <AddAppointmentModal 

@@ -1,6 +1,21 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ChevronDown, Plus, Minus, FileText, Search, MapPin, Loader2, Upload, File, X, Star, Calendar } from 'lucide-react';
+import { 
+  ChevronDown, 
+  ChevronUp, 
+  Plus, 
+  Minus, 
+  FileText, 
+  Search, 
+  MapPin, 
+  Loader2, 
+  Upload, 
+  File, 
+  X, 
+  Star, 
+  Calendar,
+  Check
+} from 'lucide-react';
 import { db } from '../firebase';
 import { doc, updateDoc, getDoc } from '@firebase/firestore';
 
@@ -99,6 +114,75 @@ const Select = ({ value, onChange, options, placeholder = "Sélectionner", disab
     <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none group-hover:text-gray-400" />
   </div>
 );
+
+const MultiSelect = ({ value, onChange, options, placeholder = "Sélectionner", disabled = false }: any) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const toggleOption = (opt: string) => {
+    const current = Array.isArray(value) ? value : [];
+    const newValue = current.includes(opt)
+      ? current.filter(v => v !== opt)
+      : [...current, opt];
+    onChange(newValue);
+  };
+
+  const displayValue = () => {
+    if (!Array.isArray(value) || value.length === 0) return placeholder;
+    return value.join(', ');
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setIsOpen(!isOpen)}
+        className={`w-full flex items-center justify-between bg-white border rounded-xl px-4 py-3 text-[13px] transition-all shadow-sm ${
+          disabled ? 'bg-gray-50 text-gray-400 border-gray-100' : 'border-gray-100 hover:border-gray-300'
+        }`}
+      >
+        <span className={`font-bold truncate ${!Array.isArray(value) || value.length === 0 ? 'text-gray-400' : 'text-gray-900'}`}>
+          {displayValue()}
+        </span>
+        {isOpen ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+      </button>
+
+      {isOpen && (
+        <div className="absolute bottom-full mb-2 left-0 right-0 md:top-full md:bottom-auto md:mt-2 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[100] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="max-h-60 overflow-y-auto p-2 custom-scrollbar">
+            {options.map((opt: string) => {
+              const isSelected = Array.isArray(value) && value.includes(opt);
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => toggleOption(opt)}
+                  className={`w-full flex items-center justify-between px-4 py-2.5 text-left rounded-xl transition-all mb-0.5 group ${
+                    isSelected ? 'bg-gray-900 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'
+                  }`}
+                >
+                  <span className={`text-[12px] ${isSelected ? 'font-bold' : 'font-medium'}`}>{opt}</span>
+                  {isSelected && <Check size={14} className="text-white" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const Toggle = ({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) => (
   <div className="flex items-center gap-3">
@@ -438,11 +522,11 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
         </Field>
         {project.details?.artisansNecessaires && (
           <Field label="Artisan.s" colSpan="col-span-12 md:col-span-4">
-            <Select 
-              value={project.details?.artisanSelection} 
+            <MultiSelect 
+              value={project.details?.artisanSelection || []} 
               options={ARTISANS_OPTIONS} 
-              onChange={(v: string) => handleUpdate('details.artisanSelection', v)} 
-              placeholder="Choisir un artisan..."
+              onChange={(v: string[]) => handleUpdate('details.artisanSelection', v)} 
+              placeholder="Choisir artisan.s..."
             />
           </Field>
         )}

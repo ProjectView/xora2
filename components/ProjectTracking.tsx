@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Search, 
   ChevronDown, 
@@ -13,7 +13,10 @@ import {
   PenSquare,
   Trash2,
   AlertTriangle,
-  Loader2
+  Loader2,
+  X,
+  Check,
+  Filter
 } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, doc, deleteDoc, updateDoc, increment } from '@firebase/firestore';
@@ -41,16 +44,70 @@ interface ProjectTrackingProps {
   onProjectClick?: (project: Project) => void;
 }
 
+// Composant interne pour les dropdowns de filtrage
+const FilterDropdown = ({ label, value, options, onSelect, isOpen, onToggle }: any) => {
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  return (
+    <div className="relative md:col-span-2" ref={dropdownRef}>
+      <button 
+        onClick={onToggle}
+        className={`w-full flex items-center justify-between px-3 py-2.5 border rounded-md text-sm transition-all shadow-sm ${
+          value 
+            ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-bold' 
+            : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+        }`}
+      >
+        <span className="truncate">{value || label}</span>
+        <ChevronDown size={14} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-gray-200 rounded-xl shadow-2xl z-[100] overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200">
+          <div className="max-h-60 overflow-y-auto py-1 custom-scrollbar">
+            <button 
+              onClick={() => { onSelect(''); onToggle(); }}
+              className="w-full text-left px-4 py-2 text-[10px] font-black text-gray-300 hover:bg-gray-50 uppercase tracking-widest border-b border-gray-50 mb-1"
+            >
+              Réinitialiser
+            </button>
+            {options.map((opt: string) => (
+              <button
+                key={opt}
+                onClick={() => { onSelect(opt); onToggle(); }}
+                className={`w-full text-left px-4 py-2.5 text-[13px] flex items-center justify-between transition-colors ${
+                  value === opt ? 'bg-indigo-50 text-indigo-700 font-black' : 'text-gray-600 hover:bg-gray-50'
+                }`}
+              >
+                <span className="truncate">{opt}</span>
+                {value === opt && <Check size={14} className="text-indigo-600" />}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const ProjectTracking: React.FC<ProjectTrackingProps> = ({ userProfile, onProjectClick }) => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   
+  // États des filtres - filterAgenceur est pré-rempli avec le nom de l'utilisateur connecté
+  const [filterAgenceur, setFilterAgenceur] = useState(userProfile?.name || '');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterDate, setFilterDate] = useState('');
+  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+
   // Actions states
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const toolbarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!userProfile?.companyId) return;
@@ -72,22 +129,63 @@ const ProjectTracking: React.FC<ProjectTrackingProps> = ({ userProfile, onProjec
     return () => unsubscribe();
   }, [userProfile?.companyId]);
 
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (toolbarRef.current && !toolbarRef.current.contains(e.target as Node)) {
+        setActiveDropdown(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const uniqueAgenceurs = useMemo(() => 
+    Array.from(new Set(projects.map(p => p.agenceur?.name).filter(Boolean))).sort(), 
+  [projects]);
+
+  const uniqueStatuses = useMemo(() => 
+    Array.from(new Set(projects.map(p => p.status).filter(Boolean))).sort(), 
+  [projects]);
+
+  const uniqueDates = useMemo(() => 
+    Array.from(new Set(projects.map(p => p.addedDate).filter(Boolean))).sort((a: any, b: any) => {
+      const [da, ma, ya] = (a as string).split('/').map(Number);
+      const [db, mb, yb] = (b as string).split('/').map(Number);
+      return new Date(yb, mb - 1, db).getTime() - new Date(ya, ma - 1, da).getTime();
+    }), 
+  [projects]);
+
+  const filteredProjects = useMemo(() => {
+    return projects.filter(p => {
+      const matchesSearch = p.projectName.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                           p.clientName.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesAgenceur = !filterAgenceur || p.agenceur?.name === filterAgenceur;
+      const matchesStatus = !filterStatus || p.status === filterStatus;
+      const matchesDate = !filterDate || p.addedDate === filterDate;
+      
+      return matchesSearch && matchesAgenceur && matchesStatus && matchesDate;
+    });
+  }, [projects, searchQuery, filterAgenceur, filterStatus, filterDate]);
+
+  const resetFilters = () => {
+    setSearchQuery('');
+    setFilterAgenceur('');
+    setFilterStatus('');
+    setFilterDate('');
+  };
+
   const confirmDeleteProject = async () => {
     if (!projectToDelete) return;
     
     setIsDeleting(true);
     try {
-      // 1. Supprimer le projet
       await deleteDoc(doc(db, 'projects', projectToDelete.id));
-      
-      // 2. Décrémenter le compteur sur la fiche client
       if (projectToDelete.clientId) {
         const clientRef = doc(db, 'clients', projectToDelete.clientId);
         await updateDoc(clientRef, {
           projectCount: increment(-1)
         });
       }
-      
       setProjectToDelete(null);
       setActiveMenuId(null);
     } catch (err) {
@@ -99,34 +197,14 @@ const ProjectTracking: React.FC<ProjectTrackingProps> = ({ userProfile, onProjec
   };
 
   const ProgressCircle = ({ progress, color }: { progress: number; color: string }) => {
-    // On utilise l'indigo par défaut si la couleur n'est pas spécifiée, pour correspondre à la charte graphique
     const strokeColor = color?.includes('D946EF') ? '#D946EF' : color?.includes('F97316') ? '#F97316' : color?.includes('0EA5E9') ? '#0EA5E9' : '#6366f1';
     return (
       <svg className="w-5 h-5 mr-1.5" viewBox="0 0 36 36">
-        <circle
-          className="text-gray-100"
-          cx="18" cy="18" r="16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="3.5"
-        />
-        <circle
-          style={{ stroke: strokeColor }}
-          cx="18" cy="18" r="16"
-          fill="none"
-          strokeWidth="3.5"
-          strokeDasharray={`${progress}, 100`}
-          strokeLinecap="round"
-          transform="rotate(-90 18 18)"
-        />
+        <circle className="text-gray-100" cx="18" cy="18" r="16" fill="none" stroke="currentColor" strokeWidth="3.5" />
+        <circle style={{ stroke: strokeColor }} cx="18" cy="18" r="16" fill="none" strokeWidth="3.5" strokeDasharray={`${progress}, 100`} strokeLinecap="round" transform="rotate(-90 18 18)" />
       </svg>
     );
   };
-
-  const filteredProjects = projects.filter(p => 
-    p.projectName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    p.clientName.toLowerCase().includes(searchQuery.toLowerCase())
-  );
 
   return (
     <div className="p-6 space-y-4 bg-gray-50 min-h-[calc(100vh-64px)] flex flex-col font-sans">
@@ -140,10 +218,10 @@ const ProjectTracking: React.FC<ProjectTrackingProps> = ({ userProfile, onProjec
         </div>
       </div>
 
-      {/* BLOC 2 : Barre de Recherche */}
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-        <div className="md:col-span-4 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+      {/* BLOC 2 : Barre de Recherche et Filtres */}
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center" ref={toolbarRef}>
+        <div className="md:col-span-4 relative group">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-gray-900 transition-colors" size={16} />
           <input 
             type="text" 
             placeholder="Rechercher un client, un projet..." 
@@ -153,14 +231,42 @@ const ProjectTracking: React.FC<ProjectTrackingProps> = ({ userProfile, onProjec
           />
         </div>
         
-        {['Agenceur.se', 'Statut', "Date d'ajout"].map((filter) => (
-          <div key={filter} className="md:col-span-2 relative">
-            <button className="w-full flex items-center justify-between px-3 py-2.5 bg-white border border-gray-200 rounded-md text-sm text-gray-500 hover:bg-gray-50 shadow-sm transition-all">
-              <span className="truncate">{filter}</span>
-              <ChevronDown size={14} />
-            </button>
-          </div>
-        ))}
+        <FilterDropdown 
+          label="Agenceur.se" 
+          value={filterAgenceur} 
+          options={uniqueAgenceurs} 
+          onSelect={setFilterAgenceur}
+          isOpen={activeDropdown === 'agenceur'}
+          onToggle={() => setActiveDropdown(activeDropdown === 'agenceur' ? null : 'agenceur')}
+        />
+
+        <FilterDropdown 
+          label="Statut" 
+          value={filterStatus} 
+          options={uniqueStatuses} 
+          onSelect={setFilterStatus}
+          isOpen={activeDropdown === 'status'}
+          onToggle={() => setActiveDropdown(activeDropdown === 'status' ? null : 'status')}
+        />
+
+        <FilterDropdown 
+          label="Date d'ajout" 
+          value={filterDate} 
+          options={uniqueDates} 
+          onSelect={setFilterDate}
+          isOpen={activeDropdown === 'date'}
+          onToggle={() => setActiveDropdown(activeDropdown === 'date' ? null : 'date')}
+        />
+
+        {(searchQuery || filterAgenceur || filterStatus || filterDate) && (
+          <button 
+            onClick={resetFilters}
+            className="p-2.5 bg-white border border-red-100 text-red-500 rounded-md hover:bg-red-50 transition-all flex items-center justify-center shadow-sm shrink-0"
+            title="Réinitialiser"
+          >
+            <X size={18} />
+          </button>
+        )}
       </div>
 
       {/* BLOC 3 : Tableau des projets */}
@@ -171,8 +277,11 @@ const ProjectTracking: React.FC<ProjectTrackingProps> = ({ userProfile, onProjec
           </div>
         ) : filteredProjects.length === 0 ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 p-8 text-center">
-            <Briefcase size={48} className="mb-4 opacity-20" />
-            <p className="text-sm font-medium">Aucun projet trouvé pour cette recherche.</p>
+            <Filter size={48} className="mb-4 opacity-10" />
+            <p className="text-sm font-black text-gray-500 uppercase tracking-widest">Aucun projet trouvé</p>
+            {(searchQuery || filterAgenceur || filterStatus || filterDate) && (
+              <button onClick={resetFilters} className="mt-4 text-indigo-600 font-bold text-sm hover:underline">Effacer les filtres</button>
+            )}
           </div>
         ) : null}
 
@@ -212,7 +321,7 @@ const ProjectTracking: React.FC<ProjectTrackingProps> = ({ userProfile, onProjec
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center justify-start gap-4">
-                      <span className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-tight ${project.statusColor || 'bg-gray-100 text-gray-600'}`}>
+                      <span className={`px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-tight ${project.statusColor || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
                         {project.status}
                       </span>
                       <div className="flex items-center gap-1">
@@ -326,14 +435,16 @@ const ProjectTracking: React.FC<ProjectTrackingProps> = ({ userProfile, onProjec
       )}
 
       {/* MODALE EDITION */}
-      <AddProjectModal 
-        isOpen={!!projectToEdit}
-        onClose={() => setProjectToEdit(null)}
-        userProfile={userProfile}
-        clientId={projectToEdit?.clientId}
-        clientName={projectToEdit?.clientName}
-        projectToEdit={projectToEdit}
-      />
+      {projectToEdit && (
+        <AddProjectModal 
+          isOpen={!!projectToEdit}
+          onClose={() => setProjectToEdit(null)}
+          userProfile={userProfile}
+          clientId={projectToEdit?.clientId}
+          clientName={projectToEdit?.clientName}
+          projectToEdit={projectToEdit}
+        />
+      )}
     </div>
   );
 };
