@@ -171,11 +171,11 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
 
   const statusCards = useMemo(() => {
     return [
-      { id: 'leads', label: 'Leads', count: allClients.filter(c => c.status === 'Leads').length, color: 'purple' },
-      { id: 'etudes', label: 'Etudes en cours', count: allProjects.filter(p => p.status?.includes('Étude')).length, color: 'fuchsia' },
-      { id: 'commandes', label: 'Commandes clients', count: allProjects.filter(p => p.status?.toLowerCase().includes('command')).length, color: 'blue' },
-      { id: 'dossiers', label: 'Dossiers tech & install', count: allProjects.filter(p => p.status?.toLowerCase().includes('tech')).length, color: 'cyan' },
-      { id: 'sav', label: 'SAV', count: allProjects.filter(p => p.status?.toLowerCase().includes('sav')).length, color: 'orange' },
+      { id: 'leads', label: 'Leads', count: allClients.filter(c => c.status === 'Leads').length, bgColor: 'bg-[#F3E8FF]', textColor: 'text-[#7E22CE]' },
+      { id: 'etudes', label: 'Etudes en cours', count: allProjects.filter(p => p.status?.includes('Étude')).length, bgColor: 'bg-[#FAE8FF]', textColor: 'text-[#A21CAF]' },
+      { id: 'commandes', label: 'Commandes clients', count: allProjects.filter(p => p.status?.toLowerCase().includes('command')).length, bgColor: 'bg-[#DBEAFE]', textColor: 'text-[#1D4ED8]' },
+      { id: 'dossiers', label: 'Dossiers tech & install', count: allProjects.filter(p => p.status?.toLowerCase().includes('tech')).length, bgColor: 'bg-[#CFFAFE]', textColor: 'text-[#0E7490]' },
+      { id: 'sav', label: 'SAV', count: allProjects.filter(p => p.status?.toLowerCase().includes('sav')).length, bgColor: 'bg-[#FFEDD5]', textColor: 'text-[#C2410C]' },
     ];
   }, [allClients, allProjects]);
 
@@ -296,12 +296,17 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-3 flex flex-col gap-3">
              {statusCards.map((card) => (
-                <div key={card.id} className={`bg-gray-100 rounded-xl p-4 flex flex-col justify-between relative group hover:shadow-md transition-all min-h-[95px] border border-white/50`}>
+                <div key={card.id} className={`${card.bgColor} rounded-xl p-4 flex flex-col justify-between relative group hover:shadow-md transition-all min-h-[95px] border border-white/50 shadow-sm`}>
                     <div className="flex justify-between items-start">
-                         <span className={`font-bold text-[11px] uppercase tracking-wider`}>{card.label}</span>
-                         <div className="bg-white/60 p-1 rounded-md cursor-pointer hover:bg-white" onClick={() => onNavigate?.('projects')}><ArrowUpRight size={14} /></div>
+                         <span className={`font-bold text-[12px] uppercase tracking-wider ${card.textColor}`}>{card.label}</span>
+                         <div 
+                           className="bg-white/80 p-1 rounded-lg cursor-pointer hover:bg-white transition-colors shadow-sm" 
+                           onClick={() => onNavigate?.('projects')}
+                         >
+                           <ArrowUpRight size={14} className={card.textColor} />
+                        </div>
                     </div>
-                    <span className="text-2xl font-bold text-gray-900 mt-1">{card.count || 0}</span>
+                    <span className={`text-2xl font-black ${card.textColor} mt-1`}>{card.count || 0}</span>
                 </div>
              ))}
         </div>
