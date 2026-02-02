@@ -14,7 +14,8 @@ import {
   Clock,
   Calendar,
   PenSquare,
-  Trash2
+  Trash2,
+  UserPlus
 } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, limit, doc, deleteDoc, updateDoc, writeBatch } from '@firebase/firestore';
@@ -147,13 +148,27 @@ const Dashboard: React.FC<DashboardProps> = ({ userProfile, onClientClick, onAdd
 
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-[calc(100vh-64px)] font-sans">
-      {/* Barre de recherche */}
+      {/* Barre de recherche avec bouton d'ajout rapide */}
       <div ref={searchRef} className="relative z-30">
-        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center">
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <input type="text" value={searchQuery} onFocus={() => setShowSearchDropdown(true)} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Rechercher un client" className="w-full pl-10 pr-4 py-2 border-b border-gray-200 focus:outline-none focus:border-gray-400 text-sm bg-white text-gray-800 placeholder-gray-400 font-medium" />
+            <input 
+              type="text" 
+              value={searchQuery} 
+              onFocus={() => setShowSearchDropdown(true)} 
+              onChange={(e) => setSearchQuery(e.target.value)} 
+              placeholder="Rechercher un client" 
+              className="w-full pl-10 pr-4 py-2 border-b border-gray-200 focus:outline-none focus:border-gray-400 text-sm bg-white text-gray-800 placeholder-gray-400 font-medium" 
+            />
           </div>
+          <button 
+            onClick={onAddClientClick}
+            className="flex items-center gap-2 px-5 py-2.5 bg-gray-900 text-white rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-black shadow-lg hover:shadow-gray-200 transition-all active:scale-95 shrink-0"
+          >
+            <Plus size={14} className="text-white/70" />
+            Ajouter fiche lead
+          </button>
         </div>
         {showSearchDropdown && searchQuery.trim() && (
           <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden z-50">
