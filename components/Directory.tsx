@@ -129,15 +129,14 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
   const [clients, setClients] = useState<Client[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // États des filtres
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterAgenceur, setFilterAgenceur] = useState('');
+  // Sélection automatique de l'agenceur identifié par défaut
+  const [filterAgenceur, setFilterAgenceur] = useState(userProfile?.name || '');
   const [filterOrigine, setFilterOrigine] = useState('');
   const [filterLocation, setFilterLocation] = useState('');
   const [filterProject, setFilterProject] = useState('');
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   
-  // États des actions
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [clientToEdit, setClientToEdit] = useState<Client | null>(null);
   const [clientToDelete, setClientToDelete] = useState<Client | null>(null);
@@ -147,7 +146,12 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
   const toolbarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (initialTab) setActiveTab(initialTab);
+    if (initialTab) {
+        if (initialTab === 'Leads') setActiveTab('Lead');
+        else if (initialTab === 'Prospects') setActiveTab('Prospect');
+        else if (initialTab === 'Clients') setActiveTab('Client');
+        else setActiveTab(initialTab);
+    }
   }, [initialTab]);
 
   useEffect(() => {
@@ -176,8 +180,6 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
   }, []);
 
   const getEffectiveStatus = (c: Client) => {
-    if (c.status === 'Client') return 'Client';
-    if ((c.projectCount || 0) > 0) return 'Prospect';
     return c.status;
   };
 
@@ -195,8 +197,10 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
 
   const filteredClients = useMemo(() => {
     return clients.filter(c => {
-      const effectiveStatus = getEffectiveStatus(c);
-      const matchesTab = activeTab === 'Tous' || effectiveStatus === activeTab;
+      const statusValue = getEffectiveStatus(c);
+      const activeStatusValue = activeTab === 'Lead' ? 'Leads' : activeTab;
+      
+      const matchesTab = activeTab === 'Tous' || statusValue === activeStatusValue;
       const matchesSearch = !searchQuery || c.name.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesAgenceur = !filterAgenceur || c.addedBy?.name === filterAgenceur;
       const matchesOrigine = !filterOrigine || c.origin === filterOrigine;
@@ -217,15 +221,14 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
 
   const tabs = useMemo(() => [
     { label: 'Tous', count: clients.length },
-    { label: 'Leads', count: clients.filter(c => getEffectiveStatus(c) === 'Leads').length },
-    { label: 'Prospects', count: clients.filter(c => getEffectiveStatus(c) === 'Prospect').length },
-    { label: 'Clients', count: clients.filter(c => getEffectiveStatus(c) === 'Client').length },
+    { label: 'Lead', count: clients.filter(c => getEffectiveStatus(c) === 'Leads').length },
+    { label: 'Prospect', count: clients.filter(c => getEffectiveStatus(c) === 'Prospect').length },
+    { label: 'Client', count: clients.filter(c => getEffectiveStatus(c) === 'Client').length },
   ], [clients]);
 
   return (
     <div className="p-6 space-y-4 bg-gray-50 h-[calc(100vh-64px)] flex flex-col overflow-hidden font-sans">
       
-      {/* Header : Titre & Onglets de Statuts */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
         <div className="flex items-center space-x-1">
              <div className="flex items-center space-x-2 mr-6">
@@ -260,7 +263,6 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
         </button>
       </div>
 
-      {/* Barre de Filtrage Interactive */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-3 shrink-0 items-center" ref={toolbarRef}>
         <div className="md:col-span-2 bg-white rounded-xl border border-gray-100 flex p-1 shadow-sm h-[46px]">
             <button 
@@ -335,7 +337,7 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
           {(searchQuery || filterAgenceur || filterOrigine || filterLocation || filterProject) && (
             <button 
               onClick={resetFilters}
-              className="px-4 py-2 bg-white border border-red-100 text-red-500 rounded-xl text-sm font-black hover:bg-red-50 transition-all flex items-center shrink-0 shadow-sm"
+              className="px-4 py-2 bg-white border border-red-100 text-red-500 rounded-xl text-sm font-black hover:bg-red-50 transition-all flex items-center justify-center shadow-sm shrink-0"
               title="Réinitialiser"
             >
               <X size={18} />
@@ -344,7 +346,6 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
         </div>
       </div>
 
-      {/* Contenu : Liste ou Map */}
       <div className="flex-1 bg-white rounded-2xl border border-gray-100 overflow-hidden relative shadow-sm flex flex-col min-h-0">
         {isLoading ? (
           <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-20">
@@ -414,7 +415,7 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
                                             effectiveStatus === 'Client' ? 'bg-cyan-50 text-cyan-700 border border-cyan-100 shadow-sm' :
                                             'bg-indigo-50 text-indigo-700 border border-indigo-100 shadow-sm'
                                         }`}>
-                                            {effectiveStatus === 'Leads' ? 'Études' : effectiveStatus}
+                                            {effectiveStatus === 'Leads' ? 'LEAD' : effectiveStatus.toUpperCase()}
                                         </span>
                                     </td>
                                     <td className="px-8 py-5 text-[13px] font-black text-gray-400 italic">{client.dateAdded}</td>
@@ -478,7 +479,6 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
         )}
       </div>
 
-      {/* Suppression Confirmation */}
       {clientToDelete && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden border border-gray-100 p-10 flex flex-col items-center text-center">

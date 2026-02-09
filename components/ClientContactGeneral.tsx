@@ -5,43 +5,65 @@ import { Client } from '../types';
 import { db } from '../firebase';
 import { doc, updateDoc, onSnapshot, query, collection, where, getDocs } from '@firebase/firestore';
 
-// Structure de données hiérarchique
+// Structure de données hiérarchique unifiée (Source de vérité)
 const HIERARCHY_DATA: Record<string, Record<string, string[]>> = {
-  "Actif commercial": {
-    "Prospection terrain": ["Porte-à-porte", "Tour de chantier"],
-    "Relance fichier": ["Anciens devis", "Clients perdus", "SAV"],
-    "Parrainage": ["Bon de parrainage", "Spontanée"],
-    "Prescripteur": ["Artisan partenaire", "Architecte", "Courtier", "Décorateur"],
-    "Démarchage téléphonique": ["Appel froid", "Suivi salon", "Relance mailing"]
+  "Prospection": {
+    "terrain": ["voisin", "porte-à porte", "Tour de chantier"],
+    "téléphonique": ["Appel froid"]
   },
-  "Notoriété": {
-    "Bouche-à-oreille": ["Famille/ami", "Voisin"],
-    "Recommandation spontanée": ["Sans lien identifié"],
-    "Ancien client": ["Autre projet", "Retour suite SAV"],
-    "Avis en ligne": ["Google", "PagesJaunes", "Site d’avis"]
+  "Parrainage": {
+    "Spontanné": [],
+    "Bon de parrainage": []
+  },
+  "Prescripteur": {
+    "Architecte": [],
+    "Artisan": [],
+    "Courtier": [],
+    "Décorateur": [],
+    "Boutiques voisines": [],
+    "Fournisseur": []
+  },
+  "Anciens clients": {
+    "Général": []
+  },
+  "Notoriété entreprise": {
+    "Général": []
+  },
+  "Digital": {
+    "Réseaux sociaux": ["Facebook", "Instagram", "Linkedin", "Tik-tok", "YouTube", "Pinterest"],
+    "Pub digitales": ["Google Ads", "Facebook Ads", "Instagram Ads"],
+    "Web": ["Recherche Google", "Google maps", "Waze", "Avis Google", "Avis en lignes divers", "Pages jaunes", "Forum"],
+    "IA": ["ChatGPT", "Gemini", "Claude", "Mistral"],
+    "Site web entreprise": ["Formulaire contact", "Prise de rdv en ligne", "Chatbot"]
   },
   "Marketing": {
-    "Publicité digitale": ["Google Ads", "Facebook Ads", "Instagram Ads", "Retargeting"],
-    "Site web": ["Formulaire contact", "Prise de RDV en ligne", "Chatbot"],
-    "Emailing": ["Newsletter", "Email promo", "Relance devis automatique"],
-    "SMS marketing": ["Campagne promo", "Relance devis"],
-    "Réseaux sociaux": ["Facebook perso", "Instagram", "TikTok", "Live", "Story promo"],
-    "Affichage": ["Panneau pub", "Abribus", "Panneau chantier", "Véhicule floqué"],
-    "Média traditionnel": ["Magazine", "Journal gratuit", "Publication pro", "Radio"],
-    "Événementiel": ["Salon", "Foire"],
-    "Réseaux pro": ["BNI", "Club entrepreneurs", "Groupement métiers"],
-    "Événement magasin": ["Portes ouvertes", "Inauguration", "Anniversaire showroom"]
+    "Emailing": ["Newsletter", "Email promo"],
+    "SMS marketing": [],
+    "Affichage": ["4x3", "Abribus", "Panneau chantier", "Véhicule floqué"],
+    "Magazine": [],
+    "Journal gratuit": [],
+    "Publication pro": [],
+    "Radio": [],
+    "Pages jaunes": [],
+    "Evenementiel": ["Salon", "Foire", "Galerie commerciale"],
+    "Evènements showroom": ["Portes ouvertes", "Innauguration", "Anniversaire", "Démo culinaires", "Autres"]
   },
-  "Magasin": {
-    "Passage magasin": ["Sans RDV"],
-    "Vitrine": ["Promo vitrine", "PLV"],
-    "Référencement local": ["Google Maps", "PagesJaunes", "GPS", "Plan local"],
-    "Bouche-à-oreille local": ["Habitant quartier", "Voisinage proche"]
+  "Réseaux pro": {
+    "BNI": [],
+    "Club entrepreneurs": ["Club 1", "Club 2", "Club 3", "Club 4"],
+    "Groupements métiers": []
+  },
+  "Passage devant showroom": {
+    "Spontanné": [],
+    "Promo vitrine": [],
+    "PLV": []
+  },
+  "Cercle proche": {
+    "Famille": [],
+    "Amis": []
   },
   "Autres": {
-    "Carte de visite": ["Récupérée événement", "Posée en magasin"],
-    "Opportunité": ["Spontanée"],
-    "Autre": ["À préciser"]
+    "Autre": []
   }
 };
 
@@ -73,7 +95,6 @@ interface ContactCardProps {
   onToggle: () => void;
 }
 
-// Composant extrait pour éviter les re-renders intempestifs et la perte de focus
 const ContactCard: React.FC<ContactCardProps> = ({ 
   id, 
   isMain, 
@@ -225,7 +246,6 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
   const [isSearching, setIsSearching] = useState(false);
   const [contactToDelete, setContactToDelete] = useState<string | null>(null);
   
-  // États locaux synchronisés avec Firestore
   const [mainContact, setMainContact] = useState({
     civility: '', lastName: '', firstName: '', email: '', phone: '', fixed: ''
   });
@@ -260,7 +280,6 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
     return () => unsub();
   }, [initialClient.id]);
 
-  // Fetch team members
   useEffect(() => {
     if (!userProfile?.companyId) return;
     const fetchTeam = async () => {
@@ -301,6 +320,8 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
   };
 
   const addContact = async () => {
+    if (additionalContacts.length >= 1) return;
+    
     const newContact: AdditionalContact = {
       id: Date.now().toString(),
       civility: 'Mme',
@@ -339,7 +360,6 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
     } catch (e) { console.error(e); }
   };
 
-  // BAN Address logic
   useEffect(() => {
     const fetchAddr = async () => {
       if (addressSearch.length < 4 || addressSearch === client.details?.address) {
@@ -371,7 +391,6 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
     setSuggestions([]);
   };
 
-  // Map logic
   useEffect(() => {
     const L = (window as any).L;
     if (!L || !mapContainerRef.current || isEditingAddress) return;
@@ -392,8 +411,11 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
     return () => { if (mapRef.current) mapRef.current.remove(); mapRef.current = null; };
   }, [client.details?.lat, client.details?.lng, isEditingAddress, client.status]);
 
+  // DERIVATION AUTOMATIQUE DES CHAMPS DEPUIS LE CLIENT
   const currentCategory = client.details?.category || '';
   const currentOrigin = client.origin || '';
+  const currentSubOrigin = client.details?.subOrigin || '';
+
   const categories = useMemo(() => Object.keys(HIERARCHY_DATA), []);
   const origins = useMemo(() => currentCategory ? Object.keys(HIERARCHY_DATA[currentCategory] || {}) : [], [currentCategory]);
   const subOrigins = useMemo(() => (currentCategory && currentOrigin) ? (HIERARCHY_DATA[currentCategory]?.[currentOrigin] || []) : [], [currentCategory, currentOrigin]);
@@ -416,6 +438,8 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
     }
   };
 
+  const hasSecondaryContact = additionalContacts.length >= 1;
+
   return (
     <div className="space-y-6 max-w-full animate-in fade-in duration-500 pb-20">
       
@@ -425,9 +449,14 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
           <h3 className="text-[15px] font-black text-gray-900 uppercase tracking-tight">Coordonnées & Contacts</h3>
           <button 
             onClick={addContact}
-            className="flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-200 rounded-xl text-[12px] font-bold text-gray-800 shadow-sm hover:border-[#A886D7] transition-all active:scale-95"
+            disabled={hasSecondaryContact}
+            className={`flex items-center gap-2 px-5 py-2.5 border border-gray-200 rounded-xl text-[12px] font-bold shadow-sm transition-all active:scale-95 ${
+              hasSecondaryContact 
+              ? 'bg-gray-50 text-gray-400 cursor-not-allowed opacity-60 grayscale' 
+              : 'bg-white text-gray-800 hover:border-[#A886D7]'
+            }`}
           >
-            <Plus size={16} className="text-[#A886D7]" /> Ajouter un contact
+            <Plus size={16} className={hasSecondaryContact ? 'text-gray-400' : 'text-[#A886D7]'} /> Ajouter un contact secondaire
           </button>
         </div>
 
@@ -502,7 +531,7 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
         )}
       </div>
 
-      {/* Section Origine client */}
+      {/* Section Origine client - CANAL D'ACQUISITION UNIFIÉ */}
       <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm space-y-6">
         <h3 className="text-[15px] font-black text-gray-900 uppercase tracking-tight">Canal d'acquisition</h3>
         
@@ -511,7 +540,7 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
             <label className="text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Origine</label>
             <div className="relative">
               <select 
-                className="w-full appearance-none bg-white border border-gray-100 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-indigo-400 transition-all font-bold shadow-sm" 
+                className="w-full appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-indigo-400 transition-all font-bold shadow-sm" 
                 value={currentCategory}
                 onChange={(e) => handleCategoryChange(e.target.value)}
               >
@@ -527,7 +556,7 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
             <div className="relative">
               <select 
                 disabled={!currentCategory}
-                className="w-full appearance-none bg-white border border-gray-100 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-indigo-400 transition-all font-bold shadow-sm disabled:bg-gray-50" 
+                className="w-full appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm text-gray-800 outline-none focus:border-indigo-400 transition-all font-bold shadow-sm disabled:bg-gray-50" 
                 value={currentOrigin}
                 onChange={(e) => handleOriginChange(e.target.value)}
               >
@@ -543,8 +572,8 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
             <div className="relative">
               <select 
                 disabled={!currentOrigin}
-                className="w-full appearance-none bg-white border border-gray-100 rounded-xl px-4 py-2.5 text-sm focus:border-indigo-400 transition-all font-bold shadow-sm disabled:bg-gray-50" 
-                value={client.details?.subOrigin || ''}
+                className="w-full appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-bold text-gray-800 outline-none focus:border-indigo-400 transition-all shadow-sm disabled:bg-gray-50" 
+                value={currentSubOrigin}
                 onChange={(e) => updateDoc(doc(db, 'clients', client.id), { "details.subOrigin": e.target.value })}
               >
                 <option value="">Sélectionner</option>
@@ -556,7 +585,7 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
         </div>
       </div>
 
-      {/* Section Affectation (New Block) */}
+      {/* Section Affectation */}
       <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm space-y-6">
         <h3 className="text-[15px] font-black text-gray-900 uppercase tracking-tight">Affectation</h3>
         
@@ -612,7 +641,7 @@ const ClientContactGeneral: React.FC<ClientContactGeneralProps> = ({ client: ini
         </div>
       </div>
 
-      {/* Modale de confirmation de suppression In-App */}
+      {/* Confirmation suppression contact */}
       {contactToDelete && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-300 border border-gray-100">

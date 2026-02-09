@@ -6,41 +6,63 @@ import { db } from '../firebase';
 import { collection, addDoc, query, where, onSnapshot, doc, updateDoc, increment, getDocs, getDoc } from '@firebase/firestore';
 
 const HIERARCHY_DATA: Record<string, Record<string, string[]>> = {
-  "Actif commercial": {
-    "Prospection terrain": ["Porte-à-porte", "Tour de chantier"],
-    "Relance fichier": ["Anciens devis", "Clients perdus", "SAV"],
-    "Parrainage": ["Bon de parrainage", "Spontanée"],
-    "Prescripteur": ["Artisan partenaire", "Architecte", "Courtier", "Décorateur"],
-    "Démarchage téléphonique": ["Appel froid", "Suivi salon", "Relance mailing"]
+  "Prospection": {
+    "terrain": ["voisin", "porte-à porte", "Tour de chantier"],
+    "téléphonique": ["Appel froid"]
   },
-  "Notoriété": {
-    "Bouche-à-oreille": ["Famille/ami", "Voisin"],
-    "Recommandation spontanée": ["Sans lien identifié"],
-    "Ancien client": ["Autre projet", "Retour suite SAV"],
-    "Avis en ligne": ["Google", "PagesJaunes", "Site d’avis"]
+  "Parrainage": {
+    "Spontanné": [],
+    "Bon de parrainage": []
+  },
+  "Prescripteur": {
+    "Architecte": [],
+    "Artisan": [],
+    "Courtier": [],
+    "Décorateur": [],
+    "Boutiques voisines": [],
+    "Fournisseur": []
+  },
+  "Anciens clients": {
+    "Général": []
+  },
+  "Notoriété entreprise": {
+    "Général": []
+  },
+  "Digital": {
+    "Réseaux sociaux": ["Facebook", "Instagram", "Linkedin", "Tik-tok", "YouTube", "Pinterest"],
+    "Pub digitales": ["Google Ads", "Facebook Ads", "Instagram Ads"],
+    "Web": ["Recherche Google", "Google maps", "Waze", "Avis Google", "Avis en lignes divers", "Pages jaunes", "Forum"],
+    "IA": ["ChatGPT", "Gemini", "Claude", "Mistral"],
+    "Site web entreprise": ["Formulaire contact", "Prise de rdv en ligne", "Chatbot"]
   },
   "Marketing": {
-    "Publicité digitale": ["Google Ads", "Facebook Ads", "Instagram Ads", "Retargeting"],
-    "Site web": ["Formulaire contact", "Prise de RDV en ligne", "Chatbot"],
-    "Emailing": ["Newsletter", "Email promo", "Relance devis automatique"],
-    "SMS marketing": ["Campagne promo", "Relance devis"],
-    "Réseaux sociaux": ["Facebook perso", "Instagram", "TikTok", "Live", "Story promo"],
-    "Affichage": ["Panneau pub", "Abribus", "Panneau chantier", "Véhicule floqué"],
-    "Média traditionnel": ["Magazine", "Journal gratuit", "Publication pro", "Radio"],
-    "Événementiel": ["Salon", "Foire"],
-    "Réseaux pro": ["BNI", "Club entrepreneurs", "Groupement métiers"],
-    "Événement magasin": ["Portes ouvertes", "Inauguration", "Anniversaire showroom"]
+    "Emailing": ["Newsletter", "Email promo"],
+    "SMS marketing": [],
+    "Affichage": ["4x3", "Abribus", "Panneau chantier", "Véhicule floqué"],
+    "Magazine": [],
+    "Journal gratuit": [],
+    "Publication pro": [],
+    "Radio": [],
+    "Pages jaunes": [],
+    "Evenementiel": ["Salon", "Foire", "Galerie commerciale"],
+    "Evènements showroom": ["Portes ouvertes", "Innauguration", "Anniversaire", "Démo culinaires", "Autres"]
   },
-  "Magasin": {
-    "Passage magasin": ["Sans RDV"],
-    "Vitrine": ["Promo vitrine", "PLV"],
-    "Référencement marque local": ["Google Maps", "PagesJaunes", "GPS", "Plan local"],
-    "Bouche-à-oreille local": ["Habitant quartier", "Voisinage proche"]
+  "Réseaux pro": {
+    "BNI": [],
+    "Club entrepreneurs": ["Club 1", "Club 2", "Club 3", "Club 4"],
+    "Groupements métiers": []
+  },
+  "Passage devant showroom": {
+    "Spontanné": [],
+    "Promo vitrine": [],
+    "PLV": []
+  },
+  "Cercle proche": {
+    "Famille": [],
+    "Amis": []
   },
   "Autres": {
-    "Carte de visite": ["Récupérée événement", "Posée en magasin"],
-    "Opportunité": ["Spontanée"],
-    "Autre": ["À préciser"]
+    "Autre": []
   }
 };
 
@@ -367,7 +389,7 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({
           <div className="p-8 space-y-6 bg-white overflow-y-auto max-h-[75vh] hide-scrollbar">
             <div className="bg-[#FBFBFB] border border-gray-100 rounded-2xl p-6 grid grid-cols-3 gap-6">
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Catégorie</label>
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Origine</label>
                 <div className="relative">
                   <select value={formData.categorie} onChange={(e) => setFormData({...formData, categorie: e.target.value, origine: '', sousOrigine: ''})} className="w-full appearance-none bg-white border border-gray-100 rounded-xl px-4 py-3 text-[13px] text-gray-900 outline-none focus:border-gray-900 transition-all font-bold shadow-sm">
                     <option value="">Sélectionner</option>
@@ -377,7 +399,7 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({
                 </div>
               </div>
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Origine du contact</label>
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Sous-origine</label>
                 <div className="relative">
                   <select value={formData.origine} onChange={(e) => setFormData({...formData, origine: e.target.value, sousOrigine: ''})} className="w-full appearance-none bg-white border border-gray-100 rounded-xl px-4 py-3 text-[13px] text-gray-900 outline-none focus:border-gray-900 transition-all font-bold shadow-sm">
                     <option value="">Sélectionner</option>
@@ -387,7 +409,7 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({
                 </div>
               </div>
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Sous origine</label>
+                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Sources</label>
                 <div className="relative">
                   <select value={formData.sousOrigine} onChange={(e) => setFormData({...formData, sousOrigine: e.target.value})} className="w-full appearance-none bg-white border border-gray-100 rounded-xl px-4 py-3 text-[13px] text-gray-900 outline-none focus:border-gray-900 transition-all font-bold shadow-sm">
                     <option value="">Sélectionner</option>

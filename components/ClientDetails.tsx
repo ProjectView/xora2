@@ -9,12 +9,13 @@ import {
   MessageSquare,
   FileText,
   ChevronsRight,
-  Loader2
+  Loader2,
+  ChevronDown
 } from 'lucide-react';
 import { Client } from '../types';
 import { db } from '../firebase';
 // Use @firebase/firestore to fix named export resolution issues
-import { doc, onSnapshot, collection, query, where } from '@firebase/firestore';
+import { doc, onSnapshot, collection, query, where, updateDoc } from '@firebase/firestore';
 import ClientTasks from './ClientTasks';
 import ClientContactInfo from './ClientContactInfo';
 import ClientProjects from './ClientProjects';
@@ -80,10 +81,14 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, on
     return () => unsubTasks();
   }, [initialClient.id, userProfile?.companyId]);
 
-  // Règle de gestion : Statut effectif
-  const effectiveStatus = (client.status !== 'Client' && (client.projectCount || 0) > 0) 
-    ? 'Prospect' 
-    : client.status;
+  const handleStatusChange = async (newStatus: string) => {
+    try {
+      const clientRef = doc(db, 'clients', client.id);
+      await updateDoc(clientRef, { status: newStatus });
+    } catch (error) {
+      console.error("Erreur lors de la mise à jour du statut:", error);
+    }
+  };
 
   const mainTabs = [
     { label: 'Information contact', key: 'Information contact' },
@@ -109,13 +114,28 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, on
             <div className="space-y-4">
               <div className="flex items-center gap-3">
                 <span className="text-[12px] font-bold text-gray-300">Créé le {client.dateAdded}</span>
-                <span className={`px-2 py-0.5 text-[10px] font-extrabold rounded uppercase tracking-widest ${
-                  effectiveStatus === 'Leads' ? 'bg-purple-100 text-purple-600' :
-                  effectiveStatus === 'Prospect' ? 'bg-fuchsia-100 text-fuchsia-600' :
-                  'bg-cyan-100 text-cyan-600'
-                }`}>
-                  {effectiveStatus === 'Leads' ? 'Etudes à réaliser' : effectiveStatus}
-                </span>
+                
+                {/* Sélecteur de statut manuel stylisé en badge */}
+                <div className="relative group/status inline-block">
+                  <select 
+                    value={client.status}
+                    onChange={(e) => handleStatusChange(e.target.value)}
+                    className={`appearance-none cursor-pointer pl-3 pr-8 py-1 text-[10px] font-extrabold rounded uppercase tracking-widest border shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-opacity-50 ${
+                      client.status === 'Leads' ? 'bg-indigo-100 text-indigo-700 border-indigo-200 focus:ring-indigo-200' :
+                      client.status === 'Prospect' ? 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200 focus:ring-fuchsia-200' :
+                      'bg-cyan-100 text-cyan-700 border-cyan-200 focus:ring-cyan-200'
+                    }`}
+                  >
+                    <option value="Leads">LEAD</option>
+                    <option value="Prospect">PROSPECT</option>
+                    <option value="Client">CLIENT</option>
+                  </select>
+                  <ChevronDown className={`absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none w-3 h-3 ${
+                    client.status === 'Leads' ? 'text-indigo-400' :
+                    client.status === 'Prospect' ? 'text-fuchsia-400' :
+                    'text-cyan-400'
+                  }`} />
+                </div>
               </div>
               
               <div className="flex flex-col gap-1.5">
@@ -163,78 +183,48 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, on
         {/* Onglets */}
         <div className="px-10 flex items-end shrink-0 mt-4 overflow-x-auto hide-scrollbar">
           <div className="flex gap-1">
-            {mainTabs.map((tab) => {
-              const isActive = activeTab === tab.key;
-              return (
-                <button 
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key)}
-                  className={`px-8 py-4 text-[13.5px] font-bold whitespace-nowrap transition-all relative rounded-t-[14px] border-t border-x ${
-                    isActive 
-                    ? 'bg-white text-gray-900 border-gray-100 z-10' 
-                    : 'bg-[#F1F3F5] text-[#ADB5BD] border-transparent hover:text-gray-600'
-                  }`}
-                  style={isActive ? { marginBottom: '-1px' } : {}}
-                >
-                  {tab.label}
-                  {isActive && (
-                    <div className="absolute -bottom-[2px] left-0 right-0 h-[3px] bg-white z-20" />
-                  )}
-                </button>
-              );
-            })}
+            {mainTabs.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`px-8 py-3.5 text-[14px] font-bold transition-all relative whitespace-nowrap ${
+                  activeTab === tab.key 
+                    ? 'text-gray-900 bg-white border border-b-0 border-gray-100 rounded-t-2xl shadow-sm' 
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Corps du dossier */}
-        <div className="bg-white flex-1 border-t border-gray-100 shadow-[0_-10px_40px_rgba(0,0,0,0.02)] flex flex-col min-h-0 relative">
-          {loading && (
-            <div className="absolute inset-0 bg-white/50 z-50 flex items-center justify-center">
+        {/* Zone de contenu principale */}
+        <div className="flex-1 bg-white border-t border-gray-100 px-10 pt-8">
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
               <Loader2 className="animate-spin text-gray-300" size={32} />
             </div>
+          ) : (
+            <div className="animate-in fade-in duration-500">
+              {activeTab === 'Information contact' && (
+                <ClientContactInfo client={client} userProfile={userProfile} />
+              )}
+              {activeTab === 'Projet' && (
+                <ClientProjects client={client} userProfile={userProfile} onProjectSelect={onProjectSelect} />
+              )}
+              {activeTab === 'Tâches' && (
+                <ClientTasks clientId={client.id} clientName={client.name} userProfile={userProfile} />
+              )}
+              {activeTab === 'Rendez-vous' && (
+                <ClientAppointments clientId={client.id} clientName={client.name} userProfile={userProfile} />
+              )}
+              {activeTab === 'Documents' && (
+                <ClientDocuments clientId={client.id} userProfile={userProfile} />
+              )}
+            </div>
           )}
-          <div className="flex-1 px-10 overflow-y-auto hide-scrollbar">
-            
-            {activeTab === 'Information contact' && <ClientContactInfo client={client} userProfile={userProfile} />}
-
-            {activeTab === 'Tâches' && (
-              <ClientTasks 
-                clientId={client.id} 
-                clientName={client.name} 
-                userProfile={userProfile} 
-              />
-            )}
-
-            {activeTab === 'Rendez-vous' && (
-              <ClientAppointments 
-                clientId={client.id}
-                clientName={client.name}
-                userProfile={userProfile}
-              />
-            )}
-
-            {activeTab === 'Projet' && (
-              <ClientProjects client={client} userProfile={userProfile} onProjectSelect={onProjectSelect} />
-            )}
-
-            {activeTab === 'Documents' && (
-              <ClientDocuments clientId={client.id} userProfile={userProfile} />
-            )}
-            
-            <div className="pb-10"></div>
-          </div>
         </div>
-      </div>
-
-      {/* Barre latérale droite */}
-      <div className="w-24 bg-white border-l border-gray-100 flex flex-col items-center py-10 gap-8 z-40 relative shadow-lg shrink-0">
-         <button className="p-4 text-[#CED4DA] hover:text-gray-800 transition-all"><ChevronsRight size={26} /></button>
-         <div className="w-12 h-px bg-[#F1F3F5]"></div>
-         <button className="p-5 bg-[#F8F9FA] text-[#ADB5BD] rounded-2xl border border-transparent hover:border-gray-200 transition-all shadow-sm"><Mail size={24} /></button>
-         <button className="p-5 bg-[#F8F9FA] text-[#ADB5BD] rounded-2xl border border-transparent hover:border-gray-200 transition-all shadow-sm"><Phone size={24} /></button>
-         <button className="p-5 bg-[#F8F9FA] text-[#ADB5BD] rounded-2xl border border-transparent hover:border-gray-200 transition-all shadow-sm"><FileText size={24} /></button>
-         <button className="p-5 bg-[#F8F9FA] text-[#ADB5BD] rounded-2xl border border-transparent hover:border-gray-200 transition-all shadow-sm"><Calendar size={24} /></button>
-         <button className="p-5 bg-[#F8F9FA] text-[#ADB5BD] rounded-2xl border border-transparent hover:border-gray-200 transition-all shadow-sm"><MessageSquare size={24} /></button>
       </div>
     </div>
   );

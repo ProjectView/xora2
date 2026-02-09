@@ -6,43 +6,65 @@ import { db } from '../firebase';
 import { collection, addDoc, query, where, onSnapshot, getDocs, doc, updateDoc, getCountFromServer, deleteDoc, getDoc } from '@firebase/firestore';
 import { Task } from '../types';
 
-// Structure de données hiérarchique identique aux autres composants
+// Structure de données hiérarchique unifiée
 const HIERARCHY_DATA: Record<string, Record<string, string[]>> = {
-  "Actif commercial": {
-    "Prospection terrain": ["Porte-à-porte", "Tour de chantier"],
-    "Relance fichier": ["Anciens devis", "Clients perdus", "SAV"],
-    "Parrainage": ["Bon de parrainage", "Spontanée"],
-    "Prescripteur": ["Artisan partenaire", "Architecte", "Courtier", "Décorateur"],
-    "Démarchage téléphonique": ["Appel froid", "Suivi salon", "Relance mailing"]
+  "Prospection": {
+    "terrain": ["voisin", "porte-à porte", "Tour de chantier"],
+    "téléphonique": ["Appel froid"]
   },
-  "Notoriété": {
-    "Bouche-à-oreille": ["Famille/ami", "Voisin"],
-    "Recommandation spontanée": ["Sans lien identifié"],
-    "Ancien client": ["Autre projet", "Retour suite SAV"],
-    "Avis en ligne": ["Google", "PagesJaunes", "Site d’avis"]
+  "Parrainage": {
+    "Spontanné": [],
+    "Bon de parrainage": []
+  },
+  "Prescripteur": {
+    "Architecte": [],
+    "Artisan": [],
+    "Courtier": [],
+    "Décorateur": [],
+    "Boutiques voisines": [],
+    "Fournisseur": []
+  },
+  "Anciens clients": {
+    "Général": []
+  },
+  "Notoriété entreprise": {
+    "Général": []
+  },
+  "Digital": {
+    "Réseaux sociaux": ["Facebook", "Instagram", "Linkedin", "Tik-tok", "YouTube", "Pinterest"],
+    "Pub digitales": ["Google Ads", "Facebook Ads", "Instagram Ads"],
+    "Web": ["Recherche Google", "Google maps", "Waze", "Avis Google", "Avis en lignes divers", "Pages jaunes", "Forum"],
+    "IA": ["ChatGPT", "Gemini", "Claude", "Mistral"],
+    "Site web entreprise": ["Formulaire contact", "Prise de rdv en ligne", "Chatbot"]
   },
   "Marketing": {
-    "Publicité digitale": ["Google Ads", "Facebook Ads", "Instagram Ads", "Retargeting"],
-    "Site web": ["Formulaire contact", "Prise de RDV en ligne", "Chatbot"],
-    "Emailing": ["Newsletter", "Email promo", "Relance devis automatique"],
-    "SMS marketing": ["Campagne promo", "Relance devis"],
-    "Réseaux sociaux": ["Facebook perso", "Instagram", "TikTok", "Live", "Story promo"],
-    "Affichage": ["Panneau pub", "Abribus", "Panneau chantier", "Véhicule floqué"],
-    "Média traditionnel": ["Magazine", "Journal gratuit", "Publication pro", "Radio"],
-    "Événementiel": ["Salon", "Foire"],
-    "Réseaux pro": ["BNI", "Club entrepreneurs", "Groupement métiers"],
-    "Événement magasin": ["Portes ouvertes", "Inauguration", "Anniversaire showroom"]
+    "Emailing": ["Newsletter", "Email promo"],
+    "SMS marketing": [],
+    "Affichage": ["4x3", "Abribus", "Panneau chantier", "Véhicule floqué"],
+    "Magazine": [],
+    "Journal gratuit": [],
+    "Publication pro": [],
+    "Radio": [],
+    "Pages jaunes": [],
+    "Evenementiel": ["Salon", "Foire", "Galerie commerciale"],
+    "Evènements showroom": ["Portes ouvertes", "Innauguration", "Anniversaire", "Démo culinaires", "Autres"]
   },
-  "Magasin": {
-    "Passage magasin": ["Sans RDV"],
-    "Vitrine": ["Promo vitrine", "PLV"],
-    "Référencement marque local": ["Google Maps", "PagesJaunes", "GPS", "Plan local"],
-    "Bouche-à-oreille local": ["Habitant quartier", "Voisinage proche"]
+  "Réseaux pro": {
+    "BNI": [],
+    "Club entrepreneurs": ["Club 1", "Club 2", "Club 3", "Club 4"],
+    "Groupements métiers": []
+  },
+  "Passage devant showroom": {
+    "Spontanné": [],
+    "Promo vitrine": [],
+    "PLV": []
+  },
+  "Cercle proche": {
+    "Famille": [],
+    "Amis": []
   },
   "Autres": {
-    "Carte de visite": ["Récupérée événement", "Posée en magasin"],
-    "Opportunité": ["Spontanée"],
-    "Autre": ["À préciser"]
+    "Autre": []
   }
 };
 
@@ -95,7 +117,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
   
   // Form States
   const [title, setTitle] = useState('');
-  const [selectedCollaboratorIdx, setSelectedCollaboratorIdx] = useState(0);
+  const [selectedCollaboratorIdx, setSelectedCollaboratorIdxValue] = useState(0);
   const [selectedReferentName, setSelectedReferentName] = useState('');
   const [selectedClientId, setSelectedClientId] = useState(initialClientId);
   const [selectedProjectId, setSelectedProjectId] = useState(initialProjectId);
@@ -208,12 +230,12 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
       
       if (userProfile) {
         const idx = users.findIndex(u => u.uid === userProfile.uid);
-        if (idx !== -1) setSelectedCollaboratorIdx(idx);
+        if (idx !== -1) setSelectedCollaboratorIdxValue(idx);
       }
     });
 
     return () => unsubscribe();
-  }, [isOpen, userProfile?.companyId]);
+  }, [isOpen, userProfile?.companyId, userProfile]);
 
   // Qualification Logic
   const categories = useMemo(() => Object.keys(HIERARCHY_DATA), []);
@@ -231,7 +253,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
           // Récupérer le référent : par défaut le créateur si non défini
           setSelectedReferentName(data.details?.referent || data.addedBy?.name || '');
           
-          // Données de qualification pour les tâches auto
+          // Données de qualification pour les tâches auto - Récupération de la fiche lead
           if (isCurrentlyAuto) {
             setQualifData({
               categorie: data.details?.category || '',
@@ -372,7 +394,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
         
         if (collaborators.length > 0) {
           const cIdx = collaborators.findIndex(c => c.name === taskToEdit.collaborator.name);
-          setSelectedCollaboratorIdx(cIdx !== -1 ? cIdx : 0);
+          setSelectedCollaboratorIdxValue(cIdx !== -1 ? cIdx : 0);
         }
 
         if (taskToEdit.date && taskToEdit.date.includes('/')) {
@@ -444,7 +466,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
           }
           if (collaborators.length > 0 && currentProject.agenceurUid) {
             const collabIdx = collaborators.findIndex(c => c.uid === currentProject.agenceurUid);
-            if (collabIdx !== -1) setSelectedCollaboratorIdx(collabIdx);
+            if (collabIdx !== -1) setSelectedCollaboratorIdxValue(collabIdx);
           }
         }
       }
@@ -562,6 +584,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
         };
 
         if (isLeadAutoTask) {
+          // On garde la mise à jour en fond même si le bloc UI est masqué, car qualifData est sync au montage
           clientUpdate["details.category"] = qualifData.categorie;
           clientUpdate["origin"] = qualifData.origine;
           clientUpdate["details.subOrigin"] = qualifData.sousOrigine;
@@ -657,184 +680,38 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
           </div>
 
           <div className="p-8 space-y-8">
-            {/* Qualification Section for Auto Tasks */}
-            {isLeadAutoTask && (
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Layers size={16} className="text-indigo-500" />
-                  <h3 className="text-[11px] font-black text-indigo-500 uppercase tracking-[0.2em]">Origine du contact (Qualification)</h3>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-indigo-50/20 p-6 rounded-2xl border border-indigo-100/50 shadow-inner">
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Origine*</label>
-                    <div className="relative">
-                      <select 
-                        value={qualifData.categorie}
-                        onChange={(e) => {
-                            const val = e.target.value;
-                            setQualifData({ ...qualifData, categorie: val, origine: '', sousOrigine: '' });
-                            if (val !== 'Parrainage') {
-                                setSelectedSponsor(null);
-                                setSponsorLink('');
-                            }
-                        }}
-                        className="w-full appearance-none bg-white border border-gray-100 rounded-xl py-2.5 px-4 text-sm font-bold text-gray-800 focus:outline-none focus:border-indigo-500 transition-all shadow-sm"
-                      >
-                        <option value="">Sélectionner</option>
-                        {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" size={14} />
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Sous-origine*</label>
-                    <div className="relative">
-                      <select 
-                        disabled={!qualifData.categorie}
-                        value={qualifData.origine}
-                        onChange={(e) => {
-                            const val = e.target.value;
-                            setQualifData({ ...qualifData, origine: val, sousOrigine: '' });
-                            if (val !== 'Parrainage' && qualifData.categorie !== 'Parrainage') {
-                                setSelectedSponsor(null);
-                                setSponsorLink('');
-                            }
-                        }}
-                        className="w-full appearance-none bg-white border border-gray-100 rounded-xl py-2.5 px-4 text-sm font-bold text-gray-800 focus:outline-none focus:border-indigo-500 transition-all shadow-sm disabled:opacity-50 disabled:bg-gray-50"
-                      >
-                        <option value="">Sélectionner</option>
-                        {origins.map(orig => <option key={orig} value={orig}>{orig}</option>)}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" size={14} />
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Sources</label>
-                    <div className="relative">
-                      <select 
-                        disabled={!qualifData.origine}
-                        value={qualifData.sousOrigine}
-                        onChange={(e) => setQualifData({ ...qualifData, sousOrigine: e.target.value })}
-                        className="w-full appearance-none bg-white border border-gray-100 rounded-xl py-2.5 px-4 text-sm font-bold text-gray-800 focus:outline-none focus:border-indigo-500 transition-all shadow-sm disabled:opacity-50 disabled:bg-gray-50"
-                      >
-                        <option value="">Sélectionner</option>
-                        {sources.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" size={14} />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Bloc Parrainage (Conditionnel) */}
-                {(qualifData.categorie === 'Parrainage' || qualifData.origine === 'Parrainage') && (
-                  <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100 animate-in slide-in-from-top-2 duration-300 space-y-4">
-                      <div className="flex items-center gap-2 mb-2">
-                          <Plus size={14} className="text-indigo-600" />
-                          <h4 className="text-[11px] font-black text-indigo-600 uppercase tracking-widest">Identification du Parrain</h4>
-                      </div>
-                      
-                      <div className="relative" ref={sponsorSearchRef}>
-                          {selectedSponsor ? (
-                              <div className="flex items-center justify-between bg-white border border-indigo-200 rounded-xl px-5 py-4 shadow-sm animate-in zoom-in-95">
-                                  <div className="flex items-center gap-3">
-                                      <div className="p-2 bg-indigo-50 rounded-lg text-indigo-600">
-                                          <UserIcon size={16} />
-                                      </div>
-                                      <div>
-                                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Parrain sélectionné</p>
-                                          <p className="text-sm font-black text-gray-900 uppercase">{selectedSponsor.name}</p>
-                                      </div>
-                                  </div>
-                                  <div className="flex items-center gap-2">
-                                      <Check size={18} className="text-green-500" />
-                                      <button 
-                                          type="button"
-                                          onClick={() => { setSelectedSponsor(null); setSponsorSearch(''); }}
-                                          className="p-2 hover:bg-red-50 text-gray-300 hover:text-red-500 rounded-lg transition-all"
-                                      >
-                                          <X size={18} />
-                                      </button>
-                                  </div>
-                              </div>
-                          ) : (
-                              <>
-                                  <div className="relative group">
-                                      <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-300 group-focus-within:text-indigo-600 transition-colors" size={18} />
-                                      <input 
-                                          value={sponsorSearch}
-                                          onChange={(e) => {
-                                              setSponsorSearch(e.target.value);
-                                              setShowSponsorResults(true);
-                                          }}
-                                          onFocus={() => setShowSponsorResults(true)}
-                                          type="text" 
-                                          placeholder="Rechercher le parrain dans l'annuaire (ex: DUBOIS)..." 
-                                          className="w-full pl-12 pr-10 py-3.5 bg-white border border-indigo-100 rounded-xl text-sm font-bold text-gray-800 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-50 transition-all placeholder:text-indigo-200" 
-                                      />
-                                  </div>
-
-                                  {showSponsorResults && sponsorSuggestions.length > 0 && (
-                                      <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-100 rounded-2xl shadow-2xl overflow-hidden z-[110] animate-in zoom-in-95">
-                                          {sponsorSuggestions.map((sponsor) => (
-                                              <button
-                                                  key={sponsor.id}
-                                                  type="button"
-                                                  onClick={() => {
-                                                      setSelectedSponsor({ id: sponsor.id, name: sponsor.name });
-                                                      
-                                                      // Mise à jour de l'agenceur référent : référent du parrain ou à défaut créateur du parrain
-                                                      if (sponsor.details?.referent) {
-                                                        setSelectedReferentName(sponsor.details.referent);
-                                                      } else if (sponsor.addedBy?.name) {
-                                                        setSelectedReferentName(sponsor.addedBy.name);
-                                                      }
-                                                      setShowSponsorResults(false);
-                                                  }}
-                                                  className="w-full px-5 py-4 text-left hover:bg-indigo-50 flex items-start gap-4 border-b border-gray-50 last:border-0 group transition-all"
-                                              >
-                                                  <div className="p-1.5 bg-gray-50 rounded-lg text-gray-300 group-hover:text-indigo-600 transition-all">
-                                                      <UserIcon size={16} />
-                                                  </div>
-                                                  <div className="flex flex-col">
-                                                      <span className="text-[13px] font-bold text-gray-900 uppercase">{sponsor.name}</span>
-                                                      <span className="text-[11px] text-gray-400 font-medium">{sponsor.location || 'Localisation non définie'}</span>
-                                                  </div>
-                                              </button>
-                                          ))}
-                                      </div>
-                                  )}
-                              </>
-                          )}
-                      </div>
-
-                      <div className="space-y-2 animate-in slide-in-from-top-1 duration-300">
-                        <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider ml-1">Lien parrain</label>
-                        <div className="relative group">
-                          <Link className="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-300 group-focus-within:text-indigo-600 transition-colors" size={16} />
-                          <input 
-                            type="text" 
-                            value={sponsorLink}
-                            onChange={(e) => setSponsorLink(e.target.value)}
-                            placeholder="Ex: Cousin, Ami, Voisin, Collègue..." 
-                            className="w-full pl-11 pr-4 py-2.5 bg-white border border-indigo-100 rounded-xl text-sm font-bold text-gray-800 focus:outline-none focus:border-indigo-500 transition-all shadow-sm placeholder:text-indigo-200" 
-                          />
-                        </div>
-                      </div>
-                  </div>
-                )}
+            
+            {/* Row 1: Titre & Etat (Highlight) */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+              <div className={`${isMemo ? 'md:col-span-12' : 'md:col-span-8'} space-y-2`}>
+                <label className="block text-xs font-bold text-gray-500 ml-1">{isMemo ? 'Titre du mémo*' : 'Titre de la tâche*'}</label>
+                <input 
+                  required
+                  type="text" 
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder={isMemo ? "Ex: Liste de courses showroom" : "Ex: Appeler M. Dubois pour le devis"}
+                  className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 focus:border-gray-900 outline-none transition-all"
+                />
               </div>
-            )}
 
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-gray-500 ml-1">{isMemo ? 'Titre du mémo*' : 'Titre de la tâche*'}</label>
-              <input 
-                required
-                type="text" 
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder={isMemo ? "Ex: Liste de courses showroom" : "Ex: Appeler M. Dubois pour le devis"}
-                className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 focus:border-gray-900 outline-none transition-all"
-              />
+              {!isMemo && (
+                <div className="md:col-span-4 space-y-2 animate-in fade-in slide-in-from-right-2">
+                  <label className="block text-xs font-bold text-gray-500 ml-1">Etat</label>
+                  <div className="relative">
+                    <select 
+                      className="w-full appearance-none bg-indigo-50/30 border border-indigo-100 rounded-xl px-4 py-3 text-sm font-black text-indigo-900 hover:border-indigo-400 outline-none transition-all cursor-pointer shadow-sm"
+                      value={selectedStatusLabel}
+                      onChange={(e) => handleStatusChange(e.target.value)}
+                    >
+                      {statusOptions.map(s => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none" />
+                  </div>
+                </div>
+              )}
             </div>
 
             {!isCurrentlyAuto && (
@@ -854,13 +731,14 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
               </div>
             )}
 
+            {/* Row 2: Collaborateur assigné */}
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-              <div className="md:col-span-6 space-y-2">
+              <div className="md:col-span-12 space-y-2">
                 <label className="block text-xs font-bold text-gray-500 ml-1">Collaborateur assigné (Tâche)</label>
                 <div className="relative group">
                   <select 
                     className="w-full appearance-none flex items-center pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 hover:border-[#A886D7] focus:ring-2 focus:ring-purple-50 outline-none transition-all cursor-pointer"
-                    onChange={(e) => setSelectedCollaboratorIdx(parseInt(e.target.value))}
+                    onChange={(e) => setSelectedCollaboratorIdxValue(parseInt(e.target.value))}
                     value={selectedCollaboratorIdx}
                   >
                     {collaborators.length > 0 ? (
@@ -875,34 +753,6 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
                      {collaborators.length > 0 && (
                        <img src={collaborators[selectedCollaboratorIdx]?.avatar} className="w-6 h-6 rounded-full border border-white shadow-sm" alt="" />
                      )}
-                  </div>
-                  <ChevronDown size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                </div>
-              </div>
-
-              <div className="md:col-span-6 space-y-2">
-                <label className="block text-xs font-bold text-gray-500 ml-1">Agenceur référent (Contact)</label>
-                <div className="relative group">
-                  <select 
-                    className="w-full appearance-none flex items-center pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 hover:border-[#A886D7] focus:ring-2 focus:ring-purple-50 outline-none transition-all cursor-pointer disabled:bg-gray-50 disabled:opacity-50"
-                    disabled={!selectedClientId}
-                    onChange={(e) => setSelectedReferentName(e.target.value)}
-                    value={selectedReferentName}
-                  >
-                    <option value="">{!selectedClientId ? 'Choisir un client d\'abord' : 'Sélectionner un référent'}</option>
-                    {collaborators.map((c, i) => (
-                      <option key={i} value={c.name}>{c.name}</option>
-                    ))}
-                  </select>
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2">
-                     {selectedReferentName && (
-                       <img 
-                        src={collaborators.find(c => c.name === selectedReferentName)?.avatar || "https://i.pravatar.cc/150?u=fallback"} 
-                        className="w-6 h-6 rounded-full border border-white shadow-sm" 
-                        alt="" 
-                       />
-                     )}
-                     {!selectedReferentName && <UserCheck size={18} className="text-gray-300" />}
                   </div>
                   <ChevronDown size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                 </div>
@@ -1037,11 +887,12 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
             </div>
 
             {!isMemo && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className={`grid grid-cols-1 ${isLeadAutoTask ? 'md:grid-cols-1' : 'md:grid-cols-2'} gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                 <div className="space-y-2 relative" ref={clientSearchRef}>
-                  <label className="block text-xs font-bold text-gray-500 ml-1">Client lié (optionnel)</label>
+                  <label className="block text-xs font-bold text-gray-500 ml-1">Client lié (verrouillé)</label>
                   <div className="relative">
                     <input 
+                      disabled={isLeadAutoTask}
                       type="text"
                       value={clientSearchQuery}
                       onChange={(e) => {
@@ -1051,10 +902,10 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
                       }}
                       onFocus={() => setShowClientResults(true)}
                       placeholder="Chercher un client..."
-                      className="w-full pl-10 pr-10 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 focus:border-[#A886D7] outline-none transition-all shadow-sm"
+                      className="w-full pl-10 pr-10 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 focus:border-[#A886D7] outline-none transition-all shadow-sm disabled:bg-gray-50 disabled:text-gray-400"
                     />
                     <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-300" />
-                    {selectedClientId && (
+                    {selectedClientId && !isLeadAutoTask && (
                       <button 
                         type="button"
                         onClick={() => { setSelectedClientId(''); setClientSearchQuery(''); }}
@@ -1065,7 +916,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
                     )}
                   </div>
 
-                  {showClientResults && (
+                  {showClientResults && !isLeadAutoTask && (
                     <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[110] overflow-hidden max-h-60 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
                       <div className="p-2 space-y-1">
                         {filteredClients.length > 0 ? (
@@ -1096,39 +947,25 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
                   )}
                 </div>
 
-                <div className="space-y-2">
-                  <label className="block text-xs font-bold text-gray-500 ml-1">Projet lié (optionnel)</label>
-                  <div className="relative">
-                    <select 
-                      className="w-full appearance-none px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 hover:border-[#A886D7] outline-none transition-all cursor-pointer disabled:bg-gray-50 disabled:text-gray-400"
-                      disabled={!selectedClientId}
-                      value={selectedProjectId}
-                      onChange={(e) => setSelectedProjectId(e.target.value)}
-                    >
-                      <option value="">{!selectedClientId ? 'Choisir un client d\'abord' : 'Aucun'}</option>
-                      {filteredProjects.map(p => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                {!isLeadAutoTask && (
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold text-gray-500 ml-1">Projet lié (optionnel)</label>
+                    <div className="relative">
+                      <select 
+                        className="w-full appearance-none px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 hover:border-[#A886D7] outline-none transition-all cursor-pointer disabled:bg-gray-50 disabled:text-gray-400"
+                        disabled={!selectedClientId}
+                        value={selectedProjectId}
+                        onChange={(e) => setSelectedProjectId(e.target.value)}
+                      >
+                        <option value="">{!selectedClientId ? 'Choisir un client d\'abord' : 'Aucun'}</option>
+                        {filteredProjects.map(p => (
+                          <option key={p.id} value={p.id}>{p.name}</option>
+                        ))}
+                      </select>
+                      <ChevronDown size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    </div>
                   </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-xs font-bold text-gray-500 ml-1">Etat</label>
-                  <div className="relative">
-                    <select 
-                      className="w-full appearance-none bg-white border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold text-gray-800 hover:border-[#A886D7] outline-none transition-all cursor-pointer"
-                      value={selectedStatusLabel}
-                      onChange={(e) => handleStatusChange(e.target.value)}
-                    >
-                      {statusOptions.map(s => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                    <ChevronDown size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                  </div>
-                </div>
+                )}
               </div>
             )}
 

@@ -19,43 +19,65 @@ import {
 import { db } from '../firebase';
 import { doc, updateDoc, getDoc } from '@firebase/firestore';
 
-// Structure de données hiérarchique identique aux autres composants
+// Structure de données hiérarchique unifiée (Source de vérité)
 const HIERARCHY_DATA: Record<string, Record<string, string[]>> = {
-  "Actif commercial": {
-    "Prospection terrain": ["Porte-à-porte", "Tour de chantier"],
-    "Relance fichier": ["Anciens devis", "Clients perdus", "SAV"],
-    "Parrainage": ["Bon de parrainage", "Spontanée"],
-    "Prescripteur": ["Artisan partenaire", "Architecte", "Courtier", "Décorateur"],
-    "Démarchage téléphonique": ["Appel froid", "Suivi salon", "Relance mailing"]
+  "Prospection": {
+    "terrain": ["voisin", "porte-à porte", "Tour de chantier"],
+    "téléphonique": ["Appel froid"]
   },
-  "Notoriété": {
-    "Bouche-à-oreille": ["Famille/ami", "Voisin"],
-    "Recommandation spontanée": ["Sans lien identifié"],
-    "Ancien client": ["Autre projet", "Retour suite SAV"],
-    "Avis en ligne": ["Google", "PagesJaunes", "Site d’avis"]
+  "Parrainage": {
+    "Spontanné": [],
+    "Bon de parrainage": []
+  },
+  "Prescripteur": {
+    "Architecte": [],
+    "Artisan": [],
+    "Courtier": [],
+    "Décorateur": [],
+    "Boutiques voisines": [],
+    "Fournisseur": []
+  },
+  "Anciens clients": {
+    "Général": []
+  },
+  "Notoriété entreprise": {
+    "Général": []
+  },
+  "Digital": {
+    "Réseaux sociaux": ["Facebook", "Instagram", "Linkedin", "Tik-tok", "YouTube", "Pinterest"],
+    "Pub digitales": ["Google Ads", "Facebook Ads", "Instagram Ads"],
+    "Web": ["Recherche Google", "Google maps", "Waze", "Avis Google", "Avis en lignes divers", "Pages jaunes", "Forum"],
+    "IA": ["ChatGPT", "Gemini", "Claude", "Mistral"],
+    "Site web entreprise": ["Formulaire contact", "Prise de rdv en ligne", "Chatbot"]
   },
   "Marketing": {
-    "Publicité digitale": ["Google Ads", "Facebook Ads", "Instagram Ads", "Retargeting"],
-    "Site web": ["Formulaire contact", "Prise de RDV en ligne", "Chatbot"],
-    "Emailing": ["Newsletter", "Email promo", "Relance devis automatique"],
-    "SMS marketing": ["Campagne promo", "Relance devis"],
-    "Réseaux sociaux": ["Facebook perso", "Instagram", "TikTok", "Live", "Story promo"],
-    "Affichage": ["Panneau pub", "Abribus", "Panneau chantier", "Véhicule floqué"],
-    "Média traditionnel": ["Magazine", "Journal gratuit", "Publication pro", "Radio"],
-    "Événementiel": ["Salon", "Foire"],
-    "Réseaux pro": ["BNI", "Club entrepreneurs", "Groupement métiers"],
-    "Événement magasin": ["Portes ouvertes", "Inauguration", "Anniversaire showroom"]
+    "Emailing": ["Newsletter", "Email promo"],
+    "SMS marketing": [],
+    "Affichage": ["4x3", "Abribus", "Panneau chantier", "Véhicule floqué"],
+    "Magazine": [],
+    "Journal gratuit": [],
+    "Publication pro": [],
+    "Radio": [],
+    "Pages jaunes": [],
+    "Evenementiel": ["Salon", "Foire", "Galerie commerciale"],
+    "Evènements showroom": ["Portes ouvertes", "Innauguration", "Anniversaire", "Démo culinaires", "Autres"]
   },
-  "Magasin": {
-    "Passage magasin": ["Sans RDV"],
-    "Vitrine": ["Promo vitrine", "PLV"],
-    "Référencement local": ["Google Maps", "PagesJaunes", "GPS", "Plan local"],
-    "Bouche-à-oreille local": ["Habitant quartier", "Voisinage proche"]
+  "Réseaux pro": {
+    "BNI": [],
+    "Club entrepreneurs": ["Club 1", "Club 2", "Club 3", "Club 4"],
+    "Groupements métiers": []
+  },
+  "Passage devant showroom": {
+    "Spontanné": [],
+    "Promo vitrine": [],
+    "PLV": []
+  },
+  "Cercle proche": {
+    "Famille": [],
+    "Amis": []
   },
   "Autres": {
-    "Carte de visite": ["Récupérée événement", "Posée en magasin"],
-    "Opportunité": ["Spontanée"],
-    "Autre": ["À préciser"]
+    "Autre": []
   }
 };
 
@@ -106,7 +128,7 @@ const Select = ({ value, onChange, options, placeholder = "Sélectionner", disab
       disabled={disabled}
       value={value || ''} 
       onChange={(e) => onChange(e.target.value)}
-      className="w-full appearance-none bg-white border border-gray-100 rounded-xl px-4 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-gray-300 transition-all shadow-sm disabled:bg-gray-50 disabled:text-gray-400"
+      className="w-full appearance-none bg-white border border-gray-200 rounded-xl px-4 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-gray-300 transition-all shadow-sm disabled:bg-gray-50 disabled:text-gray-400"
     >
       <option value="">{placeholder}</option>
       {options.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
@@ -232,7 +254,6 @@ interface ProjectGeneralDiscoveryProps {
 const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ project, userProfile }) => {
   const companyName = userProfile?.companyName || 'Ma Société';
   
-  // Address Search states
   const [chantierSearch, setChantierSearch] = useState(project.details?.adresseChantier || '');
   const [factuSearch, setFactuSearch] = useState(project.details?.adresseFacturation || '');
   const [suggestionsChantier, setSuggestionsChantier] = useState<any[]>([]);
@@ -327,8 +348,8 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
   }, [factuSearch, clientAddresses]);
 
   const categories = useMemo(() => Object.keys(HIERARCHY_DATA), []);
-  const currentCategory = project.details?.category || '';
-  const currentOrigin = project.origine || '';
+  const currentCategory = project.details?.category || project.categorie || '';
+  const currentOrigin = project.origin || project.origine || '';
   const origins = useMemo(() => currentCategory ? Object.keys(HIERARCHY_DATA[currentCategory] || {}) : [], [currentCategory]);
   const subOrigins = useMemo(() => (currentCategory && currentOrigin) ? (HIERARCHY_DATA[currentCategory]?.[currentOrigin] || []) : [], [currentCategory, currentOrigin]);
 
@@ -357,7 +378,6 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
 
   const nbConfreres = project.details?.nbConfreres || 0;
 
-  // Composant local pour gérer une plage de dates
   const DateRangeField = ({ startField, endField, startValue, endValue }: any) => (
     <div className="flex items-center gap-2">
       <div className="relative group flex-1">
@@ -366,7 +386,7 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
           type="date" 
           value={formatDateForInput(startValue)} 
           onChange={(e) => handleDateChange(startField, e.target.value)} 
-          className="w-full bg-white border border-gray-100 rounded-xl pl-9 pr-2 py-3 text-[12px] font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm transition-all cursor-pointer" 
+          className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-2 py-3 text-[12px] font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm transition-all cursor-pointer" 
         />
       </div>
       <span className="text-[10px] font-black text-gray-300 uppercase shrink-0">au</span>
@@ -375,7 +395,7 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
           type="date" 
           value={formatDateForInput(endValue)} 
           onChange={(e) => handleDateChange(endField, e.target.value)} 
-          className="w-full bg-white border border-gray-100 rounded-xl px-3 py-3 text-[12px] font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm transition-all cursor-pointer" 
+          className="w-full bg-white border border-gray-200 rounded-xl px-3 py-3 text-[12px] font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm transition-all cursor-pointer" 
         />
       </div>
     </div>
@@ -384,7 +404,6 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
       
-      {/* 1. Attribution */}
       <Section title="Attribution">
         <Field label="Agence" colSpan="col-span-12 md:col-span-6">
           <div className="w-full bg-white border border-gray-100 rounded-xl px-4 py-3 text-[13px] font-bold text-gray-900 flex items-center justify-between shadow-sm">
@@ -393,7 +412,7 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
           </div>
         </Field>
         <Field label="Agenceur référent" colSpan="col-span-12 md:col-span-6">
-          <div className="w-full bg-white border border-gray-100 rounded-xl px-4 py-2 flex items-center gap-3 shadow-sm">
+          <div className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2 flex items-center gap-3 shadow-sm">
             <img src={project.agenceur?.avatar} className="w-8 h-8 rounded-full object-cover border border-gray-50 shadow-sm" alt="" />
             <span className="text-[13px] font-bold text-gray-900">{project.agenceur?.name}</span>
             <ChevronDown size={18} className="ml-auto text-gray-400" />
@@ -401,7 +420,6 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
         </Field>
       </Section>
 
-      {/* 2. Origine du projet */}
       <Section title="Origine du Projet">
         <Field label="Origine" colSpan="col-span-12 md:col-span-4">
           <Select 
@@ -416,14 +434,14 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
             disabled={!currentCategory}
             value={currentOrigin} 
             options={origins} 
-            onChange={(v: string) => handleUpdate('origine', v)} 
+            onChange={(v: string) => handleUpdate('origin', v)} 
             placeholder="Sélectionner une sous-origine"
           />
         </Field>
         <Field label="Sources" colSpan="col-span-12 md:col-span-4">
           <Select 
             disabled={!currentOrigin}
-            value={project.details?.subOrigin} 
+            value={project.details?.subOrigin || ''} 
             options={subOrigins} 
             onChange={(v: string) => handleUpdate('details.subOrigin', v)} 
             placeholder="Sélectionner une source"
@@ -431,7 +449,6 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
         </Field>
       </Section>
 
-      {/* 3. Projet */}
       <Section title="Projet">
         <Field label="Adresse chantier" colSpan="col-span-12 md:col-span-6">
           <div className="relative" ref={chantierRef}>
@@ -446,7 +463,7 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
                 }}
                 onFocus={() => setShowChantierSuggestions(true)}
                 placeholder="Choisir ou saisir l'adresse du chantier..."
-                className="w-full bg-white border border-gray-100 rounded-xl pl-12 pr-12 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 shadow-sm transition-all"
+                className="w-full bg-white border border-gray-200 rounded-xl pl-12 pr-12 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 shadow-sm transition-all"
               />
               {chantierSearch && (
                 <button 
@@ -458,9 +475,9 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
               )}
             </div>
             {showChantierSuggestions && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-100 rounded-2xl shadow-2xl overflow-hidden z-50 animate-in zoom-in-95 duration-200 flex flex-col">
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-2xl shadow-2xl overflow-hidden z-50 animate-in zoom-in-95 duration-200 flex flex-col">
                 {clientAddresses.map((addr, idx) => (
-                  <button key={idx} type="button" onClick={() => { setChantierSearch(addr.label); handleUpdate('details.adresseChantier', addr.label); setShowChantierSuggestions(false); }} className="w-full px-5 py-4 text-left hover:bg-indigo-50 flex items-start gap-4 border-b border-gray-50 last:border-0 group transition-all">
+                  <button key={idx} type="button" onClick={() => { setChantierSearch(addr.label); handleUpdate('details.adresseChantier', addr.label); setShowChantierSuggestions(false); }} className="w-full px-5 py-4 text-left hover:bg-indigo-50 flex items-start gap-4 border-b border-gray-100 last:border-0 group transition-all">
                     <div className={`mt-1 p-1.5 rounded-lg ${addr.isMain ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-400'}`}><MapPin size={16} /></div>
                     <div className="flex flex-col"><span className="text-[13px] font-bold text-gray-900">{addr.label}</span><span className="text-[10px] text-indigo-400 font-black uppercase tracking-tighter">{addr.type}</span></div>
                   </button>
@@ -489,13 +506,13 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
                 }}
                 onFocus={() => setShowFactuSuggestions(true)}
                 placeholder="Choisir ou saisir l'adresse de facturation..."
-                className="w-full bg-white border border-gray-100 rounded-xl pl-12 pr-12 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 shadow-sm transition-all"
+                className="w-full bg-white border border-gray-200 rounded-xl pl-12 pr-4 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50 shadow-sm transition-all"
               />
             </div>
             {showFactuSuggestions && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-100 rounded-2xl shadow-2xl overflow-hidden z-50 animate-in zoom-in-95 duration-200 flex flex-col">
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-2xl shadow-2xl overflow-hidden z-50 animate-in zoom-in-95 duration-200 flex flex-col">
                 {clientAddresses.map((addr, idx) => (
-                  <button key={idx} type="button" onClick={() => { setFactuSearch(addr.label); handleUpdate('details.adresseFacturation', addr.label); setShowFactuSuggestions(false); }} className="w-full px-5 py-4 text-left hover:bg-indigo-50 flex items-start gap-4 border-b border-gray-50 last:border-0 group transition-all">
+                  <button key={idx} type="button" onClick={() => { setFactuSearch(addr.label); handleUpdate('details.adresseFacturation', addr.label); setShowFactuSuggestions(false); }} className="w-full px-5 py-4 text-left hover:bg-indigo-50 flex items-start gap-4 border-b border-gray-100 last:border-0 group transition-all">
                     <div className={`mt-1 p-1.5 rounded-lg ${addr.isMain ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-400'}`}><MapPin size={16} /></div>
                     <div className="flex flex-col"><span className="text-[13px] font-bold text-gray-900">{addr.label}</span><span className="text-[10px] text-indigo-400 font-black uppercase tracking-tighter">{addr.type}</span></div>
                   </button>
@@ -557,7 +574,6 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
         </Field>
       </Section>
 
-      {/* 4. Enveloppe financière */}
       <Section title="Enveloppe financière" action={<button className="flex items-center gap-2 text-[11px] font-bold text-gray-800 hover:text-indigo-600 transition-colors"><FileText size={14} /> Ajouter une note</button>}>
         <Field label="Fourchette basse Budget" colSpan="col-span-12 md:col-span-4">
           <CurrencyInput value={project.details?.budgetBas} onChange={(v: string) => handleUpdate('details.budgetBas', v)} />
@@ -570,7 +586,6 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
         </Field>
       </Section>
 
-      {/* 5. Installation */}
       <Section title="Installation">
         <Field label="Dépose" colSpan="col-span-12 md:col-span-4">
           <Select value={project.details?.depose} options={[companyName, 'Client', 'Autre']} onChange={(v: string) => handleUpdate('details.depose', v)} />
@@ -605,7 +620,6 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
         )}
       </Section>
 
-      {/* 6. Concurrence */}
       <Section title="Concurrence">
         <Field label="Nombre de confrères consultés" colSpan="col-span-12 md:col-span-4">
           <div className="flex items-center justify-between bg-white border border-gray-100 rounded-xl px-4 py-2 shadow-sm">
@@ -618,7 +632,6 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
           </div>
         </Field>
         
-        {/* Dynamic fields for each consultant */}
         {nbConfreres > 0 && Array.from({ length: nbConfreres }).map((_, idx) => (
           <div key={idx} className="col-span-12 grid grid-cols-1 md:grid-cols-12 gap-6 pt-4 border-t border-gray-50 mt-2 animate-in slide-in-from-top-2 duration-300">
             <Field label={`Confrère #${idx + 1}`} colSpan="col-span-12 md:col-span-4">
@@ -646,7 +659,6 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
         ))}
       </Section>
 
-      {/* 7. Permis de construire */}
       <Section title="Permis de construire">
         <Field label="Permis de construire accordé" colSpan="col-span-6 md:col-span-3">
           <div className="pt-2"><Toggle value={project.details?.permisAccorde || false} onChange={(v) => handleUpdate('details.permisAccorde', v)} /></div>
@@ -660,7 +672,7 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
                 type="date" 
                 value={formatDateForInput(project.details?.datePermis)} 
                 onChange={(e) => handleDateChange('details.datePermis', e.target.value)} 
-                className="w-full bg-white border border-gray-100 rounded-xl pl-11 pr-4 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm transition-all cursor-pointer" 
+                className="w-full bg-white border border-gray-200 rounded-xl pl-11 pr-4 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm transition-all cursor-pointer" 
               />
             </div>
           </Field>
