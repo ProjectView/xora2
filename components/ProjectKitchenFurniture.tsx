@@ -443,7 +443,7 @@ const ProjectKitchenFurniture: React.FC<ProjectKitchenFurnitureProps> = ({ proje
         <Field label="Température de l’éclairage" colSpan="col-span-12 md:col-span-6">
           <CustomDropdown 
             value={furnitureData.temperatureEclairage} 
-            options={['Blanc chaud (3000K)', 'Blanc neutre (4000K)', 'Blanc froid (6000K)']} 
+            options={['Blanc chaud 3000°K', 'Blanc neutre 4000°K', 'Blanc froid 6500°K', 'à définir']} 
             onChange={(v: string) => handleUpdate('details.kitchen.furniture.temperatureEclairage', v)} 
           />
         </Field>
