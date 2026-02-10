@@ -10,9 +10,17 @@ interface AddProjectArticleModalProps {
   mode: 'Electromenager' | 'Sanitaire';
   project: any;
   userProfile: any;
+  onArticleSelected?: (article: any) => Promise<void>;
 }
 
-const AddProjectArticleModal: React.FC<AddProjectArticleModalProps> = ({ isOpen, onClose, mode, project, userProfile }) => {
+const AddProjectArticleModal: React.FC<AddProjectArticleModalProps> = ({ 
+  isOpen, 
+  onClose, 
+  mode, 
+  project, 
+  userProfile,
+  onArticleSelected 
+}) => {
   const [view, setView] = useState<'search' | 'manual'>('search');
   const [search, setSearch] = useState('');
   const [articles, setArticles] = useState<any[]>([]);
@@ -59,15 +67,19 @@ const AddProjectArticleModal: React.FC<AddProjectArticleModalProps> = ({ isOpen,
   const handleAddArticle = async (article: any) => {
     setIsAdding(article.id);
     try {
-      const type = mode === 'Electromenager' ? 'electros' : 'sanitaires';
-      const projectRef = doc(db, 'projects', project.id);
-      
-      await updateDoc(projectRef, {
-        [`details.kitchen.${type}`]: arrayUnion({
-          ...article,
-          addedAt: new Date().toISOString()
-        })
-      });
+      if (onArticleSelected) {
+        await onArticleSelected(article);
+      } else {
+        const type = mode === 'Electromenager' ? 'electros' : 'sanitaires';
+        const projectRef = doc(db, 'projects', project.id);
+        
+        await updateDoc(projectRef, {
+          [`details.kitchen.${type}`]: arrayUnion({
+            ...article,
+            addedAt: new Date().toISOString()
+          })
+        });
+      }
       
       setTimeout(() => setIsAdding(null), 1000);
     } catch (e) {
@@ -82,9 +94,6 @@ const AddProjectArticleModal: React.FC<AddProjectArticleModalProps> = ({ isOpen,
 
     setIsAdding('manual-action');
     try {
-      const type = mode === 'Electromenager' ? 'electros' : 'sanitaires';
-      const projectRef = doc(db, 'projects', project.id);
-      
       const newManualItem = {
         id: `manual_${Date.now()}`,
         famille: manualData.famille || 'Manuel',
@@ -97,9 +106,15 @@ const AddProjectArticleModal: React.FC<AddProjectArticleModalProps> = ({ isOpen,
         addedAt: new Date().toISOString()
       };
 
-      await updateDoc(projectRef, {
-        [`details.kitchen.${type}`]: arrayUnion(newManualItem)
-      });
+      if (onArticleSelected) {
+        await onArticleSelected(newManualItem);
+      } else {
+        const type = mode === 'Electromenager' ? 'electros' : 'sanitaires';
+        const projectRef = doc(db, 'projects', project.id);
+        await updateDoc(projectRef, {
+          [`details.kitchen.${type}`]: arrayUnion(newManualItem)
+        });
+      }
       
       // Reset manual form
       setManualData({

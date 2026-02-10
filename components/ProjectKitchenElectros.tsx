@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   Trash2, 
@@ -8,10 +9,14 @@ import {
   HelpCircle,
   Zap,
   Droplets,
-  RotateCcw
+  RotateCcw,
+  Plus,
+  Euro,
+  Tag
 } from 'lucide-react';
 import { db } from '../firebase';
 import { doc, updateDoc, onSnapshot, deleteField } from '@firebase/firestore';
+import AddProjectArticleModal from './AddProjectArticleModal';
 
 // --- CONFIGURATION DES DIAGNOSTICS (ISSU DU CSV) ---
 
@@ -243,24 +248,35 @@ const QuestionField: React.FC<{
   );
 };
 
-const AccordionItem: React.FC<{ 
-  title: string, 
-  onDelete: () => void, 
-  data: any, 
-  onUpdate: (updates: any) => void,
-  isElectro?: boolean
-}> = ({ 
+interface AccordionItemProps {
+  title: string;
+  onReset: () => void;
+  diagnosticData: any;
+  onDiagnosticUpdate: (updates: any) => void;
+  itemData: any;
+  onItemUpdate: (updates: any) => void;
+  isElectro?: boolean;
+  onAddArticle: () => void;
+  onRemoveArticle: (articleId: string) => void;
+}
+
+const AccordionItem: React.FC<AccordionItemProps> = ({ 
   title, 
-  onDelete, 
-  data, 
-  onUpdate,
-  isElectro = true
+  onReset, 
+  diagnosticData, 
+  onDiagnosticUpdate,
+  itemData,
+  onItemUpdate,
+  isElectro = true,
+  onAddArticle,
+  onRemoveArticle
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const config = DIAGNOSTIC_CONFIG[title] || { label: title, questions: [] };
   
-  // Vérifier si des données ont été saisies
-  const isFilled = data && Object.keys(data).length > 0;
+  const isFilled = diagnosticData && Object.keys(diagnosticData).length > 0;
+  const quiFournit = itemData?.quiFournit || 'A fournir';
+  const articles = itemData?.articles || [];
 
   return (
     <div className={`bg-white border rounded-[24px] overflow-hidden transition-all duration-300 ${isOpen ? 'border-indigo-100 shadow-xl ring-4 ring-indigo-50/30' : 'border-gray-100 shadow-sm hover:border-gray-200'}`}>
@@ -287,7 +303,7 @@ const AccordionItem: React.FC<{
         <div className="flex items-center gap-4">
           {isFilled && (
             <button 
-              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              onClick={(e) => { e.stopPropagation(); onReset(); }}
               className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
               title="Réinitialiser le diagnostic"
             >
@@ -301,23 +317,106 @@ const AccordionItem: React.FC<{
       </div>
 
       {isOpen && (
-        <div className="px-8 pb-8 pt-2 space-y-8 animate-in slide-in-from-top-2 duration-300">
-          <div className="grid grid-cols-1 gap-8">
-            {config.questions.map((q, idx) => (
-              <QuestionField 
-                key={idx} 
-                question={q} 
-                value={data?.[q.label]} 
-                onChange={(v) => onUpdate({ ...data, [q.label]: v })}
-              />
-            ))}
+        <div className="px-8 pb-8 pt-2 space-y-10 animate-in slide-in-from-top-2 duration-300">
+          
+          {/* 1. QUI FOURNIT */}
+          <div className="space-y-4">
+            <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Qui fournit ?</label>
+            <div className="relative group w-full md:w-1/3">
+              <select 
+                value={quiFournit}
+                onChange={(e) => onItemUpdate({ ...itemData, quiFournit: e.target.value })}
+                className="w-full appearance-none bg-white border border-gray-200 rounded-xl px-4 py-3 text-[14px] font-bold text-gray-900 outline-none focus:border-indigo-400 transition-all shadow-sm"
+              >
+                <option value="le client">Le client</option>
+                <option value="A fournir">A fournir</option>
+              </select>
+              <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
+            </div>
           </div>
-          {config.questions.length === 0 && (
-             <div className="py-10 text-center bg-gray-50 border border-dashed border-gray-200 rounded-[20px]">
-               <HelpCircle size={32} className="mx-auto text-gray-200 mb-2" />
-               <p className="text-[12px] font-bold text-gray-400 italic">Aucune question spécifique configurée pour cet item.</p>
-             </div>
+
+          {/* 2. ARTICLES (Conditionnel) */}
+          {quiFournit === 'A fournir' && (
+            <div className="space-y-6 bg-[#FBFBFB] border border-gray-100 rounded-[24px] p-6">
+              <div className="flex justify-between items-center px-1">
+                <h5 className="text-[12px] font-black text-gray-800 uppercase tracking-tight">Article produit catalogue/générique</h5>
+                <button 
+                  onClick={onAddArticle}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-[11px] font-bold text-gray-700 shadow-sm hover:border-indigo-600 transition-all active:scale-95"
+                >
+                  <Plus size={14} /> Ajouter un article
+                </button>
+              </div>
+
+              {articles.length > 0 ? (
+                <div className="overflow-hidden border border-gray-200 rounded-2xl bg-white shadow-sm">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-100">
+                        <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Référence produit</th>
+                        <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Description</th>
+                        <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">Prix mini TTC</th>
+                        <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">Prix maxi TTC</th>
+                        <th className="px-6 py-4 w-12"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {articles.map((art: any, idx: number) => (
+                        <tr key={idx} className="group hover:bg-gray-50/50 transition-colors">
+                          <td className="px-6 py-4 text-[13px] font-bold text-gray-400 italic">
+                            {art.collection || '-'}
+                          </td>
+                          <td className="px-6 py-4 text-[13px] font-bold text-gray-800">
+                            {art.descriptif}
+                          </td>
+                          <td className="px-6 py-4 text-[13px] font-black text-gray-900 text-center">
+                            {art.prixMiniTTC?.toLocaleString()} €
+                          </td>
+                          <td className="px-6 py-4 text-[13px] font-black text-indigo-600 text-center">
+                            {art.prixMaxiTTC?.toLocaleString()} €
+                          </td>
+                          <td className="px-6 py-4">
+                            <button 
+                              onClick={() => onRemoveArticle(art.id)}
+                              className="p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="py-8 text-center border-2 border-dashed border-gray-200 rounded-2xl bg-white">
+                  <Package size={32} className="mx-auto text-gray-200 mb-2" />
+                  <p className="text-[11px] font-bold text-gray-400 italic">Aucun article sélectionné pour cet équipement.</p>
+                </div>
+              )}
+            </div>
           )}
+
+          {/* 3. DIAGNOSTIC */}
+          <div className="space-y-8 pt-4 border-t border-gray-50">
+            <h5 className="text-[12px] font-black text-gray-800 uppercase tracking-tight px-1">Diagnostic technique</h5>
+            <div className="grid grid-cols-1 gap-8">
+              {config.questions.map((q, idx) => (
+                <QuestionField 
+                  key={idx} 
+                  question={q} 
+                  value={diagnosticData?.[q.label]} 
+                  onChange={(v) => onDiagnosticUpdate({ ...diagnosticData, [q.label]: v })}
+                />
+              ))}
+            </div>
+            {config.questions.length === 0 && (
+               <div className="py-10 text-center bg-gray-50 border border-dashed border-gray-200 rounded-[20px]">
+                 <HelpCircle size={32} className="mx-auto text-gray-200 mb-2" />
+                 <p className="text-[12px] font-bold text-gray-400 italic">Aucune question spécifique configurée pour cet item.</p>
+               </div>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -331,13 +430,16 @@ interface ProjectKitchenElectrosProps {
   userProfile: any;
 }
 
-const ProjectKitchenElectros: React.FC<ProjectKitchenElectrosProps> = ({ project }) => {
+const ProjectKitchenElectros: React.FC<ProjectKitchenElectrosProps> = ({ project, userProfile }) => {
+  const [activeItemForModal, setActiveItemForModal] = useState<{ title: string, mode: 'Electromenager' | 'Sanitaire' } | null>(null);
+
   const electroTypes = Object.keys(DIAGNOSTIC_CONFIG).slice(0, 11); // Les 11 premiers sont des électros
   const sanitaireTypes = Object.keys(DIAGNOSTIC_CONFIG).slice(11); // Le reste sont des sanitaires
 
   const diagnostics = project.details?.kitchen?.diagnostics || {};
+  const items = project.details?.kitchen?.items || {}; // Contiendra quiFournit et articles[] par item
 
-  const handleResetItem = async (type: string) => {
+  const handleResetDiagnostic = async (type: string) => {
     if (!window.confirm(`Réinitialiser le diagnostic de l'item "${type}" ?`)) return;
     try {
       const projectRef = doc(db, 'projects', project.id);
@@ -349,7 +451,7 @@ const ProjectKitchenElectros: React.FC<ProjectKitchenElectrosProps> = ({ project
     }
   };
 
-  const handleUpdateItem = async (type: string, updates: any) => {
+  const handleUpdateDiagnostic = async (type: string, updates: any) => {
     try {
       const projectRef = doc(db, 'projects', project.id);
       await updateDoc(projectRef, {
@@ -359,6 +461,37 @@ const ProjectKitchenElectros: React.FC<ProjectKitchenElectrosProps> = ({ project
       console.error(e);
     }
   };
+
+  const handleUpdateItem = async (type: string, updates: any) => {
+    try {
+      const projectRef = doc(db, 'projects', project.id);
+      await updateDoc(projectRef, {
+        [`details.kitchen.items.${type}`]: updates
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleRemoveArticle = async (type: string, articleId: string) => {
+    try {
+      const currentItem = items[type] || {};
+      const currentArticles = currentItem.articles || [];
+      const updatedArticles = currentArticles.filter((a: any) => a.id !== articleId);
+      
+      const projectRef = doc(db, 'projects', project.id);
+      await updateDoc(projectRef, {
+        [`details.kitchen.items.${type}.articles`]: updatedArticles
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Logique spécifique pour la modale d'ajout d'article
+  // La modale AddProjectArticleModal existante ajoute directement au projet dans details.kitchen.electros ou sanitaires
+  // On va devoir l'adapter ou gérer le retour ici si on veut que ce soit lié à l'item spécifique
+  // Dans cette architecture simplifiée, on va lier les articles à l'item via details.kitchen.items[type].articles
 
   return (
     <div className="space-y-12 animate-in fade-in duration-500 pb-20">
@@ -377,12 +510,15 @@ const ProjectKitchenElectros: React.FC<ProjectKitchenElectrosProps> = ({ project
           {electroTypes.map(type => (
             <AccordionItem 
               key={type}
-              id={type}
               title={type}
               isElectro={true}
-              data={diagnostics[type] || {}}
-              onDelete={() => handleResetItem(type)}
-              onUpdate={(up) => handleUpdateItem(type, up)}
+              diagnosticData={diagnostics[type] || {}}
+              onReset={() => handleResetDiagnostic(type)}
+              onDiagnosticUpdate={(up) => handleUpdateDiagnostic(type, up)}
+              itemData={items[type] || { quiFournit: 'A fournir', articles: [] }}
+              onItemUpdate={(up) => handleUpdateItem(type, up)}
+              onAddArticle={() => setActiveItemForModal({ title: type, mode: 'Electromenager' })}
+              onRemoveArticle={(artId) => handleRemoveArticle(type, artId)}
             />
           ))}
         </div>
@@ -402,16 +538,41 @@ const ProjectKitchenElectros: React.FC<ProjectKitchenElectrosProps> = ({ project
           {sanitaireTypes.map(type => (
             <AccordionItem 
               key={type}
-              id={type}
               title={type}
               isElectro={false}
-              data={diagnostics[type] || {}}
-              onDelete={() => handleResetItem(type)}
-              onUpdate={(up) => handleUpdateItem(type, up)}
+              diagnosticData={diagnostics[type] || {}}
+              onReset={() => handleResetDiagnostic(type)}
+              onDiagnosticUpdate={(up) => handleUpdateDiagnostic(type, up)}
+              itemData={items[type] || { quiFournit: 'A fournir', articles: [] }}
+              onItemUpdate={(up) => handleUpdateItem(type, up)}
+              onAddArticle={() => setActiveItemForModal({ title: type, mode: 'Sanitaire' })}
+              onRemoveArticle={(artId) => handleRemoveArticle(type, artId)}
             />
           ))}
         </div>
       </div>
+
+      {/* MODALE D'AJOUT D'ARTICLE (ADAPTÉE) */}
+      {activeItemForModal && (
+        <AddProjectArticleModal 
+          isOpen={true}
+          onClose={() => setActiveItemForModal(null)}
+          mode={activeItemForModal.mode}
+          project={project}
+          userProfile={userProfile}
+          // On passe une fonction personnalisée pour l'ajout à l'item spécifique
+          onArticleSelected={async (article) => {
+            const type = activeItemForModal.title;
+            const currentItem = items[type] || { quiFournit: 'A fournir', articles: [] };
+            const updatedArticles = [...(currentItem.articles || []), { ...article, id: article.id || `custom_${Date.now()}` }];
+            
+            const projectRef = doc(db, 'projects', project.id);
+            await updateDoc(projectRef, {
+              [`details.kitchen.items.${type}.articles`]: updatedArticles
+            });
+          }}
+        />
+      )}
 
     </div>
   );
