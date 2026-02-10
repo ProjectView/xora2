@@ -1,6 +1,24 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, ChevronUp, Plus, Minus, Check, Search, Layers, MoveHorizontal, Layout } from 'lucide-react';
+import { 
+  ChevronDown, 
+  ChevronUp, 
+  Plus, 
+  Minus, 
+  Check, 
+  Search, 
+  Layers, 
+  MoveHorizontal, 
+  Layout, 
+  Users, 
+  Activity, 
+  Sparkles, 
+  Droplets, 
+  Utensils, 
+  TrendingUp, 
+  VolumeX,
+  Target
+} from 'lucide-react';
 import { db } from '../firebase';
 // Use @firebase/firestore to fix named export resolution issues
 import { doc, updateDoc } from '@firebase/firestore';
@@ -164,6 +182,53 @@ const UsageCounter = ({ label, value, onChange }: { label: string; value: number
   </div>
 );
 
+const VisualMultiSelect = ({ value, onChange, options }: { value: string[], onChange: (v: string[]) => void, options: { label: string, icon: any }[] }) => {
+  const toggleOption = (label: string) => {
+    const current = Array.isArray(value) ? value : [];
+    const newValue = current.includes(label)
+      ? current.filter(v => v !== label)
+      : [...current, label];
+    onChange(newValue);
+  };
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+      {options.map((opt) => {
+        const isSelected = Array.isArray(value) && value.includes(opt.label);
+        const Icon = opt.icon;
+        return (
+          <button
+            key={opt.label}
+            type="button"
+            onClick={() => toggleOption(opt.label)}
+            className={`flex flex-col items-center justify-center p-5 rounded-[20px] border-2 transition-all duration-300 group relative ${
+              isSelected 
+                ? 'bg-indigo-50 border-indigo-600 shadow-lg shadow-indigo-100' 
+                : 'bg-white border-gray-100 hover:border-gray-200 hover:bg-gray-50'
+            }`}
+          >
+            <div className={`p-2.5 rounded-xl mb-2 transition-all duration-300 ${
+              isSelected ? 'bg-indigo-600 text-white' : 'bg-gray-50 text-gray-400 group-hover:text-gray-900 group-hover:bg-white'
+            }`}>
+              <Icon size={20} />
+            </div>
+            <span className={`text-[10px] font-black text-center leading-tight uppercase tracking-tight ${
+              isSelected ? 'text-indigo-900' : 'text-gray-500 group-hover:text-gray-900'
+            }`}>
+              {opt.label}
+            </span>
+            {isSelected && (
+              <div className="absolute top-2 right-2 bg-indigo-600 text-white rounded-full p-0.5 animate-in zoom-in duration-200">
+                <Check size={10} strokeWidth={4} />
+              </div>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+};
+
 interface ProjectKitchenFurnitureProps {
   project: any;
 }
@@ -180,9 +245,31 @@ const ProjectKitchenFurniture: React.FC<ProjectKitchenFurnitureProps> = ({ proje
 
   const furnitureData = project.details?.kitchen?.furniture || {};
 
+  const objectifsOptions = [
+    { label: "Plus de rangements", icon: Layers },
+    { label: "Plus de convivialité", icon: Users },
+    { label: "Meilleure ergonomie", icon: Activity },
+    { label: "Design moderne", icon: Sparkles },
+    { label: "Facilité d'entretien", icon: Droplets },
+    { label: "Espace de repas intégré", icon: Utensils },
+    { label: "Valorisation immobilière", icon: TrendingUp },
+    { label: "Réduction sonore", icon: VolumeX }
+  ];
+
   return (
     <div className="animate-in fade-in duration-300 pb-10">
       
+      {/* 0. Objectifs nouvelle cuisine (DÉPLACÉ EN HAUT) */}
+      <Section title="Objectifs nouvelle cuisine" icon={Target}>
+        <div className="col-span-12">
+          <VisualMultiSelect 
+            value={furnitureData.objectifsCuisine || []} 
+            options={objectifsOptions} 
+            onChange={(v: string[]) => handleUpdate('details.kitchen.furniture.objectifsCuisine', v)} 
+          />
+        </div>
+      </Section>
+
       {/* 1. Rangements */}
       <Section title="Rangements" icon={Layers}>
         <Field label="Volume de rangement actuel" colSpan="col-span-12 md:col-span-6">
@@ -207,7 +294,7 @@ const ProjectKitchenFurniture: React.FC<ProjectKitchenFurnitureProps> = ({ proje
           <CustomDropdown 
             multiple
             value={furnitureData.typeMeublesBas || []} 
-            options={['Coulissants', 'Tiroirs', 'Portes battantes', 'Meuble d\'angle', 'Sous-évier', 'Four encastré', 'Range-bouteilles']} 
+            options={['Bouteilles (vertical)', 'Bouteilles (horizontal)', 'Pain', 'Epices', 'casseroles', 'Poëles', 'Vaisselle', 'Produits ménagers', 'couverts', 'grands ustensiles', 'torchon', 'alimentaire', 'occupant l\'angle']} 
             onChange={(v: string[]) => handleUpdate('details.kitchen.furniture.typeMeublesBas', v)} 
           />
         </Field>
@@ -215,7 +302,7 @@ const ProjectKitchenFurniture: React.FC<ProjectKitchenFurnitureProps> = ({ proje
           <CustomDropdown 
             multiple
             value={furnitureData.typeMeublesHauts || []} 
-            options={['Relevants', 'Portes battantes', 'Niches ouvertes', 'Hotte intégrée', 'Sur-mesure plafond', 'Étagères éclairées']} 
+            options={['Meuble portes battantes', 'Meuble portes relevables', 'Meuble ouvert', 'Meuble avec hotte', 'Vitrine', 'Etagères', 'Meuble jusqu\'au plafond', 'Meubles petites hauteur', 'Meubles hauts classiques']} 
             onChange={(v: string[]) => handleUpdate('details.kitchen.furniture.typeMeublesHauts', v)} 
           />
         </Field>
@@ -223,7 +310,7 @@ const ProjectKitchenFurniture: React.FC<ProjectKitchenFurnitureProps> = ({ proje
           <CustomDropdown 
             multiple
             value={furnitureData.colonnes || []} 
-            options={['Garde-manger', 'Frigo intégré', 'Four & MO', 'Pharmacie', 'Balai / Entretien', 'Sans colonne']} 
+            options={['Epicier lg 300/400', 'Avec tiroirs intérieurs lg 500/600', 'Etagères', 'Bibliothèque', 'Ht 1/2 armoire', 'Toute hauteur', 'Balai', 'Profondeur réduite', 'Occupant l\'angle']} 
             onChange={(v: string[]) => handleUpdate('details.kitchen.furniture.colonnes', v)} 
           />
         </Field>
@@ -238,11 +325,12 @@ const ProjectKitchenFurniture: React.FC<ProjectKitchenFurnitureProps> = ({ proje
           <LongTextField rows={1} value={furnitureData.descColonnes} onChange={(v: string) => handleUpdate('details.kitchen.furniture.descColonnes', v)} />
         </Field>
 
-        <Field label="Gestion des déchets" colSpan="col-span-12 md:col-span-4">
+        <Field label="Gestion des déchets (Sélection multiple)" colSpan="col-span-12 md:col-span-4">
           <CustomDropdown 
-            value={furnitureData.gestionDechets} 
-            options={['Poubelle de sol', 'Poubelle sur porte', 'Coulissant dédié (2 bacs)', 'Coulissant dédié (3 bacs)', 'Trie sélectif sous évier']} 
-            onChange={(v: string) => handleUpdate('details.kitchen.furniture.gestionDechets', v)} 
+            multiple
+            value={furnitureData.gestionDechets || []} 
+            options={['1 bac XXL 40 litres', '2 bac XXL 40 litres', '1 grand bac 30 litres', '2 grands bacs 30 litres', '1 grand bac 25 litres', '2 grands bacs 25 litres', '1 bac 20 litres', '2 bacs 20 litres', '1 bac standard 15 litres', '2 bacs standart 15 litres', '1 bac compost 5 litres', '1 bac verre', 'Poubelle extérieur meuble', 'Vide déchet sur plan de travail', 'Pas de poubelle']} 
+            onChange={(v: string[]) => handleUpdate('details.kitchen.furniture.gestionDechets', v)} 
           />
         </Field>
         <Field label="Description Gestion des déchets" colSpan="col-span-12 md:col-span-8">
@@ -256,7 +344,7 @@ const ProjectKitchenFurniture: React.FC<ProjectKitchenFurnitureProps> = ({ proje
           <CustomDropdown 
             multiple
             value={furnitureData.accessoires || []} 
-            options={['Tiroirs à l\'anglaise', 'Tour épice', 'Magic Corner', 'LeMans', 'Range-couverts', 'Fond antidérapant', 'Range-épices', 'Table escamotable']} 
+            options={['Bloc prise', 'Bloc prise avec USB-A', 'Bloc prise avec USB-C', 'Chargeur induction', 'Organiseur sous-évier', 'Coulissant bouteilles', 'Coulissant pain-bouteilles', 'Rangement éponges', 'Portes torchons', 'Range couvercles de casserolles', 'Casier couvert', 'escabeau pliant', 'Portes verres', 'Portes mug', 'Barres de crédence']} 
             onChange={(v: string[]) => handleUpdate('details.kitchen.furniture.accessoires', v)} 
           />
         </Field>
@@ -311,7 +399,7 @@ const ProjectKitchenFurniture: React.FC<ProjectKitchenFurnitureProps> = ({ proje
         <Field label="Longueur à prévoir" colSpan="col-span-12 md:col-span-4">
           <NumberInput unit="mm" value={furnitureData.longueurPreparation} onChange={(v) => handleUpdate('details.kitchen.furniture.longueurPreparation', v)} />
         </Field>
-        <Field label="Description gestion des déchets" colSpan="col-span-12 md:col-span-8">
+        <Field label="Description" colSpan="col-span-12 md:col-span-8">
           <LongTextField 
             rows={1}
             value={furnitureData.descriptionDechetsPrepa} 
@@ -334,15 +422,7 @@ const ProjectKitchenFurniture: React.FC<ProjectKitchenFurnitureProps> = ({ proje
             <UsageCounter label="Enfants" value={furnitureData.repasExcepEnfants} onChange={(v) => handleUpdate('details.kitchen.furniture.repasExcepEnfants', v)} />
           </div>
         </Field>
-        <Field label="Objectif.s nouvelle cuisine (Sélection multiple)" colSpan="col-span-12">
-          <CustomDropdown 
-            multiple
-            value={furnitureData.objectifsCuisine || []} 
-            options={['Plus de rangements', 'Plus de convivialité', 'Meilleure ergonomie', 'Design moderne', 'Facilité d\'entretien', 'Espace de repas intégré', 'Valorisation immobilière', 'Réduction sonore']} 
-            onChange={(v: string[]) => handleUpdate('details.kitchen.furniture.objectifsCuisine', v)} 
-          />
-        </Field>
-        <Field label="Description gestion des déchets" colSpan="col-span-12">
+        <Field label="Description" colSpan="col-span-12">
           <LongTextField 
             rows={2}
             value={furnitureData.usageDescriptionDechets} 

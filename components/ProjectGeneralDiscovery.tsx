@@ -14,7 +14,9 @@ import {
   X, 
   Star, 
   Calendar,
-  Check
+  Check,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { db } from '../firebase';
 import { doc, updateDoc, getDoc } from '@firebase/firestore';
@@ -246,6 +248,138 @@ const CurrencyInput = ({ value, onChange, placeholder = "0" }: any) => {
   );
 };
 
+const UnifiedRangePicker = ({ startValue, endValue, onRangeChange, label }: any) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const pickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const parseDate = (dStr: string) => {
+    if (!dStr || !dStr.includes('/')) return null;
+    const [d, m, y] = dStr.split('/').map(Number);
+    return new Date(y, m - 1, d);
+  };
+
+  const formatDate = (date: Date) => {
+    return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`;
+  };
+
+  const startDate = parseDate(startValue);
+  const endDate = parseDate(endValue);
+
+  const days = useMemo(() => {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    let startOffset = firstDay.getDay() === 0 ? 6 : firstDay.getDay() - 1;
+    const calendarDays = [];
+    const prevMonthLastDay = new Date(year, month, 0).getDate();
+
+    for (let i = startOffset - 1; i >= 0; i--) {
+      calendarDays.push({ day: prevMonthLastDay - i, month: month - 1, year, current: false });
+    }
+    for (let i = 1; i <= lastDay.getDate(); i++) {
+      calendarDays.push({ day: i, month, year, current: true });
+    }
+    const remaining = 42 - calendarDays.length;
+    for (let i = 1; i <= remaining; i++) {
+      calendarDays.push({ day: i, month: month + 1, year, current: false });
+    }
+    return calendarDays;
+  }, [currentMonth]);
+
+  const handleDayClick = (day: number, month: number, year: number) => {
+    const clickedDate = new Date(year, month, day);
+    
+    // Si on n'a pas de début ou si on a déjà une fin, on repart sur un nouveau début
+    if (!startDate || (startDate && endDate)) {
+      onRangeChange(formatDate(clickedDate), '');
+    } else {
+      // On a un début mais pas de fin
+      if (clickedDate < startDate) {
+        // Le clic est avant le début, on inverse ou on reset ? Inversons pour fluidité
+        onRangeChange(formatDate(clickedDate), startValue);
+      } else {
+        onRangeChange(startValue, formatDate(clickedDate));
+        // Fermeture automatique après sélection de la fin pour simplifier
+        setIsOpen(false);
+      }
+    }
+  };
+
+  return (
+    <div className="relative" ref={pickerRef}>
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-4 py-3 text-[12px] font-bold text-gray-900 shadow-sm cursor-pointer hover:border-indigo-400 transition-all"
+      >
+        <Calendar size={16} className="text-gray-300 shrink-0" />
+        <div className="flex-1 flex justify-between items-center">
+          <span className={startDate ? 'text-gray-900' : 'text-gray-400 italic'}>{startValue || 'Début'}</span>
+          <span className="text-gray-300 font-black px-1">AU</span>
+          <span className={endDate ? 'text-gray-900' : 'text-gray-400 italic'}>{endValue || 'Fin'}</span>
+        </div>
+      </div>
+
+      {isOpen && (
+        <div className="absolute top-full left-0 mt-2 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[150] w-[300px] p-4 animate-in zoom-in-95 duration-200">
+          <div className="flex justify-between items-center mb-4">
+            <h4 className="text-[12px] font-black uppercase text-gray-900">
+              {currentMonth.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+            </h4>
+            <div className="flex gap-1">
+              <button type="button" onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))} className="p-1 hover:bg-gray-50 rounded text-gray-400"><ChevronLeft size={16}/></button>
+              <button type="button" onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1))} className="p-1 hover:bg-gray-50 rounded text-gray-400"><ChevronRight size={16}/></button>
+            </div>
+          </div>
+          <div className="grid grid-cols-7 gap-1 text-center mb-2">
+            {['L','M','M','J','V','S','D'].map(d => <span key={d} className="text-[10px] font-black text-gray-300">{d}</span>)}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {days.map((d, i) => {
+              const date = new Date(d.year, d.month, d.day);
+              const isStart = startDate && date.getTime() === startDate.getTime();
+              const isEnd = endDate && date.getTime() === endDate.getTime();
+              const isBetween = startDate && endDate && date > startDate && date < endDate;
+              const isToday = new Date().toDateString() === date.toDateString();
+
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => handleDayClick(d.day, d.month, d.year)}
+                  className={`h-8 w-8 rounded-lg text-[11px] font-bold transition-all relative ${
+                    isStart || isEnd ? 'bg-indigo-600 text-white shadow-md z-10' :
+                    isBetween ? 'bg-indigo-50 text-indigo-600' :
+                    isToday ? 'border border-indigo-100 text-indigo-600' :
+                    d.current ? 'text-gray-800 hover:bg-gray-50' : 'text-gray-200'
+                  }`}
+                >
+                  {d.day}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-4 pt-4 border-t border-gray-50 flex justify-between">
+            <button type="button" onClick={() => { onRangeChange('', ''); setIsOpen(false); }} className="text-[10px] font-bold text-red-500 uppercase">Effacer</button>
+            <button type="button" onClick={() => setIsOpen(false)} className="px-4 py-1.5 bg-gray-900 text-white rounded-lg text-[10px] font-bold uppercase">Valider</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 interface ProjectGeneralDiscoveryProps {
   project: any;
   userProfile: any;
@@ -297,6 +431,15 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
       await updateDoc(projectRef, { [field]: value });
     } catch (e) {
       console.error("Erreur update découverte:", e);
+    }
+  };
+
+  const handleMultiUpdate = async (updates: Record<string, any>) => {
+    try {
+      const projectRef = doc(db, 'projects', project.id);
+      await updateDoc(projectRef, updates);
+    } catch (e) {
+      console.error("Erreur multi-update découverte:", e);
     }
   };
 
@@ -377,29 +520,6 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
   };
 
   const nbConfreres = project.details?.nbConfreres || 0;
-
-  const DateRangeField = ({ startField, endField, startValue, endValue }: any) => (
-    <div className="flex items-center gap-2">
-      <div className="relative group flex-1">
-        <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 group-hover:text-indigo-600 transition-colors pointer-events-none z-10" size={14} />
-        <input 
-          type="date" 
-          value={formatDateForInput(startValue)} 
-          onChange={(e) => handleDateChange(startField, e.target.value)} 
-          className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-2 py-3 text-[12px] font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm transition-all cursor-pointer" 
-        />
-      </div>
-      <span className="text-[10px] font-black text-gray-300 uppercase shrink-0">au</span>
-      <div className="relative group flex-1">
-        <input 
-          type="date" 
-          value={formatDateForInput(endValue)} 
-          onChange={(e) => handleDateChange(endField, e.target.value)} 
-          className="w-full bg-white border border-gray-200 rounded-xl px-3 py-3 text-[12px] font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm transition-all cursor-pointer" 
-        />
-      </div>
-    </div>
-  );
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-20">
@@ -483,7 +603,7 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
                   </button>
                 ))}
                 {suggestionsChantier.map((f: any) => (
-                  <button key={f.properties.id} type="button" onClick={() => { setChantierSearch(f.properties.label); handleUpdate('details.adresseChantier', f.properties.label); setShowChantierSuggestions(false); }} className="w-full px-5 py-4 text-left hover:bg-indigo-50 flex items-start gap-4 border-b border-gray-50 last:border-0 group transition-all">
+                  <button key={f.properties.id} type="button" onClick={() => { setChantierSearch(f.properties.label); handleUpdate('details.adresseChantier', f.properties.label); setShowChantierSuggestions(false); }} className="w-full px-5 py-4 text-left hover:bg-indigo-50 flex items-start gap-4 border-b border-gray-100 last:border-0 group transition-all">
                     <div className="mt-1 p-1.5 bg-gray-50 rounded-lg text-gray-300 group-hover:text-indigo-600 transition-all"><Search size={16} /></div>
                     <div className="flex flex-col"><span className="text-[13px] font-bold text-gray-900">{f.properties.name}</span><span className="text-[11px] text-gray-400 font-medium">{f.properties.postcode} {f.properties.city}</span></div>
                   </button>
@@ -518,7 +638,7 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
                   </button>
                 ))}
                 {suggestionsFactu.map((f: any) => (
-                  <button key={f.properties.id} type="button" onClick={() => { setFactuSearch(f.properties.label); handleUpdate('details.adresseFacturation', f.properties.label); setShowFactuSuggestions(false); }} className="w-full px-5 py-4 text-left hover:bg-indigo-50 flex items-start gap-4 border-b border-gray-50 last:border-0 group transition-all">
+                  <button key={f.properties.id} type="button" onClick={() => { setFactuSearch(f.properties.label); handleUpdate('details.adresseFacturation', f.properties.label); setShowFactuSuggestions(false); }} className="w-full px-5 py-4 text-left hover:bg-indigo-50 flex items-start gap-4 border-b border-gray-100 last:border-0 group transition-all">
                     <div className="mt-1 p-1.5 bg-gray-50 rounded-lg text-gray-300 group-hover:text-indigo-600 transition-all"><Search size={16} /></div>
                     <div className="flex flex-col"><span className="text-[13px] font-bold text-gray-900">{f.properties.name}</span><span className="text-[11px] text-gray-400 font-medium">{f.properties.postcode} {f.properties.city}</span></div>
                   </button>
@@ -549,27 +669,33 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
         )}
 
         <Field label="Date Prévisionnelle Signature" colSpan="col-span-12 md:col-span-4">
-          <DateRangeField 
-            startField="details.dateSignatureStart"
-            endField="details.dateSignatureEnd"
+          <UnifiedRangePicker 
             startValue={project.details?.dateSignatureStart}
             endValue={project.details?.dateSignatureEnd}
+            onRangeChange={(start: string, end: string) => handleMultiUpdate({
+              'details.dateSignatureStart': start,
+              'details.dateSignatureEnd': end
+            })}
           />
         </Field>
         <Field label="Dates prévisionnel chantier" colSpan="col-span-12 md:col-span-4">
-          <DateRangeField 
-            startField="details.dateChantierStart"
-            endField="details.dateChantierEnd"
+          <UnifiedRangePicker 
             startValue={project.details?.dateChantierStart}
             endValue={project.details?.dateChantierEnd}
+            onRangeChange={(start: string, end: string) => handleMultiUpdate({
+              'details.dateChantierStart': start,
+              'details.dateChantierEnd': end
+            })}
           />
         </Field>
         <Field label="Date installation cuisine" colSpan="col-span-12 md:col-span-4">
-          <DateRangeField 
-            startField="details.dateInstallationStart"
-            endField="details.dateInstallationEnd"
+          <UnifiedRangePicker 
             startValue={project.details?.dateInstallationStart}
             endValue={project.details?.dateInstallationEnd}
+            onRangeChange={(start: string, end: string) => handleMultiUpdate({
+              'details.dateInstallationStart': start,
+              'details.dateInstallationEnd': end
+            })}
           />
         </Field>
       </Section>
