@@ -18,7 +18,10 @@ import {
   Trash2,
   AlertTriangle,
   Loader2,
-  Check
+  Check,
+  Truck,
+  Hammer,
+  Stamp
 } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, doc, deleteDoc } from '@firebase/firestore';
@@ -68,7 +71,6 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({ label, value, options, 
       
       {isOpen && (
         <div className="absolute top-full left-0 right-0 mt-1.5 bg-white border border-gray-200 rounded-xl shadow-2xl z-[100] min-w-[200px] overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-1 duration-200">
-          {/* Champ de recherche integré */}
           <div className="p-2 border-b border-gray-50 bg-gray-50/30">
             <div className="relative">
               <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -121,16 +123,22 @@ interface DirectoryProps {
   initialTab?: string;
   onAddClick: () => void;
   onClientClick: (client: Client) => void;
+  mode?: 'contacts' | 'suppliers' | 'artisans' | 'prescribers';
 }
 
-const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous', onAddClick, onClientClick }) => {
+const Directory: React.FC<DirectoryProps> = ({ 
+  userProfile, 
+  initialTab = 'Tous', 
+  onAddClick, 
+  onClientClick,
+  mode = 'contacts'
+}) => {
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
   const [activeTab, setActiveTab] = useState(initialTab);
   const [clients, setClients] = useState<Client[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const [searchQuery, setSearchQuery] = useState('');
-  // Sélection automatique de l'agenceur identifié par défaut
   const [filterAgenceur, setFilterAgenceur] = useState(userProfile?.name || '');
   const [filterOrigine, setFilterOrigine] = useState('');
   const [filterLocation, setFilterLocation] = useState('');
@@ -145,6 +153,44 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
   
   const toolbarRef = useRef<HTMLDivElement>(null);
 
+  // Configuration dynamique basée sur le mode
+  const config = useMemo(() => {
+    switch (mode) {
+      case 'suppliers':
+        return {
+          title: 'FOURNISSEURS',
+          icon: Truck,
+          addButton: 'Ajouter une fiche fournisseur',
+          tabs: ['Tous', 'Fournisseur', 'Institutionnel', 'Sous traitant'],
+          statusField: 'category' // Supposons qu'on filtre par ce champ pour les fournisseurs
+        };
+      case 'artisans':
+        return {
+          title: 'ARTISANS',
+          icon: Hammer,
+          addButton: 'Ajouter une fiche artisan',
+          tabs: ['Tous', 'Plombier', 'Électricien', 'Peintre', 'Menuisier'],
+          statusField: 'specialty'
+        };
+      case 'prescribers':
+        return {
+          title: 'PRESCRIPTEURS',
+          icon: Stamp,
+          addButton: 'Ajouter une fiche prescripteur',
+          tabs: ['Tous', 'Architecte', 'Décorateur', 'Courtier'],
+          statusField: 'type'
+        };
+      default:
+        return {
+          title: 'CLIENTS',
+          icon: Users,
+          addButton: 'Ajouter une fiche leads',
+          tabs: ['Tous', 'Lead', 'Prospect', 'Client'],
+          statusField: 'status'
+        };
+    }
+  }, [mode]);
+
   useEffect(() => {
     if (initialTab) {
         if (initialTab === 'Leads') setActiveTab('Lead');
@@ -157,17 +203,28 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
   useEffect(() => {
     if (!userProfile?.companyId) return;
     const clientsRef = collection(db, 'clients');
+    // On pourrait filtrer ici par type de collection/type de contact si la structure le permet
     const q = query(clientsRef, where('companyId', '==', userProfile.companyId));
+    
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const clientsList = snapshot.docs.map(doc => ({
+      let clientsList = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       })) as Client[];
+
+      // Filtre basique par "catégorie" globale si on simule plusieurs annuaires dans une seule collection
+      // Pour cet exemple, on filtre sur le champ 'type' s'il existe
+      if (mode !== 'contacts') {
+        clientsList = clientsList.filter(c => (c as any).directoryType === mode);
+      } else {
+        clientsList = clientsList.filter(c => !(c as any).directoryType || (c as any).directoryType === 'contacts');
+      }
+
       setClients(clientsList);
       setIsLoading(false);
     });
     return () => unsubscribe();
-  }, [userProfile?.companyId]);
+  }, [userProfile?.companyId, mode]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -180,20 +237,9 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
   }, []);
 
   const getEffectiveStatus = (c: Client) => {
-    return c.status;
+    if (mode === 'contacts') return c.status;
+    return (c as any).statusLabel || 'Général';
   };
-
-  const uniqueAgenceurs = useMemo(() => 
-    Array.from(new Set(clients.map(c => c.addedBy?.name).filter(Boolean))).sort(), 
-  [clients]);
-  
-  const uniqueOrigines = useMemo(() => 
-    Array.from(new Set(clients.map(c => c.origin).filter(Boolean))).sort(), 
-  [clients]);
-  
-  const uniqueLocations = useMemo(() => 
-    Array.from(new Set(clients.map(c => c.location).filter(Boolean))).sort(), 
-  [clients]);
 
   const filteredClients = useMemo(() => {
     return clients.filter(c => {
@@ -209,7 +255,7 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
       
       return matchesTab && matchesSearch && matchesAgenceur && matchesOrigine && matchesLocation && matchesProject;
     });
-  }, [clients, activeTab, searchQuery, filterAgenceur, filterOrigine, filterLocation, filterProject]);
+  }, [clients, activeTab, searchQuery, filterAgenceur, filterOrigine, filterLocation, filterProject, mode]);
 
   const resetFilters = () => {
     setSearchQuery('');
@@ -219,12 +265,9 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
     setFilterProject('');
   };
 
-  const tabs = useMemo(() => [
-    { label: 'Tous', count: clients.length },
-    { label: 'Lead', count: clients.filter(c => getEffectiveStatus(c) === 'Leads').length },
-    { label: 'Prospect', count: clients.filter(c => getEffectiveStatus(c) === 'Prospect').length },
-    { label: 'Client', count: clients.filter(c => getEffectiveStatus(c) === 'Client').length },
-  ], [clients]);
+  const uniqueAgenceurs = useMemo(() => Array.from(new Set(clients.map(c => c.addedBy?.name).filter(Boolean))).sort(), [clients]);
+  const uniqueOrigines = useMemo(() => Array.from(new Set(clients.map(c => c.origin).filter(Boolean))).sort(), [clients]);
+  const uniqueLocations = useMemo(() => Array.from(new Set(clients.map(c => c.location).filter(Boolean))).sort(), [clients]);
 
   return (
     <div className="p-6 space-y-4 bg-gray-50 h-[calc(100vh-64px)] flex flex-col overflow-hidden font-sans">
@@ -232,23 +275,23 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">
         <div className="flex items-center space-x-1">
              <div className="flex items-center space-x-2 mr-6">
-                 <Users size={22} className="text-gray-900" />
-                 <span className="font-black text-xl text-gray-900 uppercase tracking-tighter">{activeTab}</span>
+                 <config.icon size={22} className="text-gray-900" />
+                 <span className="font-black text-xl text-gray-900 uppercase tracking-tighter">{config.title}</span>
                  <span className="text-gray-300 font-bold text-sm">({filteredClients.length})</span>
              </div>
              
              <div className="flex bg-gray-200 rounded-full p-1 gap-1">
-                 {tabs.map(tab => (
+                 {config.tabs.map(tab => (
                      <button
-                        key={tab.label}
-                        onClick={() => setActiveTab(tab.label)}
+                        key={tab}
+                        onClick={() => setActiveTab(tab)}
                         className={`px-5 py-2 rounded-full text-xs font-bold transition-all ${
-                            activeTab === tab.label 
+                            activeTab === tab 
                             ? 'bg-gray-900 text-white shadow-lg' 
                             : 'text-gray-500 hover:text-gray-900'
                         }`}
                      >
-                         {tab.label} <span className="opacity-40 ml-1">({tab.count})</span>
+                         {tab}
                      </button>
                  ))}
              </div>
@@ -259,7 +302,7 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
             className="flex items-center px-6 py-3 bg-gray-900 text-white rounded-2xl text-sm font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-gray-200"
         >
             <Plus size={18} className="mr-2" />
-            Ajouter une fiche leads
+            {config.addButton}
         </button>
       </div>
 
@@ -289,7 +332,7 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-gray-900 transition-colors" size={18} />
             <input 
                 type="text" 
-                placeholder="Chercher client..." 
+                placeholder="Rechercher..." 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-11 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-bold text-gray-900 focus:outline-none focus:border-indigo-400 shadow-sm transition-all"
@@ -299,7 +342,7 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
         <div className="md:col-span-8 flex gap-2">
           <FilterDropdown 
             id="agenceur"
-            label="Agenceur.se" 
+            label="Ajouté par" 
             value={filterAgenceur} 
             options={uniqueAgenceurs} 
             onSelect={setFilterAgenceur} 
@@ -324,15 +367,17 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
             isOpen={activeDropdown === 'localisation'}
             onToggle={setActiveDropdown}
           />
-          <FilterDropdown 
-            id="projet"
-            label="Projet(s)" 
-            value={filterProject} 
-            options={['Avec projet(s)', 'Sans projet']} 
-            onSelect={setFilterProject} 
-            isOpen={activeDropdown === 'projet'}
-            onToggle={setActiveDropdown}
-          />
+          {mode === 'contacts' && (
+            <FilterDropdown 
+              id="projet"
+              label="Projet(s)" 
+              value={filterProject} 
+              options={['Avec projet(s)', 'Sans projet']} 
+              onSelect={setFilterProject} 
+              isOpen={activeDropdown === 'projet'}
+              onToggle={setActiveDropdown}
+            />
+          )}
 
           {(searchQuery || filterAgenceur || filterOrigine || filterLocation || filterProject) && (
             <button 
@@ -354,7 +399,7 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
         ) : filteredClients.length === 0 ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 p-8 text-center z-10">
             <Filter size={48} className="mb-4 opacity-10" />
-            <p className="text-sm font-black text-gray-500 uppercase tracking-widest">Aucun contact trouvé</p>
+            <p className="text-sm font-black text-gray-500 uppercase tracking-widest">Aucun résultat trouvé</p>
             <button onClick={resetFilters} className="mt-4 text-indigo-600 font-bold text-sm hover:underline">Effacer les filtres</button>
           </div>
         ) : null}
@@ -371,7 +416,7 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
                                 <th className="px-8 py-5">Ajouté par</th>
                                 <th className="px-8 py-5">Origine</th>
                                 <th className="px-8 py-5">Localisation</th>
-                                <th className="px-8 py-5 text-center">Projet(s)</th>
+                                {mode === 'contacts' && <th className="px-8 py-5 text-center">Projet(s)</th>}
                                 <th className="px-8 py-5 text-center">Statut</th>
                                 <th className="px-8 py-5">Ajouté le</th>
                                 <th className="px-8 py-5 text-right">Action</th>
@@ -395,27 +440,29 @@ const Directory: React.FC<DirectoryProps> = ({ userProfile, initialTab = 'Tous',
                                     </td>
                                     <td className="px-8 py-5 text-[13px] font-bold text-gray-500 uppercase">{client.origin}</td>
                                     <td className="px-8 py-5 text-[13px] font-bold text-gray-500">{client.location}</td>
-                                    <td className="px-8 py-5">
-                                        {!client.projectCount || client.projectCount === 0 ? (
-                                            <div className="flex justify-center">
-                                              <span className="px-3 py-1 bg-gray-50 text-gray-300 text-[10px] font-black rounded-full">-</span>
-                                            </div>
-                                        ) : (
-                                            <div className="flex items-center justify-center gap-2">
-                                              <div className="w-7 h-7 bg-gray-900 text-white rounded-full flex items-center justify-center text-[11px] font-black shadow-lg">
-                                                {client.projectCount}
+                                    {mode === 'contacts' && (
+                                      <td className="px-8 py-5">
+                                          {!client.projectCount || client.projectCount === 0 ? (
+                                              <div className="flex justify-center">
+                                                <span className="px-3 py-1 bg-gray-50 text-gray-300 text-[10px] font-black rounded-full">-</span>
                                               </div>
-                                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">projet{client.projectCount > 1 ? 's' : ''}</span>
-                                            </div>
-                                        )}
-                                    </td>
+                                          ) : (
+                                              <div className="flex items-center justify-center gap-2">
+                                                <div className="w-7 h-7 bg-gray-900 text-white rounded-full flex items-center justify-center text-[11px] font-black shadow-lg">
+                                                  {client.projectCount}
+                                                </div>
+                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">projet{client.projectCount > 1 ? 's' : ''}</span>
+                                              </div>
+                                          )}
+                                      </td>
+                                    )}
                                     <td className="px-8 py-5 text-center">
                                         <span className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest ${
                                             effectiveStatus === 'Prospect' ? 'bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-100 shadow-sm' :
                                             effectiveStatus === 'Client' ? 'bg-cyan-50 text-cyan-700 border border-cyan-100 shadow-sm' :
                                             'bg-indigo-50 text-indigo-700 border border-indigo-100 shadow-sm'
                                         }`}>
-                                            {effectiveStatus === 'Leads' ? 'LEAD' : effectiveStatus.toUpperCase()}
+                                            {effectiveStatus}
                                         </span>
                                     </td>
                                     <td className="px-8 py-5 text-[13px] font-black text-gray-400 italic">{client.dateAdded}</td>

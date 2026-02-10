@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   LayoutDashboard, 
   CheckSquare, 
@@ -10,7 +10,12 @@ import {
   BarChart2, 
   LogOut, 
   ChevronsLeft,
-  ChevronRight
+  ChevronDown,
+  UserCircle,
+  Truck,
+  Hammer,
+  Stamp,
+  Users
 } from 'lucide-react';
 import { Page } from '../types';
 
@@ -29,24 +34,17 @@ const Sidebar: React.FC<SidebarProps> = ({
   isCollapsed,
   setIsCollapsed
 }) => {
+  const [isAnnuaireOpen, setIsAnnuaireOpen] = useState(true);
   const LOGO_URL = "https://framerusercontent.com/images/BrlQcPpho2hjJ0qjdKGIdbfXY.png?width=1024&height=276";
-  const MINI_LOGO = "https://framerusercontent.com/images/7u9hI9mH9N3V2H2B3v4V5z.png"; // Placeholder pour logo réduit si existant
-
-  const menuItems = [
-    { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard, page: 'dashboard' as Page },
-    { id: 'tasks', label: 'Tâches & mémo', icon: CheckSquare, page: 'tasks' as Page },
-    { id: 'directory', label: 'Annuaire', icon: Book, page: 'directory' as Page },
-  ];
-
-  const bottomItems = [
-    { id: 'projects', label: 'Suivi projets', icon: Briefcase, page: 'projects' as Page },
-    { id: 'articles', label: 'Articles', icon: Box, page: 'articles' as Page },
-    { id: 'agenda', label: 'Agenda', icon: Calendar, page: 'agenda' as Page },
-    { id: 'kpi', label: 'KPI', icon: BarChart2, page: 'kpi' as Page },
-    { id: 'company', label: 'Notre entreprise', icon: Briefcase, page: 'company' as Page },
-  ];
 
   const isActive = (pageName: string) => currentPage === pageName;
+
+  const annuaireSubItems = [
+    { id: 'directory', label: 'Fiche contact', icon: UserCircle, page: 'directory' as Page },
+    { id: 'suppliers', label: 'Fiche fournisseurs', icon: Truck, page: 'suppliers' as Page },
+    { id: 'artisans', label: 'Fiche artisans', icon: Hammer, page: 'artisans' as Page },
+    { id: 'prescriber', label: 'Fiche prescripteur', icon: Stamp, page: 'prescriber' as Page },
+  ];
 
   return (
     <div className={`${isCollapsed ? 'w-24' : 'w-72'} h-screen bg-white border-r border-gray-100 flex flex-col font-sans text-gray-600 transition-all duration-300 ease-in-out z-50 shrink-0 shadow-sm overflow-hidden`}>
@@ -65,41 +63,86 @@ const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Main Menu Scrollable Area */}
-      <div className="flex-1 px-4 space-y-8 overflow-y-auto hide-scrollbar">
+      <div className="flex-1 px-4 space-y-4 overflow-y-auto hide-scrollbar">
         
         {/* Navigation Section */}
         <div className="space-y-1.5">
           {!isCollapsed && <p className="px-3 text-[10px] font-black text-gray-300 uppercase tracking-widest mb-3 animate-in fade-in">Principal</p>}
-          {menuItems.map((item) => (
+          
+          <button
+            onClick={() => setCurrentPage('dashboard')}
+            className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'px-4'} py-3.5 rounded-2xl transition-all duration-200 group relative ${
+              isActive('dashboard') 
+                ? 'bg-gray-900 text-white shadow-lg shadow-gray-200' 
+                : 'hover:bg-gray-50 text-gray-500 hover:text-gray-900'
+            }`}
+          >
+            <LayoutDashboard size={22} className={`${isCollapsed ? 'm-0' : 'mr-4'} ${isActive('dashboard') ? 'text-white' : 'text-gray-400 group-hover:text-gray-900'}`} />
+            {!isCollapsed && <span className="text-[15px] font-bold whitespace-nowrap">Tableau de bord</span>}
+          </button>
+
+          <button
+            onClick={() => setCurrentPage('tasks')}
+            className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'px-4'} py-3.5 rounded-2xl transition-all duration-200 group relative ${
+              isActive('tasks') 
+                ? 'bg-gray-900 text-white shadow-lg shadow-gray-200' 
+                : 'hover:bg-gray-50 text-gray-500 hover:text-gray-900'
+            }`}
+          >
+            <CheckSquare size={22} className={`${isCollapsed ? 'm-0' : 'mr-4'} ${isActive('tasks') ? 'text-white' : 'text-gray-400 group-hover:text-gray-900'}`} />
+            {!isCollapsed && <span className="text-[15px] font-bold whitespace-nowrap">Tâches & mémo</span>}
+          </button>
+
+          {/* Annuaire Group */}
+          <div className="space-y-1">
             <button
-              key={item.id}
-              onClick={() => setCurrentPage(item.page)}
+              onClick={() => !isCollapsed && setIsAnnuaireOpen(!isAnnuaireOpen)}
               className={`w-full flex items-center ${isCollapsed ? 'justify-center' : 'px-4'} py-3.5 rounded-2xl transition-all duration-200 group relative ${
-                isActive(item.page) 
-                  ? 'bg-gray-900 text-white shadow-lg shadow-gray-200' 
-                  : 'hover:bg-gray-50 text-gray-500 hover:text-gray-900'
+                isActive('directory') || isActive('suppliers') || isActive('artisans') || isActive('prescriber')
+                  ? 'text-gray-900 font-bold' 
+                  : 'text-gray-500 hover:bg-gray-50'
               }`}
             >
-              <item.icon 
-                size={22} 
-                className={`${isCollapsed ? 'm-0' : 'mr-4'} ${isActive(item.page) ? 'text-white' : 'text-gray-400 group-hover:text-gray-900'}`} 
-              />
+              <Book size={22} className={`${isCollapsed ? 'm-0' : 'mr-4'} ${isActive('directory') ? 'text-gray-900' : 'text-gray-400'}`} />
               {!isCollapsed && (
-                <span className={`text-[15px] font-bold whitespace-nowrap animate-in slide-in-from-left-2`}>
-                  {item.label}
-                </span>
-              )}
-              {isCollapsed && isActive(item.page) && (
-                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1.5 h-6 bg-gray-900 rounded-l-full" />
+                <>
+                  <span className="text-[15px] font-bold whitespace-nowrap flex-1 text-left">Annuaire</span>
+                  <ChevronDown size={16} className={`transition-transform duration-200 ${isAnnuaireOpen ? 'rotate-180' : ''}`} />
+                </>
               )}
             </button>
-          ))}
+
+            {!isCollapsed && isAnnuaireOpen && (
+              <div className="pl-6 space-y-1 animate-in slide-in-from-top-2 duration-300">
+                {annuaireSubItems.map((sub) => (
+                  <button
+                    key={sub.id}
+                    onClick={() => setCurrentPage(sub.page)}
+                    className={`w-full flex items-center px-4 py-2.5 rounded-xl transition-all duration-200 group ${
+                      isActive(sub.page) 
+                        ? 'bg-gray-100 text-gray-900' 
+                        : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'
+                    }`}
+                  >
+                    <sub.icon size={18} className={`mr-3 ${isActive(sub.page) ? 'text-gray-900' : 'text-gray-300 group-hover:text-gray-400'}`} />
+                    <span className="text-[13px] font-bold">{sub.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Administration Section */}
         <div className="space-y-1.5">
           {!isCollapsed && <p className="px-3 text-[10px] font-black text-gray-300 uppercase tracking-widest mb-3 animate-in fade-in">Gestion</p>}
-          {bottomItems.map((item) => (
+          {[
+            { id: 'projects', label: 'Suivi projets', icon: Briefcase, page: 'projects' as Page },
+            { id: 'articles', label: 'Articles', icon: Box, page: 'articles' as Page },
+            { id: 'agenda', label: 'Agenda', icon: Calendar, page: 'agenda' as Page },
+            { id: 'kpi', label: 'KPI', icon: BarChart2, page: 'kpi' as Page },
+            { id: 'company', label: 'Notre entreprise', icon: Briefcase, page: 'company' as Page },
+          ].map((item) => (
             <button
               key={item.id}
               onClick={() => setCurrentPage(item.page)}
@@ -113,11 +156,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                 size={22} 
                 className={`${isCollapsed ? 'm-0' : 'mr-4'} ${isActive(item.page) ? 'text-white' : 'text-gray-400 group-hover:text-gray-900'}`} 
               />
-              {!isCollapsed && (
-                <span className="text-[15px] font-bold whitespace-nowrap animate-in slide-in-from-left-2">
-                  {item.label}
-                </span>
-              )}
+              {!isCollapsed && <span className="text-[15px] font-bold whitespace-nowrap">{item.label}</span>}
             </button>
           ))}
         </div>

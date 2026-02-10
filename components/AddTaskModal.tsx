@@ -118,7 +118,6 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
   // Form States
   const [title, setTitle] = useState('');
   const [selectedCollaboratorIdx, setSelectedCollaboratorIdxValue] = useState(0);
-  const [selectedReferentName, setSelectedReferentName] = useState('');
   const [selectedClientId, setSelectedClientId] = useState(initialClientId);
   const [selectedProjectId, setSelectedProjectId] = useState(initialProjectId);
   const [selectedStatusLabel, setSelectedStatusLabel] = useState('À qualifier');
@@ -249,9 +248,6 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
         const clientSnap = await getDoc(doc(db, 'clients', selectedClientId));
         if (clientSnap.exists()) {
           const data = clientSnap.data();
-          
-          // Récupérer le référent : par défaut le créateur si non défini
-          setSelectedReferentName(data.details?.referent || data.addedBy?.name || '');
           
           // Données de qualification pour les tâches auto - Récupération de la fiche lead
           if (isCurrentlyAuto) {
@@ -576,12 +572,10 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
         taskId = docRef.id;
       }
 
-      // MISE À JOUR DE LA FICHE CLIENT (SYNCHRO QUALIF + RÉFÉRENT + PARRAINAGE)
+      // MISE À JOUR DE LA FICHE CLIENT (SYNCHRO QUALIF + PARRAINAGE)
       if (selectedClientId) {
         const clientRef = doc(db, 'clients', selectedClientId);
-        const clientUpdate: any = {
-          "details.referent": selectedReferentName
-        };
+        const clientUpdate: any = {};
 
         if (isLeadAutoTask) {
           // On garde la mise à jour en fond même si le bloc UI est masqué, car qualifData est sync au montage
@@ -601,7 +595,9 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
           }
         }
 
-        await updateDoc(clientRef, clientUpdate);
+        if (Object.keys(clientUpdate).length > 0) {
+          await updateDoc(clientRef, clientUpdate);
+        }
       }
 
       if (isScheduled && agendaDate) {
@@ -666,7 +662,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
                         ? 'Qualification de la fiche lead' 
                         : (isEdit 
                             ? `Modifier : ${taskToEdit?.title}` 
-                            : `Créer une ${isMemo ? 'note mémo' : 'tâche manuelle'}`
+                            : `Créer une tâche manuelle`
                           )
                       )
                   }
@@ -889,10 +885,10 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
             {!isMemo && (
               <div className={`grid grid-cols-1 ${isLeadAutoTask ? 'md:grid-cols-1' : 'md:grid-cols-2'} gap-6 animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                 <div className="space-y-2 relative" ref={clientSearchRef}>
-                  <label className="block text-xs font-bold text-gray-500 ml-1">Client lié (verrouillé)</label>
+                  <label className="block text-xs font-bold text-gray-500 ml-1">Client lié {(isLeadAutoTask || isEdit || isProjectAutoTask) ? '(verrouillé)' : ''}</label>
                   <div className="relative">
                     <input 
-                      disabled={isLeadAutoTask}
+                      disabled={isLeadAutoTask || isEdit || isProjectAutoTask}
                       type="text"
                       value={clientSearchQuery}
                       onChange={(e) => {
@@ -905,7 +901,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
                       className="w-full pl-10 pr-10 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 focus:border-[#A886D7] outline-none transition-all shadow-sm disabled:bg-gray-50 disabled:text-gray-400"
                     />
                     <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-300" />
-                    {selectedClientId && !isLeadAutoTask && (
+                    {selectedClientId && !isLeadAutoTask && !isEdit && !isProjectAutoTask && (
                       <button 
                         type="button"
                         onClick={() => { setSelectedClientId(''); setClientSearchQuery(''); }}
@@ -916,7 +912,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
                     )}
                   </div>
 
-                  {showClientResults && !isLeadAutoTask && (
+                  {showClientResults && !isLeadAutoTask && !isEdit && !isProjectAutoTask && (
                     <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[110] overflow-hidden max-h-60 overflow-y-auto animate-in fade-in slide-in-from-top-2 duration-200">
                       <div className="p-2 space-y-1">
                         {filteredClients.length > 0 ? (
@@ -949,11 +945,11 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
 
                 {!isLeadAutoTask && (
                   <div className="space-y-2">
-                    <label className="block text-xs font-bold text-gray-500 ml-1">Projet lié (optionnel)</label>
+                    <label className="block text-xs font-bold text-gray-500 ml-1">Projet lié {isProjectAutoTask ? '(verrouillé)' : '(optionnel)'}</label>
                     <div className="relative">
                       <select 
                         className="w-full appearance-none px-4 py-3 bg-white border border-gray-200 rounded-xl text-sm font-semibold text-gray-800 hover:border-[#A886D7] outline-none transition-all cursor-pointer disabled:bg-gray-50 disabled:text-gray-400"
-                        disabled={!selectedClientId}
+                        disabled={!selectedClientId || isProjectAutoTask}
                         value={selectedProjectId}
                         onChange={(e) => setSelectedProjectId(e.target.value)}
                       >
@@ -962,7 +958,7 @@ const AddTaskModal: React.FC<AddTaskModalProps> = ({
                           <option key={p.id} value={p.id}>{p.name}</option>
                         ))}
                       </select>
-                      <ChevronDown size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      {!isProjectAutoTask && <ChevronDown size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />}
                     </div>
                   </div>
                 )}

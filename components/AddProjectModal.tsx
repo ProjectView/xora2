@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X, Briefcase, Check, Loader2, ChevronDown, MapPin, CheckCircle2, ArrowRight } from 'lucide-react';
 import { db } from '../firebase';
@@ -386,36 +385,39 @@ const AddProjectModal: React.FC<AddProjectModalProps> = ({
             </div>
             <button type="button" onClick={onClose} className="p-2 border border-gray-200 hover:bg-white rounded-lg transition-all text-gray-400 hover:text-gray-900 shadow-sm"><X size={20} /></button>
           </div>
-          <div className="p-8 space-y-6 bg-white overflow-y-auto max-h-[75vh] hide-scrollbar">
-            <div className="bg-[#FBFBFB] border border-gray-100 rounded-2xl p-6 grid grid-cols-3 gap-6">
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Origine</label>
-                <div className="relative">
-                  <select value={formData.categorie} onChange={(e) => setFormData({...formData, categorie: e.target.value, origine: '', sousOrigine: ''})} className="w-full appearance-none bg-white border border-gray-100 rounded-xl px-4 py-3 text-[13px] text-gray-900 outline-none focus:border-gray-900 transition-all font-bold shadow-sm">
-                    <option value="">Sélectionner</option>
-                    {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                  </select>
-                  <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
+          <div className="p-8 space-y-8 bg-white overflow-y-auto max-h-[75vh] hide-scrollbar">
+            <div className="space-y-4">
+              <h3 className="text-[11px] font-black text-indigo-500 uppercase tracking-[0.2em] ml-1">Origine du projet</h3>
+              <div className="bg-[#FBFBFB] border border-gray-100 rounded-2xl p-6 grid grid-cols-3 gap-6">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Origine</label>
+                  <div className="relative">
+                    <select value={formData.categorie} onChange={(e) => setFormData({...formData, categorie: e.target.value, origine: '', sousOrigine: ''})} className="w-full appearance-none bg-white border border-gray-100 rounded-xl px-4 py-3 text-[13px] text-gray-900 outline-none focus:border-gray-900 transition-all font-bold shadow-sm">
+                      <option value="">Sélectionner</option>
+                      {categories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                    <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Sous-origine</label>
-                <div className="relative">
-                  <select value={formData.origine} onChange={(e) => setFormData({...formData, origine: e.target.value, sousOrigine: ''})} className="w-full appearance-none bg-white border border-gray-100 rounded-xl px-4 py-3 text-[13px] text-gray-900 outline-none focus:border-gray-900 transition-all font-bold shadow-sm">
-                    <option value="">Sélectionner</option>
-                    {origines.map(orig => <option key={orig} value={orig}>{orig}</option>)}
-                  </select>
-                  <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Sous-origine</label>
+                  <div className="relative">
+                    <select value={formData.origine} onChange={(e) => setFormData({...formData, origine: e.target.value, sousOrigine: ''})} className="w-full appearance-none bg-white border border-gray-100 rounded-xl px-4 py-3 text-[13px] text-gray-900 outline-none focus:border-gray-900 transition-all font-bold shadow-sm">
+                      <option value="">Sélectionner</option>
+                      {origines.map(orig => <option key={orig} value={orig}>{orig}</option>)}
+                    </select>
+                    <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Sources</label>
-                <div className="relative">
-                  <select value={formData.sousOrigine} onChange={(e) => setFormData({...formData, sousOrigine: e.target.value})} className="w-full appearance-none bg-white border border-gray-100 rounded-xl px-4 py-3 text-[13px] text-gray-900 outline-none focus:border-gray-900 transition-all font-bold shadow-sm">
-                    <option value="">Sélectionner</option>
-                    {sousOrigines.map(so => <option key={so} value={so}>{so}</option>)}
-                  </select>
-                  <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Sources</label>
+                  <div className="relative">
+                    <select value={formData.sousOrigine} onChange={(e) => setFormData({...formData, sousOrigine: e.target.value})} className="w-full appearance-none bg-white border border-gray-100 rounded-xl px-4 py-3 text-[13px] text-gray-900 outline-none focus:border-gray-900 transition-all font-bold shadow-sm">
+                      <option value="">Sélectionner</option>
+                      {sousOrigines.map(so => <option key={so} value={so}>{so}</option>)}
+                    </select>
+                    <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" />
+                  </div>
                 </div>
               </div>
             </div>

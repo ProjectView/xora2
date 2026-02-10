@@ -91,7 +91,10 @@ function App() {
   const getHeaderTitle = (page: Page) => {
     switch (page) {
       case 'dashboard': return 'Tableau de bord';
-      case 'directory': return 'Annuaire';
+      case 'directory': return 'Annuaire Contacts';
+      case 'suppliers': return 'Annuaire Fournisseurs';
+      case 'artisans': return 'Annuaire Artisans';
+      case 'prescriber': return 'Annuaire Prescripteurs';
       case 'agenda': return 'Agenda';
       case 'articles': return 'Articles';
       case 'tasks': return 'Tâches & mémo';
@@ -109,13 +112,14 @@ function App() {
     setSelectedProject(null);
     if (page === 'directory' && options?.tab) {
       setDirectoryActiveTab(options.tab);
-    } else if (page === 'directory') {
+    } else {
       setDirectoryActiveTab('Tous');
     }
   };
 
   const handleProjectSelect = (project: any) => {
     setSelectedProject(project);
+    // On ne retire pas selectedClient pour pouvoir y revenir au bouton retour
     setCurrentPage('projects');
   };
 
@@ -180,6 +184,30 @@ function App() {
   }
 
   const renderContent = () => {
+    // PRIORITÉ 1 : Fiche Projet (permet l'ouverture depuis n'importe où)
+    if (selectedProject) {
+      return (
+        <ProjectDetails 
+          project={selectedProject} 
+          userProfile={userProfile} 
+          onBack={() => setSelectedProject(null)} 
+        />
+      );
+    }
+
+    // PRIORITÉ 2 : Fiche Client
+    if (selectedClient) {
+      return (
+        <ClientDetails 
+          client={selectedClient} 
+          userProfile={userProfile} 
+          onBack={() => setSelectedClient(null)}
+          onProjectSelect={handleProjectSelect}
+        />
+      );
+    }
+
+    // PRIORITÉ 3 : Pages de navigation
     switch (currentPage) {
       case 'dashboard': 
         return (
@@ -187,39 +215,56 @@ function App() {
             userProfile={userProfile} 
             onClientClick={(client) => {
               setSelectedClient(client);
-              setCurrentPage('directory');
             }}
             onAddClientClick={() => setIsModalOpen(true)}
             onNavigate={(page, options) => handlePageChange(page, options)}
           />
         );
       case 'directory':
-        return selectedClient ? (
-          <ClientDetails 
-            client={selectedClient} 
-            userProfile={userProfile} 
-            onBack={() => setSelectedClient(null)}
-            onProjectSelect={handleProjectSelect}
-          />
-        ) : (
+        return (
           <Directory 
             userProfile={userProfile}
             initialTab={directoryActiveTab}
             onAddClick={() => setIsModalOpen(true)} 
-            onClientClick={(client) => setSelectedClient(client)} 
+            onClientClick={(client) => setSelectedClient(client)}
+            mode="contacts"
+          />
+        );
+      case 'suppliers':
+        return (
+          <Directory 
+            userProfile={userProfile}
+            initialTab="Tous"
+            onAddClick={() => setIsModalOpen(true)} 
+            onClientClick={(client) => setSelectedClient(client)}
+            mode="suppliers"
+          />
+        );
+      case 'artisans':
+        return (
+          <Directory 
+            userProfile={userProfile}
+            initialTab="Tous"
+            onAddClick={() => setIsModalOpen(true)} 
+            onClientClick={(client) => setSelectedClient(client)}
+            mode="artisans"
+          />
+        );
+      case 'prescriber':
+        return (
+          <Directory 
+            userProfile={userProfile}
+            initialTab="Tous"
+            onAddClick={() => setIsModalOpen(true)} 
+            onClientClick={(client) => setSelectedClient(client)}
+            mode="prescribers"
           />
         );
       case 'agenda': return <Agenda userProfile={userProfile} />;
       case 'articles': return <Articles userProfile={userProfile} />;
       case 'tasks': return <TasksMemo userProfile={userProfile} />;
       case 'projects': 
-        return selectedProject ? (
-          <ProjectDetails 
-            project={selectedProject} 
-            userProfile={userProfile} 
-            onBack={() => setSelectedProject(null)} 
-          />
-        ) : (
+        return (
           <ProjectTracking 
             userProfile={userProfile}
             onProjectClick={(project) => setSelectedProject(project)} 
