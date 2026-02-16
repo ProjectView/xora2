@@ -1,18 +1,22 @@
 
-import React, { useState } from 'react';
-import { X, Box, Plus, Loader2, Euro, BookOpen, Layers, Tag } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, Box, Plus, Loader2, Euro, BookOpen, Layers, Tag, Save } from 'lucide-react';
 import { db } from '../firebase';
 // Use @firebase/firestore to fix named export resolution issues
-import { collection, addDoc, serverTimestamp } from '@firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, updateDoc } from '@firebase/firestore';
+import { Article } from '../types';
 
 interface AddArticleModalProps {
   isOpen: boolean;
   onClose: () => void;
   userProfile: any;
+  articleToEdit?: Article | null;
 }
 
-const AddArticleModal: React.FC<AddArticleModalProps> = ({ isOpen, onClose, userProfile }) => {
+const AddArticleModal: React.FC<AddArticleModalProps> = ({ isOpen, onClose, userProfile, articleToEdit }) => {
   const [isLoading, setIsLoading] = useState(false);
+  const isEdit = !!articleToEdit;
+  
   const [formData, setFormData] = useState({
     metier: 'Cuisine',
     rubrique: 'Electromenager',
@@ -23,6 +27,32 @@ const AddArticleModal: React.FC<AddArticleModalProps> = ({ isOpen, onClose, user
     prixMaxiTTC: ''
   });
 
+  useEffect(() => {
+    if (isOpen) {
+      if (articleToEdit) {
+        setFormData({
+          metier: articleToEdit.metier || 'Cuisine',
+          rubrique: articleToEdit.rubrique || 'Electromenager',
+          famille: articleToEdit.famille || '',
+          collection: articleToEdit.collection || '',
+          descriptif: articleToEdit.descriptif || '',
+          prixMiniTTC: articleToEdit.prixMiniTTC ? articleToEdit.prixMiniTTC.toString() : '',
+          prixMaxiTTC: articleToEdit.prixMaxiTTC ? articleToEdit.prixMaxiTTC.toString() : ''
+        });
+      } else {
+        setFormData({
+          metier: 'Cuisine',
+          rubrique: 'Electromenager',
+          famille: '',
+          collection: '',
+          descriptif: '',
+          prixMiniTTC: '',
+          prixMaxiTTC: ''
+        });
+      }
+    }
+  }, [isOpen, articleToEdit]);
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -31,7 +61,7 @@ const AddArticleModal: React.FC<AddArticleModalProps> = ({ isOpen, onClose, user
 
     setIsLoading(true);
     try {
-      await addDoc(collection(db, 'articles'), {
+      const articleData = {
         metier: formData.metier,
         rubrique: formData.rubrique,
         famille: formData.famille,
@@ -39,21 +69,21 @@ const AddArticleModal: React.FC<AddArticleModalProps> = ({ isOpen, onClose, user
         descriptif: formData.descriptif,
         prixMiniTTC: Number(formData.prixMiniTTC),
         prixMaxiTTC: Number(formData.prixMaxiTTC),
-        companyId: userProfile.companyId,
-        createdBy: userProfile.name,
-        createdAt: serverTimestamp(),
-      });
+      };
+
+      if (isEdit && articleToEdit) {
+        const articleRef = doc(db, 'articles', articleToEdit.id);
+        await updateDoc(articleRef, articleData);
+      } else {
+        await addDoc(collection(db, 'articles'), {
+          ...articleData,
+          companyId: userProfile.companyId,
+          createdBy: userProfile.name,
+          createdAt: serverTimestamp(),
+        });
+      }
       
       onClose();
-      setFormData({
-        metier: 'Cuisine',
-        rubrique: 'Electromenager',
-        famille: '',
-        collection: '',
-        descriptif: '',
-        prixMiniTTC: '',
-        prixMaxiTTC: ''
-      });
     } catch (error) {
       console.error(error);
       alert("Erreur lors de l'enregistrement de l'article.");
@@ -74,7 +104,7 @@ const AddArticleModal: React.FC<AddArticleModalProps> = ({ isOpen, onClose, user
                 <Box size={24} />
               </div>
               <div>
-                <h2 className="text-[18px] font-bold text-gray-900 tracking-tight">Nouvel article catalogue</h2>
+                <h2 className="text-[18px] font-bold text-gray-900 tracking-tight">{isEdit ? "Modifier l'article" : "Nouvel article catalogue"}</h2>
                 <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest">Entreprise : {userProfile?.companyName}</p>
               </div>
             </div>
@@ -205,14 +235,14 @@ const AddArticleModal: React.FC<AddArticleModalProps> = ({ isOpen, onClose, user
             <button 
               type="submit"
               disabled={isLoading || !formData.famille || !formData.descriptif || !formData.prixMiniTTC || !formData.prixMaxiTTC}
-              className="w-full flex items-center justify-center gap-3 px-10 py-5 bg-gray-900 text-white rounded-2xl text-[15px] font-bold shadow-2xl hover:bg-black transition-all active:scale-[0.98] disabled:opacity-50"
+              className={`w-full flex items-center justify-center gap-3 px-10 py-5 text-white rounded-2xl text-[15px] font-bold shadow-2xl transition-all active:scale-[0.98] disabled:opacity-50 ${isEdit ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200' : 'bg-gray-900 hover:bg-black shadow-gray-200'}`}
             >
               {isLoading ? (
                 <Loader2 className="animate-spin" size={20} />
               ) : (
-                <Plus size={20} />
+                isEdit ? <Save size={20} /> : <Plus size={20} />
               )}
-              Ajouter au catalogue entreprise
+              {isEdit ? 'Enregistrer les modifications' : 'Ajouter au catalogue entreprise'}
             </button>
           </div>
         </form>

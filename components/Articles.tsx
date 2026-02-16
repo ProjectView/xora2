@@ -8,21 +8,23 @@ import {
   ChevronDown, 
   Eye, 
   MoreHorizontal, 
-  ChevronsLeft,
-  ChevronLeft,
-  ChevronRight,
-  PenSquare,
-  Trash2,
-  Loader2,
-  CheckCircle2,
-  Filter,
-  Euro,
-  X
+  ChevronsLeft, 
+  ChevronLeft, 
+  ChevronRight, 
+  PenSquare, 
+  Trash2, 
+  Loader2, 
+  CheckCircle2, 
+  Filter, 
+  Euro, 
+  X,
+  AlertTriangle
 } from 'lucide-react';
 import { db } from '../firebase';
 import { collection, query, where, onSnapshot, doc, deleteDoc, writeBatch, serverTimestamp } from '@firebase/firestore';
 import { Article } from '../types';
 import AddArticleModal from './AddArticleModal';
+import ArticleImportModal from './ArticleImportModal';
 
 interface ArticlesProps {
   userProfile?: any;
@@ -37,7 +39,13 @@ const Articles: React.FC<ArticlesProps> = ({ userProfile }) => {
   const [importSuccess, setImportSuccess] = useState(false);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   
+  // États d'édition et suppression
+  const [articleToEdit, setArticleToEdit] = useState<Article | null>(null);
+  const [articleToDelete, setArticleToDelete] = useState<Article | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   // États des filtres
   const [searchQuery, setSearchQuery] = useState('');
   const [activeMainTab, setActiveMainTab] = useState<'Tous' | 'Electromenager' | 'Sanitaire'>('Tous');
@@ -50,7 +58,6 @@ const Articles: React.FC<ArticlesProps> = ({ userProfile }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [openDropdown, setOpenDropdown] = useState<'rubrique' | 'famille' | 'price' | null>(null);
   
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -112,71 +119,80 @@ const Articles: React.FC<ArticlesProps> = ({ userProfile }) => {
     return Array.from(set).sort();
   }, [articles, rubriqueFilter]);
 
-  const handleDeleteArticle = async (id: string) => {
-    if (!confirm("Êtes-vous sûr de vouloir supprimer cet article du catalogue ?")) return;
+  const handleEditArticle = (article: Article) => {
+    setArticleToEdit(article);
+    setIsAddModalOpen(true);
+    setActiveMenuId(null);
+  };
+
+  const handleDeleteClick = (article: Article) => {
+    setArticleToDelete(article);
+    setActiveMenuId(null);
+  };
+
+  const confirmDeleteArticle = async () => {
+    if (!articleToDelete) return;
+    setIsDeleting(true);
     try {
-      await deleteDoc(doc(db, 'articles', id));
-      setActiveMenuId(null);
+      await deleteDoc(doc(db, 'articles', articleToDelete.id));
+      setArticleToDelete(null);
     } catch (e) {
-      console.error(e);
+      console.error("Erreur suppression:", e);
+      alert("Une erreur est survenue lors de la suppression de l'article.");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
   const handleImportClick = () => {
-    fileInputRef.current?.click();
+    setIsImportModalOpen(true);
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !userProfile?.companyId) return;
+  const handleBatchImport = async (importedData: any[]) => {
+    if (!userProfile?.companyId || importedData.length === 0) return;
 
     setIsImporting(true);
-    const reader = new FileReader();
+    
+    const BATCH_SIZE = 500;
+    const batches = [];
+    let currentBatch = writeBatch(db);
+    let operationCount = 0;
 
-    reader.onload = async (event) => {
-      const text = event.target?.result as string;
-      const lines = text.split(/\r?\n/);
-      const batch = writeBatch(db);
-      let count = 0;
-
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line || line.startsWith(';;') || line.toLowerCase().includes('métier;rubrique')) continue;
-        const cols = line.split(';');
-        if (cols.length < 6) continue;
-        const parsePrice = (val: string) => {
-            if (!val) return 0;
-            const cleaned = val.replace(/[^\d.,]/g, '').replace(',', '.');
-            return parseFloat(cleaned) || 0;
-        };
+    for (const item of importedData) {
         const articleRef = doc(collection(db, 'articles'));
-        batch.set(articleRef, {
-          metier: cols[0]?.trim() || 'Cuisine',
-          rubrique: cols[1]?.trim() || 'Général',
-          famille: cols[2]?.trim() || 'Non classé',
-          collection: cols[3]?.trim() || '',
-          descriptif: cols[4]?.trim() || '',
-          prixMiniTTC: parsePrice(cols[5]),
-          prixMaxiTTC: parsePrice(cols[6]),
+        currentBatch.set(articleRef, {
+          ...item,
           companyId: userProfile.companyId,
           createdBy: userProfile.name,
           createdAt: serverTimestamp()
         });
-        count++;
-        if (count >= 490) break; 
-      }
-      try {
-        await batch.commit();
-        setImportSuccess(true);
-        setTimeout(() => setImportSuccess(false), 3000);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setIsImporting(false);
-        if (fileInputRef.current) fileInputRef.current.value = '';
-      }
-    };
-    reader.readAsText(file);
+
+        operationCount++;
+
+        // Firestore batch limit is 500
+        if (operationCount >= BATCH_SIZE) {
+          batches.push(currentBatch.commit());
+          currentBatch = writeBatch(db);
+          operationCount = 0;
+        }
+    }
+
+    // Commit remaining operations
+    if (operationCount > 0) {
+      batches.push(currentBatch.commit());
+    }
+
+    try {
+      await Promise.all(batches);
+      setImportSuccess(true);
+      setTimeout(() => setImportSuccess(false), 3000);
+      setIsImportModalOpen(false);
+    } catch (err) {
+      console.error("Erreur d'importation :", err);
+      alert("Une erreur est survenue lors de l'importation des données.");
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const counts = {
@@ -231,8 +247,7 @@ const Articles: React.FC<ArticlesProps> = ({ userProfile }) => {
 
   return (
     <div className="p-6 space-y-4 bg-gray-50 min-h-[calc(100vh-64px)] flex flex-col font-sans">
-      <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".csv" className="hidden" />
-
+      
       {/* BLOC 1 : Titre et Filtres Principaux */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center space-x-1">
@@ -357,11 +372,11 @@ const Articles: React.FC<ArticlesProps> = ({ userProfile }) => {
                 <X size={16} />
               </button>
             )}
-            <button onClick={handleImportClick} disabled={isImporting} className="flex items-center justify-center px-4 py-2.5 bg-white border border-gray-200 rounded-md text-sm font-bold text-gray-700 hover:bg-gray-50 shadow-sm transition-all">
-                {isImporting ? <Loader2 size={16} className="mr-2 animate-spin" /> : <UploadIcon size={16} className="mr-2" />}
+            <button onClick={handleImportClick} className="flex items-center justify-center px-4 py-2.5 bg-white border border-gray-200 rounded-md text-sm font-bold text-gray-700 hover:bg-gray-50 shadow-sm transition-all">
+                <UploadIcon size={16} className="mr-2" />
                 Import
             </button>
-            <button onClick={() => setIsAddModalOpen(true)} className="flex items-center px-4 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-black transition-all shadow-lg shadow-gray-200">
+            <button onClick={() => { setArticleToEdit(null); setIsAddModalOpen(true); }} className="flex items-center px-4 py-2.5 bg-gray-900 text-white rounded-xl text-sm font-bold hover:bg-black transition-all shadow-lg shadow-gray-200">
                 <Plus size={18} className="mr-2" />
                 Ajouter
             </button>
@@ -408,7 +423,12 @@ const Articles: React.FC<ArticlesProps> = ({ userProfile }) => {
                               <td className="px-6 py-4 text-center text-sm font-black text-gray-900">{article.prixMaxiTTC?.toLocaleString()} €</td>
                               <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                                   <div className="flex justify-end space-x-2 relative">
-                                      <button className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-100 text-gray-400 shadow-sm transition-all"><Eye size={16} /></button>
+                                      <button 
+                                        onClick={() => handleEditArticle(article)} 
+                                        className="p-1.5 border border-gray-200 rounded-lg hover:bg-gray-100 text-gray-400 shadow-sm transition-all"
+                                      >
+                                        <Eye size={16} />
+                                      </button>
                                       <button 
                                         onClick={() => setActiveMenuId(activeMenuId === article.id ? null : article.id)}
                                         className={`p-1.5 border border-gray-200 rounded-lg hover:bg-gray-100 text-gray-400 shadow-sm transition-all ${activeMenuId === article.id ? 'bg-gray-100 text-gray-900' : ''}`}
@@ -417,8 +437,8 @@ const Articles: React.FC<ArticlesProps> = ({ userProfile }) => {
                                           <>
                                             <div className="fixed inset-0 z-10" onClick={() => setActiveMenuId(null)} />
                                             <div className={`absolute right-0 ${index >= limitedArticles.length - 2 && limitedArticles.length > 2 ? 'bottom-full mb-2' : 'top-10'} bg-white border border-gray-200 rounded-xl shadow-2xl z-20 w-40 py-2 animate-in fade-in zoom-in-95 duration-150`}>
-                                                <button className="w-full text-left px-4 py-2 text-[12px] font-bold text-gray-700 hover:bg-gray-50 flex items-center"><PenSquare size={14} className="mr-2" /> Modifier</button>
-                                                <button onClick={() => handleDeleteArticle(article.id)} className="w-full text-left px-4 py-2 text-[12px] font-bold text-red-600 hover:bg-red-50 flex items-center"><Trash2 size={14} className="mr-2" /> Supprimer</button>
+                                                <button onClick={() => handleEditArticle(article)} className="w-full text-left px-4 py-2 text-[12px] font-bold text-gray-700 hover:bg-gray-50 flex items-center"><PenSquare size={14} className="mr-2" /> Modifier</button>
+                                                <button onClick={() => handleDeleteClick(article)} className="w-full text-left px-4 py-2 text-[12px] font-bold text-red-600 hover:bg-red-50 flex items-center"><Trash2 size={14} className="mr-2" /> Supprimer</button>
                                             </div>
                                           </>
                                       )}
@@ -473,7 +493,51 @@ const Articles: React.FC<ArticlesProps> = ({ userProfile }) => {
            </div>
       </div>
 
-      <AddArticleModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} userProfile={userProfile} />
+      {/* Popup Confirmation Suppression */}
+      {articleToDelete && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden border border-gray-100 p-10 flex flex-col items-center text-center">
+              <div className="w-20 h-20 bg-red-50 rounded-[28px] flex items-center justify-center text-red-500 mb-8 shadow-inner">
+                <AlertTriangle size={40} />
+              </div>
+              <h3 className="text-xl font-black text-gray-900 mb-2 uppercase tracking-tighter">Supprimer définitivement ?</h3>
+              <p className="text-[14px] text-gray-500 leading-relaxed mb-10">
+                Vous allez effacer l'article <br/>
+                <span className="font-bold text-gray-900">"{articleToDelete.descriptif}"</span>.<br/>
+                Cette opération est irréversible.
+              </p>
+              <div className="flex gap-4 w-full">
+                <button 
+                  onClick={() => setArticleToDelete(null)} 
+                  disabled={isDeleting}
+                  className="flex-1 px-6 py-4 bg-gray-50 text-gray-600 rounded-2xl font-bold text-[13px] hover:bg-gray-100 transition-all"
+                >
+                  Annuler
+                </button>
+                <button 
+                  onClick={confirmDeleteArticle}
+                  disabled={isDeleting}
+                  className="flex-1 px-6 py-4 bg-red-600 text-white rounded-2xl font-bold text-[13px] hover:bg-red-700 shadow-xl shadow-red-100 flex items-center justify-center gap-2"
+                >
+                  {isDeleting ? <Loader2 size={18} className="animate-spin" /> : <Trash2 size={18} />} Supprimer
+                </button>
+              </div>
+          </div>
+        </div>
+      )}
+
+      <AddArticleModal 
+        isOpen={isAddModalOpen} 
+        onClose={() => { setIsAddModalOpen(false); setArticleToEdit(null); }} 
+        userProfile={userProfile} 
+        articleToEdit={articleToEdit}
+      />
+      <ArticleImportModal 
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImport={handleBatchImport}
+        isImporting={isImporting}
+      />
     </div>
   );
 };
