@@ -40,7 +40,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   const isActive = (pageName: string) => currentPage === pageName;
 
   const annuaireSubItems = [
-    { id: 'directory', label: 'Fiche contact', icon: UserCircle, page: 'directory' as Page },
+    { id: 'directory', label: 'Client / Prospect', icon: UserCircle, page: 'directory' as Page },
     { id: 'suppliers', label: 'Fiche fournisseurs', icon: Truck, page: 'suppliers' as Page },
     { id: 'artisans', label: 'Fiche artisans', icon: Hammer, page: 'artisans' as Page },
     { id: 'prescriber', label: 'Fiche prescripteur', icon: Stamp, page: 'prescriber' as Page },

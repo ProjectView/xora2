@@ -154,17 +154,17 @@ const ClientDetails: React.FC<ClientDetailsProps> = ({ client: initialClient, on
 
                 {/* Contact Secondaire (Si existe) */}
                 {secondaryContact && (
-                  <div className="flex gap-12 items-center opacity-45 animate-in fade-in slide-in-from-top-1 duration-300">
+                  <div className="flex gap-12 items-center animate-in fade-in slide-in-from-top-1 duration-300">
                     <div className="min-w-[180px]">
-                      <h2 className="text-[14px] font-bold text-gray-500 leading-tight uppercase">
+                      <h2 className="text-[17px] font-bold text-gray-900 leading-tight uppercase">
                         {secondaryContact.firstName} {secondaryContact.lastName}
                       </h2>
                     </div>
-                    <div className="flex items-center gap-2 text-[12px] font-medium text-gray-500 min-w-[140px]">
-                      <Phone size={14} className="text-gray-300" /> {secondaryContact.phone || '-'}
+                    <div className="flex items-center gap-2 text-[13px] font-bold text-gray-700 min-w-[140px]">
+                      <Phone size={16} className="text-gray-300" /> {secondaryContact.phone || '-'}
                     </div>
-                    <div className="flex items-center gap-2 text-[12px] font-medium text-gray-500">
-                      <Mail size={14} className="text-gray-300" /> {secondaryContact.email || '-'}
+                    <div className="flex items-center gap-2 text-[13px] font-bold text-gray-700">
+                      <Mail size={16} className="text-gray-300" /> {secondaryContact.email || '-'}
                     </div>
                   </div>
                 )}

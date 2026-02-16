@@ -700,7 +700,7 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
         </Field>
       </Section>
 
-      <Section title="Enveloppe financière" action={<button className="flex items-center gap-2 text-[11px] font-bold text-gray-800 hover:text-indigo-600 transition-colors"><FileText size={14} /> Ajouter une note</button>}>
+      <Section title="Enveloppe financière">
         <Field label="Fourchette basse Budget" colSpan="col-span-12 md:col-span-4">
           <CurrencyInput value={project.details?.budgetBas} onChange={(v: string) => handleUpdate('details.budgetBas', v)} />
         </Field>
@@ -730,8 +730,8 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
         </div>
 
         {project.details?.plansTechniques && (
-          <div className="col-span-12 animate-in slide-in-from-top-4 duration-300">
-             <Field label="Date de remise des plans" colSpan="col-span-12 md:col-span-12">
+          <div className="col-span-12 md:col-span-4 animate-in slide-in-from-top-4 duration-300">
+             <Field label="Date de remise des plans" colSpan="w-full">
                 <div className="relative group">
                   <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 group-hover:text-indigo-600 transition-colors pointer-events-none z-10" size={18} />
                   <input 
@@ -791,17 +791,30 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
         </Field>
         
         {project.details?.permisAccorde && (
-          <Field label="Date d'obtention Permis" colSpan="col-span-12 md:col-span-3">
-            <div className="relative group animate-in slide-in-from-left-2 duration-300">
-              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 group-hover:text-indigo-600 transition-colors pointer-events-none z-10" size={18} />
-              <input 
-                type="date" 
-                value={formatDateForInput(project.details?.datePermis)} 
-                onChange={(e) => handleDateChange('details.datePermis', e.target.value)} 
-                className="w-full bg-white border border-gray-200 rounded-xl pl-11 pr-4 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm transition-all cursor-pointer" 
+          <>
+            <Field label="Date d'obtention prévisionnelle" colSpan="col-span-12 md:col-span-4">
+              <UnifiedRangePicker 
+                startValue={project.details?.datePermisPrevisionnelStart}
+                endValue={project.details?.datePermisPrevisionnelEnd}
+                onRangeChange={(start: string, end: string) => handleMultiUpdate({
+                  'details.datePermisPrevisionnelStart': start,
+                  'details.datePermisPrevisionnelEnd': end
+                })}
               />
-            </div>
-          </Field>
+            </Field>
+
+            <Field label="Date d'obtention Permis" colSpan="col-span-12 md:col-span-3">
+              <div className="relative group animate-in slide-in-from-left-2 duration-300">
+                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 group-hover:text-indigo-600 transition-colors pointer-events-none z-10" size={18} />
+                <input 
+                  type="date" 
+                  value={formatDateForInput(project.details?.datePermis)} 
+                  onChange={(e) => handleDateChange('details.datePermis', e.target.value)} 
+                  className="w-full bg-white border border-gray-200 rounded-xl pl-11 pr-4 py-3 text-[13px] font-bold text-gray-900 outline-none focus:border-indigo-400 shadow-sm transition-all cursor-pointer" 
+                />
+              </div>
+            </Field>
+          </>
         )}
       </Section>
     </div>
