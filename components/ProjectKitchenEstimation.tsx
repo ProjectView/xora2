@@ -1,3 +1,4 @@
+
 import React from 'react';
 // Added Check icon to imports
 import { Calculator, Euro, Info, Receipt, Percent, Truck, Check } from 'lucide-react';
@@ -12,16 +13,48 @@ const ProjectKitchenEstimation: React.FC<ProjectKitchenEstimationProps> = ({ pro
   const estimationData = project.details?.kitchen?.estimation || {};
   const simulationData = estimationData.simulation || { montantTotal: 0, acomptePct: 30 };
   
-  const electros = project.details?.kitchen?.electros || [];
-  const sanitaires = project.details?.kitchen?.sanitaires || [];
+  // NOUVELLE LOGIQUE : Récupération depuis details.kitchen.items (structure accordéon)
+  const itemsMap = project.details?.kitchen?.items || {};
+
+  // Définition des clés pour catégoriser (doit correspondre aux clés utilisées dans ProjectKitchenElectros)
+  const ELECTRO_KEYS = [
+    "Four", "Micro-ondes", "Tiroir chauffe-plat", "Cafetière", 
+    "Plaque de cuisson", "Hotte", "Réfrigérateur", "Congélateur", 
+    "Cave à vins", "Lave-vaisselle", "Lave-linge"
+  ];
+
+  const SANITAIRE_KEYS = [
+    "Evier", "Mitigeur", "Distributeur savon", "Égouttoir pliable", 
+    "Vidage automatique", "Panier égouttoir", "Planche à découper", 
+    "Bonde + trop-plein", "Cache bonde"
+  ];
+
+  const calculateTotal = (keys: string[]) => {
+    let min = 0;
+    let max = 0;
+    keys.forEach(key => {
+      const itemData = itemsMap[key];
+      // On additionne les prix des articles présents dans la liste
+      if (itemData?.articles && Array.isArray(itemData.articles)) {
+         itemData.articles.forEach((art: any) => {
+           min += Number(art.prixMiniTTC) || 0;
+           max += Number(art.prixMaxiTTC) || 0;
+         });
+      }
+    });
+    return { min, max };
+  };
+
+  const electroTotals = calculateTotal(ELECTRO_KEYS);
+  const sanitaireTotals = calculateTotal(SANITAIRE_KEYS);
 
   // Calcul automatique pour Electroménager
-  const electroMini = electros.reduce((sum: number, item: any) => sum + (Number(item.prixMiniTTC) || 0), 0);
-  const electroMaxi = electros.reduce((sum: number, item: any) => sum + (Number(item.prixMaxiTTC) || 0), 0);
+  const electroMini = electroTotals.min;
+  const electroMaxi = electroTotals.max;
 
   // Calcul automatique pour Sanitaire
-  const sanitaireMini = sanitaires.reduce((sum: number, item: any) => sum + (Number(item.prixMiniTTC) || 0), 0);
-  const sanitaireMaxi = sanitaires.reduce((sum: number, item: any) => sum + (Number(item.prixMaxiTTC) || 0), 0);
+  const sanitaireMini = sanitaireTotals.min;
+  const sanitaireMaxi = sanitaireTotals.max;
 
   const handleUpdate = async (field: string, value: number) => {
     try {

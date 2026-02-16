@@ -12,7 +12,10 @@ import {
   RotateCcw,
   Plus,
   Euro,
-  Tag
+  Tag,
+  User,
+  ShoppingCart,
+  AlertTriangle
 } from 'lucide-react';
 import { db } from '../firebase';
 import { doc, updateDoc, onSnapshot, deleteField } from '@firebase/firestore';
@@ -248,6 +251,17 @@ const QuestionField: React.FC<{
   );
 };
 
+const ToggleButton = ({ value, onChange }: { value: boolean, onChange: (v: boolean) => void }) => (
+  <button 
+    onClick={(e) => { e.stopPropagation(); onChange(!value); }}
+    className={`relative h-7 w-12 rounded-full transition-colors duration-200 ease-in-out border-2 ${value ? 'bg-indigo-600 border-indigo-600' : 'bg-gray-200 border-gray-200'}`}
+  >
+    <span 
+      className={`absolute left-0.5 top-0.5 h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${value ? 'translate-x-5' : 'translate-x-0'}`}
+    />
+  </button>
+);
+
 interface AccordionItemProps {
   title: string;
   onReset: () => void;
@@ -275,53 +289,103 @@ const AccordionItem: React.FC<AccordionItemProps> = ({
   const config = DIAGNOSTIC_CONFIG[title] || { label: title, questions: [] };
   
   const isFilled = diagnosticData && Object.keys(diagnosticData).length > 0;
+  const isDesired = itemData?.isDesired ?? false;
   const quiFournit = itemData?.quiFournit || 'A fournir';
   const articles = itemData?.articles || [];
 
+  const totalMin = articles.reduce((acc: number, art: any) => acc + (Number(art.prixMiniTTC) || 0), 0);
+  const totalMax = articles.reduce((acc: number, art: any) => acc + (Number(art.prixMaxiTTC) || 0), 0);
+
+  const handleToggleDesired = (val: boolean) => {
+    onItemUpdate({ ...itemData, isDesired: val });
+    // Ouvrir automatiquement si on active
+    if (val) setIsOpen(true);
+    else setIsOpen(false);
+  };
+
   return (
-    <div className={`bg-white border rounded-[24px] overflow-hidden transition-all duration-300 ${isOpen ? 'border-indigo-100 shadow-xl ring-4 ring-indigo-50/30' : 'border-gray-100 shadow-sm hover:border-gray-200'}`}>
+    <div className={`bg-white border rounded-[24px] overflow-hidden transition-all duration-300 ${isDesired && isOpen ? 'border-indigo-100 shadow-xl ring-4 ring-indigo-50/30' : 'border-gray-100 shadow-sm hover:border-gray-200'}`}>
+      {/* Header */}
       <div 
-        className="px-6 py-5 flex items-center justify-between cursor-pointer group"
-        onClick={() => setIsOpen(!isOpen)}
+        className={`px-6 py-5 flex flex-col gap-4 cursor-pointer group ${!isDesired ? 'opacity-70 hover:opacity-100' : ''}`}
+        onClick={() => { if (isDesired) setIsOpen(!isOpen); }}
       >
-        <div className="flex items-center gap-4">
-          <div className={`p-2 rounded-xl transition-colors relative ${isOpen ? 'bg-indigo-600 text-white' : 'bg-gray-50 text-gray-400 group-hover:bg-indigo-50 group-hover:text-indigo-500'}`}>
-            {isElectro ? <Zap size={20} /> : <Droplets size={20} />}
-            {isFilled && (
-              <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
-            )}
+        <div className="flex items-center justify-between w-full">
+          <div className="flex items-center gap-4">
+            <div className={`p-2 rounded-xl transition-colors relative ${isDesired ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
+              {isElectro ? <Zap size={20} /> : <Droplets size={20} />}
+              {isFilled && isDesired && (
+                <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></div>
+              )}
+            </div>
+            <div className="flex flex-col">
+              <h4 className={`text-[15px] font-black uppercase tracking-tight ${isDesired ? 'text-gray-900' : 'text-gray-500'}`}>{title}</h4>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Le client désire :</span>
+                <ToggleButton value={isDesired} onChange={handleToggleDesired} />
+                <span className={`text-[10px] font-bold uppercase ${isDesired ? 'text-indigo-600' : 'text-gray-400'}`}>{isDesired ? 'OUI' : 'NON'}</span>
+              </div>
+            </div>
           </div>
-          <div className="flex flex-col">
-            <h4 className={`text-[15px] font-black uppercase tracking-tight ${isOpen ? 'text-gray-900' : 'text-gray-500 group-hover:text-gray-700'}`}>{title}</h4>
-            {isFilled && !isOpen && (
-              <span className="text-[9px] font-bold text-green-600 uppercase tracking-widest flex items-center gap-1">
-                <Check size={10} /> Diagnostic rempli
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-4">
-          {isFilled && (
-            <button 
-              onClick={(e) => { e.stopPropagation(); onReset(); }}
-              className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
-              title="Réinitialiser le diagnostic"
-            >
-              <RotateCcw size={18} />
-            </button>
+
+          {isDesired && (
+            <div className="flex items-center gap-6">
+              <div className="text-right hidden sm:block">
+                <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Total Estimé</p>
+                <p className="text-[14px] font-black text-indigo-600">{totalMin === totalMax ? `${totalMin} €` : `${totalMin} - ${totalMax} €`}</p>
+              </div>
+              <div className={`p-1 transition-transform duration-300 ${isOpen ? 'rotate-180 text-indigo-500' : 'text-gray-300'}`}>
+                <ChevronDown size={22} />
+              </div>
+            </div>
           )}
-          <div className={`p-1 transition-transform duration-300 ${isOpen ? 'rotate-180 text-indigo-500' : 'text-gray-300'}`}>
-            <ChevronDown size={22} />
-          </div>
         </div>
+
+        {/* Synthèse visuelle (Visible si désiré) */}
+        {isDesired && (
+          <div className="w-full pt-2 border-t border-gray-50 mt-1 flex flex-wrap items-center gap-4 animate-in fade-in slide-in-from-top-1">
+             <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
+               <User size={12} className="text-gray-400" />
+               <span className="text-[11px] font-bold text-gray-700">Fourni par : <span className="text-indigo-600">{quiFournit}</span></span>
+             </div>
+             
+             {articles.map((art: any, idx: number) => (
+               <div key={idx} className="flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100">
+                 <Package size={12} className="text-indigo-400" />
+                 <span className="text-[11px] font-bold text-indigo-900 truncate max-w-[200px]">
+                   {art.collection ? `${art.collection} - ` : ''}{art.descriptif}
+                 </span>
+                 <span className="text-[10px] font-mono text-indigo-500 ml-1">
+                   ({art.prixMiniTTC}€ - {art.prixMaxiTTC}€)
+                 </span>
+               </div>
+             ))}
+
+             {articles.length === 0 && (
+               <span className="text-[11px] font-medium text-gray-400 italic flex items-center gap-1">
+                 <AlertTriangle size={12} /> Aucun article sélectionné
+               </span>
+             )}
+          </div>
+        )}
       </div>
 
-      {isOpen && (
-        <div className="px-8 pb-8 pt-2 space-y-10 animate-in slide-in-from-top-2 duration-300">
+      {isDesired && isOpen && (
+        <div className="px-8 pb-8 pt-4 space-y-10 animate-in slide-in-from-top-2 duration-300 border-t border-gray-100">
           
           {/* 1. QUI FOURNIT */}
           <div className="space-y-4">
-            <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Qui fournit ?</label>
+            <div className="flex justify-between items-center">
+               <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Responsable fourniture</label>
+               {isFilled && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); onReset(); }}
+                  className="text-[10px] font-bold text-red-400 hover:text-red-600 flex items-center gap-1"
+                >
+                  <RotateCcw size={12} /> Réinitialiser le diagnostic
+                </button>
+              )}
+            </div>
             <div className="relative group w-full md:w-1/3">
               <select 
                 value={quiFournit}
@@ -339,7 +403,7 @@ const AccordionItem: React.FC<AccordionItemProps> = ({
           {quiFournit === 'A fournir' && (
             <div className="space-y-6 bg-[#FBFBFB] border border-gray-100 rounded-[24px] p-6">
               <div className="flex justify-between items-center px-1">
-                <h5 className="text-[12px] font-black text-gray-800 uppercase tracking-tight">Article produit catalogue/générique</h5>
+                <h5 className="text-[12px] font-black text-gray-800 uppercase tracking-tight">Sélection produits</h5>
                 <button 
                   onClick={onAddArticle}
                   className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl text-[11px] font-bold text-gray-700 shadow-sm hover:border-indigo-600 transition-all active:scale-95"
@@ -353,7 +417,7 @@ const AccordionItem: React.FC<AccordionItemProps> = ({
                   <table className="w-full text-left border-collapse">
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-100">
-                        <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Référence produit</th>
+                        <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Référence / Marque</th>
                         <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest">Description</th>
                         <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">Prix mini TTC</th>
                         <th className="px-6 py-4 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center">Prix maxi TTC</th>
@@ -390,8 +454,8 @@ const AccordionItem: React.FC<AccordionItemProps> = ({
                 </div>
               ) : (
                 <div className="py-8 text-center border-2 border-dashed border-gray-200 rounded-2xl bg-white">
-                  <Package size={32} className="mx-auto text-gray-200 mb-2" />
-                  <p className="text-[11px] font-bold text-gray-400 italic">Aucun article sélectionné pour cet équipement.</p>
+                  <ShoppingCart size={32} className="mx-auto text-gray-200 mb-2" />
+                  <p className="text-[11px] font-bold text-gray-400 italic">Aucun article sélectionné.</p>
                 </div>
               )}
             </div>
@@ -411,9 +475,8 @@ const AccordionItem: React.FC<AccordionItemProps> = ({
               ))}
             </div>
             {config.questions.length === 0 && (
-               <div className="py-10 text-center bg-gray-50 border border-dashed border-gray-200 rounded-[20px]">
-                 <HelpCircle size={32} className="mx-auto text-gray-200 mb-2" />
-                 <p className="text-[12px] font-bold text-gray-400 italic">Aucune question spécifique configurée pour cet item.</p>
+               <div className="py-6 text-center bg-gray-50 border border-dashed border-gray-200 rounded-[20px]">
+                 <p className="text-[11px] font-bold text-gray-400 italic">Pas de questions spécifiques.</p>
                </div>
             )}
           </div>
@@ -488,11 +551,6 @@ const ProjectKitchenElectros: React.FC<ProjectKitchenElectrosProps> = ({ project
     }
   };
 
-  // Logique spécifique pour la modale d'ajout d'article
-  // La modale AddProjectArticleModal existante ajoute directement au projet dans details.kitchen.electros ou sanitaires
-  // On va devoir l'adapter ou gérer le retour ici si on veut que ce soit lié à l'item spécifique
-  // Dans cette architecture simplifiée, on va lier les articles à l'item via details.kitchen.items[type].articles
-
   return (
     <div className="space-y-12 animate-in fade-in duration-500 pb-20">
       
@@ -515,7 +573,7 @@ const ProjectKitchenElectros: React.FC<ProjectKitchenElectrosProps> = ({ project
               diagnosticData={diagnostics[type] || {}}
               onReset={() => handleResetDiagnostic(type)}
               onDiagnosticUpdate={(up) => handleUpdateDiagnostic(type, up)}
-              itemData={items[type] || { quiFournit: 'A fournir', articles: [] }}
+              itemData={items[type] || { quiFournit: 'A fournir', articles: [], isDesired: false }}
               onItemUpdate={(up) => handleUpdateItem(type, up)}
               onAddArticle={() => setActiveItemForModal({ title: type, mode: 'Electromenager' })}
               onRemoveArticle={(artId) => handleRemoveArticle(type, artId)}
@@ -543,7 +601,7 @@ const ProjectKitchenElectros: React.FC<ProjectKitchenElectrosProps> = ({ project
               diagnosticData={diagnostics[type] || {}}
               onReset={() => handleResetDiagnostic(type)}
               onDiagnosticUpdate={(up) => handleUpdateDiagnostic(type, up)}
-              itemData={items[type] || { quiFournit: 'A fournir', articles: [] }}
+              itemData={items[type] || { quiFournit: 'A fournir', articles: [], isDesired: false }}
               onItemUpdate={(up) => handleUpdateItem(type, up)}
               onAddArticle={() => setActiveItemForModal({ title: type, mode: 'Sanitaire' })}
               onRemoveArticle={(artId) => handleRemoveArticle(type, artId)}
@@ -552,7 +610,7 @@ const ProjectKitchenElectros: React.FC<ProjectKitchenElectrosProps> = ({ project
         </div>
       </div>
 
-      {/* MODALE D'AJOUT D'ARTICLE (ADAPTÉE) */}
+      {/* MODALE D'AJOUT D'ARTICLE */}
       {activeItemForModal && (
         <AddProjectArticleModal 
           isOpen={true}
@@ -560,15 +618,16 @@ const ProjectKitchenElectros: React.FC<ProjectKitchenElectrosProps> = ({ project
           mode={activeItemForModal.mode}
           project={project}
           userProfile={userProfile}
-          // On passe une fonction personnalisée pour l'ajout à l'item spécifique
           onArticleSelected={async (article) => {
             const type = activeItemForModal.title;
-            const currentItem = items[type] || { quiFournit: 'A fournir', articles: [] };
+            const currentItem = items[type] || { quiFournit: 'A fournir', articles: [], isDesired: true };
             const updatedArticles = [...(currentItem.articles || []), { ...article, id: article.id || `custom_${Date.now()}` }];
             
             const projectRef = doc(db, 'projects', project.id);
+            // On force isDesired à true si on ajoute un article
             await updateDoc(projectRef, {
-              [`details.kitchen.items.${type}.articles`]: updatedArticles
+              [`details.kitchen.items.${type}.articles`]: updatedArticles,
+              [`details.kitchen.items.${type}.isDesired`]: true
             });
           }}
         />
