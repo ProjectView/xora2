@@ -33,7 +33,7 @@ const InviteCollaboratorModal: React.FC<InviteCollaboratorModalProps> = ({ isOpe
       
       // Le lien vers lequel le collaborateur sera redirigé pour créer son compte
       // On passe l'ID de la société et le rôle souhaité dans l'URL
-      const registrationLink = `${appUrl}?view=register&inviteId=${userProfile.companyId}&email=${encodeURIComponent(inviteEmail)}&role=${formData.role}`;
+      const registrationLink = `${appUrl}?view=register&inviteId=${userProfile.companyId}&email=${encodeURIComponent(inviteEmail)}&role=${encodeURIComponent(formData.role)}`;
 
       // Création du document dans la collection 'invitations'
       // Ce document sera détecté par l'extension Firebase "Trigger Email"

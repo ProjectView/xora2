@@ -387,7 +387,7 @@ const ProjectTracking: React.FC<ProjectTrackingProps> = ({ userProfile, onProjec
 
         {/* Pied de page */}
         <div className="p-4 border-t border-gray-200 flex items-center justify-between text-xs text-gray-400 bg-white">
-          <div>Actuellement <span className="font-bold text-gray-900">1 à {filteredProjects.length} sur {filteredProjects.length}</span> résultats</div>
+          <div>Affichage de <span className="font-bold text-gray-900">1 à {filteredProjects.length}</span> sur <span className="font-bold text-gray-900">{filteredProjects.length}</span> résultats</div>
           <div className="flex items-center space-x-2">
             <button className="p-1 border border-gray-200 rounded-md hover:bg-gray-50"><ChevronsLeft size={16} /></button>
             <button className="p-1 border border-gray-200 rounded-md hover:bg-gray-50"><ChevronLeft size={16} /></button>

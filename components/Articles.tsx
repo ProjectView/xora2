@@ -453,7 +453,7 @@ const Articles: React.FC<ArticlesProps> = ({ userProfile }) => {
           {/* Pied de page style Annuaire */}
           <div className="p-4 border-t border-gray-200 flex items-center justify-between text-xs text-gray-400 bg-white">
                 <div>
-                  Actuellement <span className="font-bold text-gray-900">{startIndex} à {endIndex} sur {filteredArticles.length}</span> résultats
+                  Affichage de <span className="font-bold text-gray-900">{startIndex} à {endIndex}</span> sur <span className="font-bold text-gray-900">{filteredArticles.length}</span> résultats
                 </div>
                 <div className="flex items-center space-x-2">
                     <button 

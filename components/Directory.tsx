@@ -513,7 +513,7 @@ const Directory: React.FC<DirectoryProps> = ({
                 </div>
                 
                 <div className="p-6 border-t border-gray-100 flex items-center justify-between text-[11px] font-bold text-gray-400 bg-white shrink-0">
-                    <div>Vue <span className="font-black text-gray-900 tracking-tighter">1 à {filteredClients.length}</span> sur <span className="font-black text-gray-900 tracking-tighter">{filteredClients.length}</span> résultats</div>
+                    <div>Vue <span className="font-black text-gray-900">1 à {filteredClients.length}</span> sur <span className="font-black text-gray-900">{filteredClients.length}</span> résultats</div>
                     <div className="flex items-center gap-2">
                         <button className="p-2 border border-gray-100 rounded-xl hover:bg-gray-50 text-gray-300"><ChevronsLeft size={16} /></button>
                         <button className="p-2 border border-gray-100 rounded-xl hover:bg-gray-50 text-gray-300"><ChevronLeft size={16} /></button>
