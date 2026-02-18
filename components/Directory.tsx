@@ -162,7 +162,7 @@ const Directory: React.FC<DirectoryProps> = ({
           icon: Truck,
           addButton: 'Ajouter une fiche fournisseur',
           tabs: ['Tous', 'Fournisseur', 'Institutionnel', 'Sous traitant'],
-          statusField: 'category' // Supposons qu'on filtre par ce champ pour les fournisseurs
+          statusField: 'category' 
         };
       case 'artisans':
         return {
@@ -203,7 +203,6 @@ const Directory: React.FC<DirectoryProps> = ({
   useEffect(() => {
     if (!userProfile?.companyId) return;
     const clientsRef = collection(db, 'clients');
-    // On pourrait filtrer ici par type de collection/type de contact si la structure le permet
     const q = query(clientsRef, where('companyId', '==', userProfile.companyId));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -212,8 +211,6 @@ const Directory: React.FC<DirectoryProps> = ({
         ...doc.data()
       })) as Client[];
 
-      // Filtre basique par "catégorie" globale si on simule plusieurs annuaires dans une seule collection
-      // Pour cet exemple, on filtre sur le champ 'type' s'il existe
       if (mode !== 'contacts') {
         clientsList = clientsList.filter(c => (c as any).directoryType === mode);
       } else {
@@ -411,7 +408,7 @@ const Directory: React.FC<DirectoryProps> = ({
                 <div className="overflow-x-auto flex-1 overflow-y-auto hide-scrollbar">
                     <table className="w-full text-left border-collapse">
                         <thead>
-                            <tr className="bg-gray-50/50 border-b border-gray-100 text-[10px] text-gray-400 uppercase font-black tracking-[0.2em] sticky top-0 z-10">
+                            <tr className="bg-white border-b border-gray-100 text-[10px] text-gray-400 uppercase font-black tracking-[0.2em] sticky top-0 z-20 shadow-sm">
                                 <th className="px-8 py-5">Nom & prénom</th>
                                 <th className="px-8 py-5">Ajouté par</th>
                                 <th className="px-8 py-5">Origine</th>

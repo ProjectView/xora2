@@ -786,7 +786,7 @@ const ProjectGeneralDiscovery: React.FC<ProjectGeneralDiscoveryProps> = ({ proje
       </Section>
 
       <Section title="Permis de construire">
-        <Field label="Permis de construire accordé" colSpan="col-span-6 md:col-span-3">
+        <Field label="Besoin d'un permis de construire" colSpan="col-span-6 md:col-span-3">
           <div className="pt-2"><Toggle value={project.details?.permisAccorde || false} onChange={(v) => handleUpdate('details.permisAccorde', v)} /></div>
         </Field>
         
